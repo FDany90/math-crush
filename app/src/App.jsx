@@ -17,6 +17,8 @@ export default function App() {
   const [overlay, setOverlay] = useState({ show: false })
   const [mode, setMode] = useState('time')
   const [toast, setToast] = useState(null)
+  const [config, setConfigState] = useState({ pctOps: 18, pctEq: 20, minEq: 6 })
+  const [showCfg, setShowCfg] = useState(false)
   const toastTimer = useRef(null)
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function App() {
         setTarget: (t) => { setTarget(t); },
         setLimit, setInventory, setOverlay,
         setSelected: () => {},
-        setConfig: () => {},
+        setConfig: (c) => setConfigState(c),
         toast: (msg) => {
           setToast(msg)
           clearTimeout(toastTimer.current)
@@ -56,6 +58,20 @@ export default function App() {
   }, [])
 
   const doMode = (m) => { setMode(m); ctrlRef.current?.setMode(m) }
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+  const adjust = (key, d) => {
+    const c = { ...config }
+    if (key === 'pctOps') c.pctOps = clamp(c.pctOps + d * 2, 0, 60)
+    if (key === 'pctEq') c.pctEq = clamp(c.pctEq + d * 2, 0, 60)
+    if (key === 'minEq') c.minEq = clamp(c.minEq + d, 0, 30)
+    if (c.pctOps + c.pctEq > 90) { // dígitos nunca < 10%
+      if (key === 'pctEq') c.pctOps = 90 - c.pctEq
+      else c.pctEq = 90 - c.pctOps
+    }
+    ctrlRef.current?.setConfig(c)
+  }
+  const digits = 100 - config.pctOps - config.pctEq
 
   const sec = Math.ceil(limit.timeLeft)
   const timeStr = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0')
@@ -111,6 +127,37 @@ export default function App() {
         Tocá una ficha y una adyacente para intercambiarlas. Hacé el <b>objetivo</b> (ej. {target.target})
         en una línea, o una ecuación con <b>=</b> para bonus. Si te quedás quieto, te muestra una pista.
       </div>
+
+      <button className="cfg-toggle" onClick={() => setShowCfg((s) => !s)}>
+        ⚙ Configurar fichas {showCfg ? '▲' : '▼'}
+      </button>
+      {showCfg && (
+        <div className="config">
+          <div className="cfg-row">
+            <span className="cfg-label">Operadores</span>
+            <button className="cfg-btn" onClick={() => adjust('pctOps', -1)}>−</button>
+            <span className="cfg-val">{config.pctOps}%</span>
+            <button className="cfg-btn" onClick={() => adjust('pctOps', 1)}>+</button>
+          </div>
+          <div className="cfg-row">
+            <span className="cfg-label">Signos =</span>
+            <button className="cfg-btn" onClick={() => adjust('pctEq', -1)}>−</button>
+            <span className="cfg-val">{config.pctEq}%</span>
+            <button className="cfg-btn" onClick={() => adjust('pctEq', 1)}>+</button>
+          </div>
+          <div className="cfg-row">
+            <span className="cfg-label">Mínimo =</span>
+            <button className="cfg-btn" onClick={() => adjust('minEq', -1)}>−</button>
+            <span className="cfg-val">{config.minEq}</span>
+            <button className="cfg-btn" onClick={() => adjust('minEq', 1)}>+</button>
+          </div>
+          <div className="cfg-row">
+            <span className="cfg-label" style={{ opacity: .5 }}>Dígitos</span>
+            <span className="cfg-val" style={{ marginLeft: 'auto', opacity: .5 }}>{digits}%</span>
+          </div>
+          <div className="cfg-note">Al cambiar un valor se re-genera el tablero.</div>
+        </div>
+      )}
 
       {toast && <div className="toast">{toast}</div>}
 

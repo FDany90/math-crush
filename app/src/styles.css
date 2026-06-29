@@ -56,6 +56,16 @@ h1 span { color: var(--eq); }
 
 .hint-txt { opacity: .55; font-size: 11px; max-width: min(94vw, 460px); text-align: center; line-height: 1.5; margin-top: 6px; }
 
+.cfg-toggle { background: #3a2d63; color: #fff; opacity: .8; font-size: 13px; padding: 9px 18px; border-radius: 11px; margin-top: 14px; box-shadow: 0 3px 0 rgba(0,0,0,.3); }
+.cfg-toggle:active { transform: translateY(2px); }
+.config { width: min(94vw, 460px); background: var(--panel); border-radius: 14px; padding: 8px 12px; margin-top: 10px; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
+.cfg-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.cfg-label { font-size: 13px; font-weight: 600; width: 90px; }
+.cfg-val { font-size: 15px; font-weight: 800; min-width: 46px; text-align: center; }
+.cfg-btn { width: 34px; height: 34px; padding: 0; font-size: 20px; line-height: 1; border-radius: 9px; background: #4a3a7a; color: #fff; box-shadow: 0 3px 0 rgba(0,0,0,.3); }
+.cfg-btn:active { transform: translateY(2px); }
+.cfg-note { font-size: 11px; opacity: .5; text-align: center; margin-top: 4px; }
+
 .toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: #000a; padding: 8px 16px; border-radius: 20px; font-weight: 700; z-index: 20; pointer-events: none; transition: opacity .25s; }
 
 .overlay { position: fixed; inset: 0; background: #0b0820e0; display: flex; align-items: center; justify-content: center; z-index: 50; }

@@ -53,7 +53,7 @@ export class Controller {
     this.activeBooster = null;
     for (const b of this.boosters) b.n = b.base;
     this.target = randomTarget(this.level);
-    this.best = Number(localStorage.getItem('equa_best_' + mode) || 0);
+    this.best = Number(localStorage.getItem('math_best_' + mode) || 0);
 
     const grid = newGrid(this.cfg, this.target, this.randTile);
     this.board.build(grid);
@@ -207,7 +207,7 @@ export class Controller {
     if (this.ended) return;
     this.ended = true; this.timerOn = false; this.activeBooster = null; this.selected = null;
     if (this.timerId) clearTimeout(this.timerId);
-    if (this.score > this.best) { this.best = this.score; localStorage.setItem('equa_best_' + this.mode, this.best); }
+    if (this.score > this.best) { this.best = this.score; localStorage.setItem('math_best_' + this.mode, this.best); }
     this._pushInventory(); this._showSelection();
     this.hooks.setBest(this.best);
     this.hooks.setOverlay({

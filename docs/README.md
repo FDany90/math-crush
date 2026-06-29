@@ -1,4 +1,4 @@
-# 📁 Documentación — EquaCrush
+# 📁 Documentación — Math Crush
 
 Juego puzzle matemático casual (cuentas/ecuaciones, mecánica match-3 estilo Candy Crush).
 

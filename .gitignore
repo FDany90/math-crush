@@ -22,3 +22,6 @@ Thumbs.db
 
 # vercel
 .vercel
+
+# config local del harness / Claude
+.claude/

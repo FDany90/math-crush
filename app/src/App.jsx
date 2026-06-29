@@ -69,7 +69,7 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>Equa <span>Crush</span></h1>
+        <h1>Math <span>Crush</span></h1>
         <div className="sub">Formá el objetivo o una ecuación · horizontal o vertical</div>
       </header>
 

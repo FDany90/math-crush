@@ -1,4 +1,4 @@
-# Equa Crush — Documentación / Traspaso
+# Math Crush — Documentación / Traspaso
 
 > Match-3 estilo Candy Crush pero con **números y operadores matemáticos**.
 > En vez de alinear caramelos, formás **ecuaciones/cálculos válidos** en línea (horizontal o vertical) y las fichas explotan.

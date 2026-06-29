@@ -1,4 +1,4 @@
-# 🔬 Fuentes y Metodología — Análisis de Mercado EquaCrush
+# 🔬 Fuentes y Metodología — Análisis de Mercado Math Crush
 
 > Anexo de [analisis-de-mercado.md](./analisis-de-mercado.md).
 > Generado por investigación profunda multi-agente con verificación adversarial · 2026-06-29.

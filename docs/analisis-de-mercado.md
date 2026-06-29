@@ -1,4 +1,4 @@
-# 📊 Análisis de Mercado — EquaCrush
+# 📊 Análisis de Mercado — Math Crush
 
 > Juego puzzle matemático casual (cuentas/ecuaciones con mecánica match-3 estilo Candy Crush).
 > Informe basado en investigación multi-fuente con verificación adversarial.
@@ -95,7 +95,7 @@ CPI blended general de mercado 2025: ~$4,70 iOS / ~$3,40 Android.
 
 ---
 
-## 🎯 Recomendación estratégica para EquaCrush
+## 🎯 Recomendación estratégica para Math Crush
 
 1. **Web (`index.html`) como laboratorio gratis** — valida que la mecánica engancha sin gastar en captación. Cero fricción, compartible.
 2. **Android + LatAm para volumen barato** — CPI $0,14-0,34, miles de jugadores para medir retención real.

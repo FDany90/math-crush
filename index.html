@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Equa Crush — Prototipo</title>
+<style>
+  :root{
+    --gap: 4px;
+    --cols: 8;
+    --rows: 8;
+    --bg: #1b1530;
+    --panel: #271d47;
+    --num: #4f7cff;
+    --num2: #6a93ff;
+    --op:  #ff7b54;
+    --op2: #ff9b7a;
+    --eq:  #ffd23f;
+    --eq2: #ffe07a;
+    --txt: #fff;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; }
+  body{
+    background:radial-gradient(circle at 50% 0%, #2a1f52, var(--bg));
+    color:var(--txt);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+    user-select:none; touch-action:manipulation;
+    min-height:100%;
+  }
+  header{ text-align:center; padding:14px 10px 6px; }
+  h1{ margin:0; font-size:22px; letter-spacing:.5px; }
+  h1 span{ color:var(--eq); }
+  .sub{ opacity:.6; font-size:12px; margin-top:2px; }
+
+  .hud{
+    display:flex; gap:10px; width:min(94vw,460px); margin:8px 0;
+  }
+  .stat{
+    flex:1; background:var(--panel); border-radius:14px; padding:8px 10px;
+    text-align:center; box-shadow:0 4px 0 rgba(0,0,0,.25);
+  }
+  .stat .k{ font-size:10px; text-transform:uppercase; opacity:.55; letter-spacing:1px;}
+  .stat .v{ font-size:22px; font-weight:700; }
+
+  #board{
+    width:min(94vw,460px); aspect-ratio:1/1;
+    background:var(--panel); border-radius:18px; padding:var(--gap);
+    display:grid; gap:var(--gap);
+    grid-template-columns:repeat(var(--cols),1fr);
+    grid-template-rows:repeat(var(--rows),1fr);
+    box-shadow:0 8px 0 rgba(0,0,0,.3), inset 0 0 0 2px rgba(255,255,255,.04);
+    position:relative;
+  }
+  .tile{
+    border-radius:12px; display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:clamp(14px,4.4vw,24px); cursor:pointer;
+    color:#0d0a1a;
+    box-shadow:0 3px 0 rgba(0,0,0,.28), inset 0 2px 2px rgba(255,255,255,.35);
+    transition:transform .12s ease, opacity .18s ease;
+    position:relative;
+  }
+  .tile.num{ background:linear-gradient(160deg,var(--num2),var(--num)); color:#fff;}
+  .tile.op { background:linear-gradient(160deg,var(--op2),var(--op)); color:#3a0f00;}
+  .tile.eq { background:linear-gradient(160deg,var(--eq2),var(--eq)); color:#5a4500;}
+  .tile.sel{ transform:scale(.86); box-shadow:0 0 0 3px #fff, 0 3px 0 rgba(0,0,0,.28); }
+  .tile.hint{ animation:hintPulse .7s ease infinite; }
+  @keyframes hintPulse{ 0%,100%{ box-shadow:0 0 0 0 #fff8; } 50%{ box-shadow:0 0 0 4px #fff8; transform:scale(1.05);} }
+  .tile.clear{ animation:pop .28s ease forwards; }
+  @keyframes pop{
+    0%{ transform:scale(1); }
+    40%{ transform:scale(1.18); filter:brightness(1.6); }
+    100%{ transform:scale(0); opacity:0; }
+  }
+  .tile.fall{ animation:fall .18s ease; }
+  @keyframes fall{ from{ transform:translateY(-14%);} to{ transform:translateY(0);} }
+
+  .toast{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    background:#000a; padding:8px 16px; border-radius:20px; font-weight:700;
+    opacity:0; transition:opacity .25s, transform .25s; pointer-events:none;
+    z-index:20;
+  }
+  .toast.show{ opacity:1; }
+
+  .inventory{
+    display:flex; gap:8px; flex-wrap:wrap; justify-content:center;
+    width:min(94vw,460px); margin-top:12px;
+  }
+  .boost{
+    position:relative; width:50px; height:50px; border-radius:12px;
+    background:#3a2d63; display:flex; align-items:center; justify-content:center;
+    font-size:22px; font-weight:800; color:#fff; cursor:pointer;
+    box-shadow:0 4px 0 rgba(0,0,0,.3);
+  }
+  .boost:active{ transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.3); }
+  .boost .badge{
+    position:absolute; top:-6px; right:-6px; background:var(--op); color:#3a0f00;
+    font-size:12px; min-width:18px; height:18px; border-radius:9px; padding:0 4px;
+    display:flex; align-items:center; justify-content:center; font-weight:800;
+  }
+  .boost.active{ outline:3px solid #fff; }
+  .boost.empty{ opacity:.35; pointer-events:none; }
+  .config{
+    width:min(94vw,460px); background:var(--panel); border-radius:14px;
+    padding:8px 12px; margin-top:12px; box-shadow:0 4px 0 rgba(0,0,0,.25);
+  }
+  .cfg-row{ display:flex; align-items:center; gap:10px; padding:4px 0; }
+  .cfg-label{ font-size:13px; font-weight:600; width:90px; }
+  .cfg-val{ font-size:15px; font-weight:800; min-width:46px; text-align:center; }
+  .cfg-btn{
+    width:34px; height:34px; padding:0; font-size:20px; line-height:1;
+    border-radius:9px; background:#3a2d63; box-shadow:0 3px 0 rgba(0,0,0,.3);
+  }
+  .cfg-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.3); }
+  .controls{ display:flex; gap:10px; margin:12px 0 30px; }
+  button{
+    background:var(--num); color:#fff; border:none; border-radius:12px;
+    padding:10px 18px; font-weight:700; font-size:14px; cursor:pointer;
+    box-shadow:0 4px 0 rgba(0,0,0,.3);
+  }
+  button:active{ transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.3); }
+  .hint{ opacity:.55; font-size:11px; max-width:min(94vw,460px); text-align:center; line-height:1.5; }
+
+  .modes{ display:flex; gap:8px; margin-top:8px; }
+  .mode-btn{
+    background:#3a2d63; color:#fff; opacity:.6; font-size:13px; padding:8px 14px;
+    border-radius:11px; box-shadow:0 3px 0 rgba(0,0,0,.3);
+  }
+  .mode-btn.active{ opacity:1; background:var(--num); outline:2px solid #fff5; }
+
+  .limitbar{
+    width:min(94vw,460px); height:8px; background:#0003; border-radius:6px;
+    margin:6px 0 2px; overflow:hidden;
+  }
+  #limitfill{
+    height:100%; width:100%; border-radius:6px;
+    background:linear-gradient(90deg,#5cd66b,#37b24d); transition:width .2s linear;
+  }
+  #limitfill.low{ background:linear-gradient(90deg,#ff7b54,#e03131); }
+
+  .overlay{
+    position:fixed; inset:0; background:#0b0820e0; display:none;
+    align-items:center; justify-content:center; z-index:50;
+  }
+  .overlay.show{ display:flex; }
+  .card{
+    background:var(--panel); border-radius:20px; padding:28px 34px; text-align:center;
+    box-shadow:0 10px 0 rgba(0,0,0,.4); animation:pop .3s ease;
+  }
+  .over-title{ font-size:24px; font-weight:800; color:var(--eq); }
+  .over-k{ font-size:12px; opacity:.6; text-transform:uppercase; letter-spacing:1px; margin-top:10px; }
+  .over-score{ font-size:48px; font-weight:900; }
+  .over-sub{ opacity:.7; font-size:13px; margin:6px 0 16px; }
+  .card button{ font-size:16px; padding:12px 28px; }
+
+  .target{
+    font-size:18px; margin:8px 0 2px; color:#5a4500; font-weight:800;
+    background:linear-gradient(160deg,var(--eq2),var(--eq));
+    padding:8px 24px; border-radius:30px; box-shadow:0 4px 0 rgba(0,0,0,.25);
+  }
+  .target b{ font-size:26px; }
+  .target.flash{ animation:tflash .5s; }
+  @keyframes tflash{ 0%{transform:scale(1);} 50%{transform:scale(1.18); filter:brightness(1.3);} 100%{transform:scale(1);} }
+
+  .popup{
+    position:fixed; transform:translate(-50%,-50%); font-weight:900; font-size:22px;
+    color:#ffe07a; text-shadow:0 2px 6px #000; pointer-events:none; z-index:30;
+    animation:floatUp .75s ease forwards;
+  }
+  @keyframes floatUp{
+    0%{ opacity:0; transform:translate(-50%,-30%) scale(.6); }
+    25%{ opacity:1; }
+    100%{ opacity:0; transform:translate(-50%,-170%) scale(1.1); }
+  }
+  #board.shake{ animation:shk .25s; }
+  @keyframes shk{
+    0%,100%{ transform:translate(0,0); }
+    20%{ transform:translate(-5px,3px); } 40%{ transform:translate(5px,-3px); }
+    60%{ transform:translate(-4px,-2px); } 80%{ transform:translate(4px,2px); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Equa <span>Crush</span></h1>
+  <div class="sub">Formá el objetivo o una ecuación · horizontal o vertical</div>
+</header>
+
+<div class="modes">
+  <button class="mode-btn active" id="m-time">⏱ Tiempo 3min</button>
+  <button class="mode-btn" id="m-moves">🔢 Movidas 20</button>
+</div>
+
+<div class="target" id="targetBanner"><span id="level">Nv.1</span> · Hacé <b id="target">10</b></div>
+<div class="limitbar"><div id="limitfill"></div></div>
+
+<div class="hud">
+  <div class="stat"><div class="k">Puntos</div><div class="v" id="score">0</div></div>
+  <div class="stat"><div class="k" id="limitLabel">Tiempo</div><div class="v" id="limitVal">60</div></div>
+  <div class="stat"><div class="k">Combo</div><div class="v" id="combo">x1</div></div>
+  <div class="stat"><div class="k">Mejor</div><div class="v" id="best">0</div></div>
+</div>
+
+<div id="board"></div>
+
+<div class="inventory" id="inventory"></div>
+
+<div class="config" id="config">
+  <div class="cfg-row">
+    <span class="cfg-label">Operadores</span>
+    <button class="cfg-btn" data-k="ops" data-d="-1">−</button>
+    <span class="cfg-val" id="v-ops">18%</span>
+    <button class="cfg-btn" data-k="ops" data-d="1">+</button>
+  </div>
+  <div class="cfg-row">
+    <span class="cfg-label">Signos =</span>
+    <button class="cfg-btn" data-k="eq" data-d="-1">−</button>
+    <span class="cfg-val" id="v-eq">20%</span>
+    <button class="cfg-btn" data-k="eq" data-d="1">+</button>
+  </div>
+  <div class="cfg-row">
+    <span class="cfg-label">Mínimo =</span>
+    <button class="cfg-btn" data-k="min" data-d="-1">−</button>
+    <span class="cfg-val" id="v-min">6</span>
+    <button class="cfg-btn" data-k="min" data-d="1">+</button>
+  </div>
+  <div class="cfg-row">
+    <span class="cfg-label" style="opacity:.5">Dígitos</span>
+    <span class="cfg-val" id="v-dig" style="margin-left:auto;opacity:.5">62%</span>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="hint">Pista</button>
+  <button id="shuffle">Mezclar</button>
+  <button id="reset">Reiniciar</button>
+</div>
+<div class="hint">
+  Tocá una ficha y luego una adyacente para intercambiarlas.
+  Si formás algo como <b>10+55=60+5</b> (65=65) en línea, explota.
+  Necesita un solo <b>=</b> y al menos un operador.
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="overlay">
+  <div class="card">
+    <div class="over-title" id="overTitle">¡Tiempo!</div>
+    <div class="over-k">Puntos</div>
+    <div class="over-score" id="finalScore">0</div>
+    <div class="over-sub" id="overSub">Nivel alcanzado 1 · Récord 0</div>
+    <button id="again">De nuevo</button>
+  </div>
+</div>
+
+<script>
+const COLS = 8, ROWS = 8;
+const DIGITS = "0123456789".split("");
+const OPS = ["+","−","×","÷"];
+const EQ = "=";
+
+const boardEl = document.getElementById("board");
+const toastEl = document.getElementById("toast");
+let grid = [];           // grid[r][c] = char
+let selected = null;     // {r,c}
+let busy = false;
+let hintSet = null;      // Set de "r,c" resaltados por la pista
+
+// ---------- consumibles / power-ups ----------
+const BOOSTERS = [
+  {id:"+",  label:"+", kind:"place", ch:"+", n:3},
+  {id:"-",  label:"−", kind:"place", ch:"−", n:3},
+  {id:"x",  label:"×", kind:"place", ch:"×", n:2},
+  {id:"d",  label:"÷", kind:"place", ch:"÷", n:2},
+  {id:"eq", label:"=", kind:"place", ch:"=", n:2},
+  {id:"tp", label:"⇄", kind:"teleport",     n:3},
+  {id:"rr", label:"🎯", kind:"reroll",       n:2},
+];
+const BOOSTER_BASE = Object.fromEntries(BOOSTERS.map(b=>[b.id,b.n]));
+let activeBooster = null;   // booster seleccionado, esperando toque en el tablero
+// ---------- modos, nivel, límite ----------
+let mode = "time";                 // "time" | "moves"
+const START_TIME = 180, START_MOVES = 20;   // 3 minutos
+let level = 1;
+let timeLeft = START_TIME, deadline = 0, timerOn = false, timerId = null;
+let moves = START_MOVES;
+let gameStarted = false, gameEnded = false;
+
+// objetivo escala con el nivel: más difícil de formar a medida que avanzás
+function randomTarget(){
+  const base = 3 + level*2;
+  const span = 6 + level*2;
+  return base + Math.floor(Math.random()*span);
+}
+let target = randomTarget();
+
+let score = 0;
+function bestKey(){ return "equa_best_"+mode; }
+let best = Number(localStorage.getItem(bestKey())||0);
+document.getElementById("best").textContent = best;
+
+// ---------- generación (configurable en vivo) ----------
+let PCT_OPS = 18;    // % de operadores
+let PCT_EQ  = 20;    // % de signos '='
+let MIN_EQ  = 6;     // piso de signos '=' en el tablero
+
+function randTile(){
+  const x = Math.random()*100;
+  if (x < PCT_OPS)          return OPS[Math.floor(Math.random()*OPS.length)];
+  if (x < PCT_OPS + PCT_EQ) return EQ;
+  return DIGITS[Math.floor(Math.random()*10)];
+}
+function isSpecial(ch){ return ch===EQ || OPS.includes(ch); }
+function randDigit(){ return DIGITS[Math.floor(Math.random()*10)]; }
+
+// Mantiene el tablero "jugable": sin operadores/= pegados, y con un mínimo de '='.
+function tidyBoard(){
+  // 1) romper clusters: un especial pegado a otro especial (izq/arriba) -> dígito
+  for (let r=0;r<ROWS;r++){
+    for (let c=0;c<COLS;c++){
+      if (!isSpecial(grid[r][c])) continue;
+      const left = c>0      && isSpecial(grid[r][c-1]);
+      const up   = r>0      && isSpecial(grid[r-1][c]);
+      if ((left||up) && Math.random()<0.85) grid[r][c]=randDigit();
+    }
+  }
+  // 2) piso de '=': si faltan, convertir dígitos rodeados de dígitos
+  let eq=0; for(const row of grid) for(const ch of row) if(ch===EQ) eq++;
+  let guard=0;
+  while (eq<MIN_EQ && guard++<300){
+    const r=Math.floor(Math.random()*ROWS), c=Math.floor(Math.random()*COLS);
+    if (isSpecial(grid[r][c])) continue;
+    const clean =
+      (c===0||!isSpecial(grid[r][c-1])) && (c===COLS-1||!isSpecial(grid[r][c+1])) &&
+      (r===0||!isSpecial(grid[r-1][c])) && (r===ROWS-1||!isSpecial(grid[r+1][c]));
+    if (!clean) continue;                 // preferimos rodearlo de números
+    grid[r][c]=EQ; eq++;
+  }
+}
+function kindOf(ch){
+  if (ch === EQ) return "eq";
+  if (OPS.includes(ch)) return "op";
+  return "num";
+}
+
+function newGrid(){
+  grid = Array.from({length:ROWS},()=>Array.from({length:COLS},randTile));
+  tidyBoard();
+  // limpiar matches iniciales para no auto-resolver al arrancar
+  let guard=0;
+  while (findMatches().size && guard++ < 50){
+    for (const key of findMatches()){
+      const [r,c]=key.split(",").map(Number);
+      grid[r][c]=randTile();
+    }
+  }
+}
+
+// ---------- parser / evaluación ----------
+// Evalúa una expresión (lista de chars) -> número o null si inválida
+function evalExpr(tokens){
+  if (!tokens.length) return null;
+  // construir números y operadores
+  const seq = []; // ['num',valor] | ['op',ch]
+  let numBuf = "";
+  for (const t of tokens){
+    if (DIGITS.includes(t)) numBuf += t;
+    else if (OPS.includes(t)){
+      if (numBuf === "") return null;      // operador sin número previo
+      seq.push(["num", parseInt(numBuf,10)]); numBuf="";
+      seq.push(["op", t]);
+    } else return null;                    // '=' u otro dentro de un lado
+  }
+  if (numBuf === "") return null;          // termina en operador
+  seq.push(["num", parseInt(numBuf,10)]);
+  // precedencia: × ÷ primero
+  const pass1=[seq[0]];
+  for (let i=1;i<seq.length;i+=2){
+    const op=seq[i][1], rhs=seq[i+1][1];
+    if (op==="×"||op==="÷"){
+      const prev=pass1.pop()[1];
+      if (op==="÷" && rhs===0) return null;
+      pass1.push(["num", op==="×"? prev*rhs : prev/rhs]);
+    } else { pass1.push(seq[i]); pass1.push(seq[i+1]); }
+  }
+  let acc=pass1[0][1];
+  for (let i=1;i<pass1.length;i+=2){
+    const op=pass1[i][1], rhs=pass1[i+1][1];
+    acc = op==="+"? acc+rhs : acc-rhs;
+  }
+  return acc;
+}
+
+// ¿el segmento de chars es una ecuación válida?
+function isValidEquation(chars){
+  if (chars.length < 3) return false;
+  const eqCount = chars.filter(c=>c===EQ).length;
+  if (eqCount !== 1) return false;
+  if (!chars.some(c=>OPS.includes(c))) return false;   // requiere ≥1 operador
+  const i = chars.indexOf(EQ);
+  const left = chars.slice(0,i), right = chars.slice(i+1);
+  const lv = evalExpr(left), rv = evalExpr(right);
+  if (lv===null || rv===null) return false;
+  return Math.abs(lv-rv) < 1e-9;
+}
+
+// ¿el segmento (sin '=') es una expresión que da el objetivo?
+function isTargetExpr(chars){
+  if (chars.length < 3) return false;
+  if (chars.includes(EQ)) return false;
+  if (!chars.some(c=>OPS.includes(c))) return false;   // requiere ≥1 operador
+  const v = evalExpr(chars);
+  return v!==null && Math.abs(v-target) < 1e-9;
+}
+function scanLineWith(cells, validFn){
+  const hits=[]; let start=0;
+  while (start < cells.length){
+    let bestEnd=-1;
+    for (let end=cells.length; end>start+2; end--){
+      if (validFn(cells.slice(start,end).map(x=>x.ch))){ bestEnd=end; break; }
+    }
+    if (bestEnd!==-1){ for(let k=start;k<bestEnd;k++) hits.push(cells[k]); start=bestEnd; }
+    else start++;
+  }
+  return hits;
+}
+function scanAll(validFn){
+  const s=new Set();
+  for (let r=0;r<ROWS;r++){
+    const line=[]; for(let c=0;c<COLS;c++) line.push({r,c,ch:grid[r][c]});
+    for (const cell of scanLineWith(line,validFn)) s.add(cell.r+","+cell.c);
+  }
+  for (let c=0;c<COLS;c++){
+    const line=[]; for(let r=0;r<ROWS;r++) line.push({r,c,ch:grid[r][c]});
+    for (const cell of scanLineWith(line,validFn)) s.add(cell.r+","+cell.c);
+  }
+  return s;
+}
+function findEquationCells(){ return scanAll(isValidEquation); }
+function findTargetCells(){ return scanAll(isTargetExpr); }
+function findMatches(){ return new Set([...findEquationCells(), ...findTargetCells()]); }
+
+// ---------- gravedad / refill ----------
+function collapse(cleared){
+  for (let c=0;c<COLS;c++){
+    const keep=[];
+    for (let r=ROWS-1;r>=0;r--){
+      if (!cleared.has(r+","+c)) keep.push(grid[r][c]);
+    }
+    for (let r=ROWS-1, i=0;r>=0;r--,i++){
+      grid[r][c] = i<keep.length ? keep[i] : randTile();
+    }
+  }
+}
+
+// ---------- render ----------
+function render(clearedSet, fallSet){
+  boardEl.innerHTML="";
+  for (let r=0;r<ROWS;r++){
+    for (let c=0;c<COLS;c++){
+      const ch=grid[r][c];
+      const d=document.createElement("div");
+      d.className="tile "+kindOf(ch);
+      d.textContent=ch;
+      d.dataset.r=r; d.dataset.c=c;
+      if (selected && selected.r===r && selected.c===c) d.classList.add("sel");
+      if (clearedSet && clearedSet.has(r+","+c)) d.classList.add("clear");
+      if (fallSet && fallSet.has(r+","+c)) d.classList.add("fall");
+      if (hintSet && hintSet.has(r+","+c)) d.classList.add("hint");
+      d.addEventListener("click",()=>onTap(r,c));
+      boardEl.appendChild(d);
+    }
+  }
+}
+
+// ---------- interacción ----------
+function adjacent(a,b){
+  return (Math.abs(a.r-b.r)+Math.abs(a.c-b.c))===1;
+}
+let lastAct = Date.now();
+async function onTap(r,c){
+  if (busy || gameEnded) return;
+  lastAct = Date.now();
+  ensureStarted();
+  hintSet=null;
+
+  // --- modo power-up ---
+  if (activeBooster){
+    const b=activeBooster;
+    if (b.kind==="place"){
+      grid[r][c]=b.ch; consume(b); selected=null;
+      busy=true; render();
+      if (findMatches().size){ await sleep(140); await resolve(); }
+      busy=false; return;
+    }
+    if (b.kind==="teleport"){
+      if (!selected){ selected={r,c}; render(); return; }
+      if (selected.r===r && selected.c===c){ selected=null; render(); return; }
+      swap(selected,{r,c});                 // intercambio a distancia, sin adyacencia
+      consume(b); selected=null;
+      busy=true; render();
+      if (findMatches().size){ await sleep(140); await resolve(); }
+      busy=false; return;
+    }
+  }
+
+  if (!selected){ selected={r,c}; render(); return; }
+  if (selected.r===r && selected.c===c){ selected=null; render(); return; }
+  if (!adjacent(selected,{r,c})){ selected={r,c}; render(); return; }
+
+  const a=selected, b={r,c};
+  swap(a,b);                   // intercambio LIBRE: nunca se revierte
+  selected=null;
+  spendMove();                 // cuesta 1 movida (solo modo movidas)
+  busy=true;
+  render();                    // mostrar el movimiento
+  if (findMatches().size){
+    await sleep(140);
+    await resolve();
+  }
+  busy=false;
+  endIfNoLimit();
+}
+function swap(a,b){
+  const t=grid[a.r][a.c]; grid[a.r][a.c]=grid[b.r][b.c]; grid[b.r][b.c]=t;
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function resolve(){
+  let combo=0;
+  while(true){
+    if (gameEnded) break;
+    const eqCells = findEquationCells();
+    const tgCells = findTargetCells();
+    const matches = new Set([...eqCells, ...tgCells]);
+    if (matches.size===0) break;
+    combo++;
+    document.getElementById("combo").textContent="x"+combo;
+    let gained = matches.size*10*combo;
+    if (eqCells.size>0) gained += 60*combo;        // bonus por ecuación con '='
+    score += gained; updateScore();
+    popup(matches, "+"+gained+(combo>1?"  x"+combo:""));
+    boardEl.classList.add("shake");
+    render(matches);                                // animación pop
+    await sleep(matches.size>6 ? 240 : 170);
+    boardEl.classList.remove("shake");
+    collapse(matches);
+    tidyBoard();
+    if (tgCells.size>0) objectiveReached();          // objetivo cumplido -> +nivel +recurso
+    render(null, new Set());                          // refill
+    await sleep(90);
+  }
+  document.getElementById("combo").textContent="x1";
+  if (combo>=3 && !gameEnded) earnBooster();          // recompensa por encadenar
+  endIfNoLimit();
+}
+
+function newTarget(){
+  target = randomTarget();
+  document.getElementById("target").textContent = target;
+  document.getElementById("level").textContent = "Nv."+level;
+  const b=document.getElementById("targetBanner");
+  b.classList.remove("flash"); void b.offsetWidth; b.classList.add("flash");
+}
+
+// recompensa al cumplir un objetivo: sube nivel y da recurso según el modo
+function objectiveReached(){
+  level++;
+  if (mode==="time") addTime(3);
+  else { moves += 2; }
+  newTarget();
+  updateLimitUI();
+}
+
+// ---------- límite (tiempo o movidas) ----------
+const limitLabelEl=document.getElementById("limitLabel");
+const limitValEl=document.getElementById("limitVal");
+const fillEl=document.getElementById("limitfill");
+function updateLimitUI(){
+  if (mode==="time"){
+    limitLabelEl.textContent="Tiempo";
+    const s=Math.ceil(timeLeft);
+    limitValEl.textContent=Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+    const pct=Math.max(0,Math.min(100, timeLeft/START_TIME*100));
+    fillEl.style.width=pct+"%";
+    fillEl.classList.toggle("low", timeLeft<=10);
+  } else {
+    limitLabelEl.textContent="Movidas";
+    limitValEl.textContent=moves;
+    const pct=Math.max(0,Math.min(100, moves/START_MOVES*100));
+    fillEl.style.width=pct+"%";
+    fillEl.classList.toggle("low", moves<=5);
+  }
+}
+function addTime(s){ deadline += s*1000; }
+function tickTimer(){
+  if (!timerOn) return;
+  const ms=deadline-Date.now();
+  timeLeft=Math.max(0, ms/1000);
+  updateLimitUI();
+  if (ms<=0){ timerOn=false; gameOver(); return; }
+  timerId=setTimeout(tickTimer,100);
+}
+function ensureStarted(){
+  if (gameStarted || gameEnded) return;
+  gameStarted=true;
+  if (mode==="time"){ deadline=Date.now()+START_TIME*1000; timerOn=true; tickTimer(); }
+}
+function spendMove(){            // solo en modo movidas
+  if (mode!=="moves") return;
+  moves--; updateLimitUI();
+}
+function endIfNoLimit(){
+  if (mode==="moves" && moves<=0 && !gameEnded) gameOver();
+}
+
+// ---------- fin / reinicio ----------
+function gameOver(){
+  if (gameEnded) return;
+  gameEnded=true; timerOn=false; activeBooster=null; selected=null;
+  if (timerId) clearTimeout(timerId);
+  if (score>best){ best=score; localStorage.setItem(bestKey(),best); }
+  document.getElementById("best").textContent=best;
+  document.getElementById("overTitle").textContent = mode==="time" ? "¡Tiempo!" : "¡Sin movidas!";
+  document.getElementById("finalScore").textContent=score;
+  document.getElementById("overSub").textContent="Nivel alcanzado "+level+" · Récord "+best;
+  document.getElementById("overlay").classList.add("show");
+  renderInventory(); render();
+}
+function resetGame(){
+  gameEnded=false; gameStarted=false; timerOn=false;
+  if (timerId) clearTimeout(timerId);
+  level=1; score=0; updateScore();
+  moves=START_MOVES; timeLeft=START_TIME; deadline=0;
+  for (const b of BOOSTERS) b.n=BOOSTER_BASE[b.id];
+  activeBooster=null; selected=null;
+  best=Number(localStorage.getItem(bestKey())||0);
+  document.getElementById("best").textContent=best;
+  target=randomTarget();
+  document.getElementById("target").textContent=target;
+  document.getElementById("level").textContent="Nv."+level;
+  document.getElementById("overlay").classList.remove("show");
+  updateLimitUI(); renderInventory(); newGrid(); render();
+}
+function setMode(m){
+  if (mode===m && gameStarted && !gameEnded) return;
+  mode=m;
+  document.getElementById("m-time").classList.toggle("active", m==="time");
+  document.getElementById("m-moves").classList.toggle("active", m==="moves");
+  resetGame();
+}
+
+function popup(cells, text){
+  const arr=[...cells].map(k=>k.split(",").map(Number));
+  const r=arr.reduce((a,p)=>a+p[0],0)/arr.length;
+  const c=arr.reduce((a,p)=>a+p[1],0)/arr.length;
+  const rect=boardEl.getBoundingClientRect();
+  const el=document.createElement("div");
+  el.className="popup"; el.textContent=text;
+  el.style.left=(rect.left + (c+0.5)/COLS*rect.width)+"px";
+  el.style.top =(rect.top  + (r+0.5)/ROWS*rect.height)+"px";
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),750);
+}
+
+function updateScore(){
+  document.getElementById("score").textContent=score;
+  if (score>best){ best=score; localStorage.setItem("equa_best",best);
+    document.getElementById("best").textContent=best; }
+}
+let toastT;
+function toast(msg){
+  toastEl.textContent=msg; toastEl.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(()=>toastEl.classList.remove("show"),1100);
+}
+
+// ---------- detección de jugadas posibles ----------
+// Prueba cada swap adyacente; devuelve la primera pareja que forma ecuación, o null.
+function findHint(){
+  for (let r=0;r<ROWS;r++){
+    for (let c=0;c<COLS;c++){
+      const neighbors = [[r,c+1],[r+1,c]];
+      for (const [r2,c2] of neighbors){
+        if (r2>=ROWS || c2>=COLS) continue;
+        const a={r,c}, b={r:r2,c:c2};
+        swap(a,b);
+        const ok = findMatches().size>0;
+        swap(a,b);                     // revertir, solo es una prueba
+        if (ok) return {a,b};
+      }
+    }
+  }
+  return null;
+}
+
+// ---------- botones ----------
+// ---------- inventario / power-ups ----------
+const invEl=document.getElementById("inventory");
+function renderInventory(){
+  invEl.innerHTML="";
+  for (const b of BOOSTERS){
+    const d=document.createElement("div");
+    d.className="boost"+(b.n<=0?" empty":"")+(activeBooster===b?" active":"");
+    d.textContent=b.label;
+    const badge=document.createElement("span");
+    badge.className="badge"; badge.textContent=b.n;
+    d.appendChild(badge);
+    d.addEventListener("click",()=>activateBooster(b));
+    invEl.appendChild(d);
+  }
+}
+function activateBooster(b){
+  if (busy || gameEnded || b.n<=0) return;
+  ensureStarted();
+  if (b.kind==="reroll"){            // efecto inmediato, sin tocar el tablero
+    b.n--; newTarget(); renderInventory();
+    toast("Nuevo objetivo: "+target);
+    return;
+  }
+  activeBooster = (activeBooster===b) ? null : b;   // togglear
+  selected=null; render(); renderInventory();
+  if (activeBooster){
+    toast(b.kind==="place" ? "Tocá una ficha para poner  "+b.label
+                           : "Tocá dos fichas para intercambiarlas");
+  }
+}
+function consume(b){
+  b.n--; if (b===activeBooster) activeBooster=null;
+  renderInventory();
+}
+function earnBooster(){               // recompensa por combos grandes
+  const pool=BOOSTERS.filter(b=>b.kind!=="reroll");
+  const b=pool[Math.floor(Math.random()*pool.length)];
+  b.n++; renderInventory();
+  toast("¡Bonus combo! +1  "+b.label);
+}
+
+// ---------- panel de configuración en vivo ----------
+function refreshConfigUI(){
+  document.getElementById("v-ops").textContent = PCT_OPS+"%";
+  document.getElementById("v-eq").textContent  = PCT_EQ+"%";
+  document.getElementById("v-min").textContent = MIN_EQ;
+  document.getElementById("v-dig").textContent = (100-PCT_OPS-PCT_EQ)+"%";
+}
+function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+
+document.getElementById("config").addEventListener("click",(e)=>{
+  const btn=e.target.closest(".cfg-btn"); if(!btn||busy) return;
+  const k=btn.dataset.k, d=Number(btn.dataset.d);
+  if (k==="ops") PCT_OPS = clamp(PCT_OPS + d*2, 0, 60);
+  if (k==="eq")  PCT_EQ  = clamp(PCT_EQ  + d*2, 0, 60);
+  if (k==="min") MIN_EQ  = clamp(MIN_EQ  + d,   0, 30);
+  // que dígitos no quede negativo
+  if (PCT_OPS+PCT_EQ > 90){ if(k==="ops") PCT_EQ=90-PCT_OPS; else PCT_OPS=90-PCT_EQ; }
+  refreshConfigUI();
+  newGrid(); selected=null; render();   // re-siembra para ver el efecto al instante
+});
+refreshConfigUI();
+
+document.getElementById("hint").onclick=()=>{
+  if (busy) return;
+  const h=findHint();
+  if (!h){ toast("Sin jugadas directas — probá Mezclar"); return; }
+  hintSet=new Set([h.a.r+","+h.a.c, h.b.r+","+h.b.c]);
+  render();
+  toast("Pista: intercambiá las fichas marcadas");
+  setTimeout(()=>{ hintSet=null; render(); }, 2500);
+};
+document.getElementById("shuffle").onclick=async ()=>{
+  if (busy || gameEnded) return;
+  // mezcla todo el tablero
+  const flat=grid.flat().sort(()=>Math.random()-0.5);
+  let i=0; for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++) grid[r][c]=flat[i++];
+  tidyBoard();
+  let g=0; while(findMatches().size && g++<40){ for(const k of findMatches()){const[r,c]=k.split(",").map(Number);grid[r][c]=randTile();} }
+  selected=null; render();
+};
+document.getElementById("reset").onclick=()=>{ if (!busy) resetGame(); };
+document.getElementById("again").onclick=()=>{ resetGame(); };
+document.getElementById("m-time").onclick=()=>setMode("time");
+document.getElementById("m-moves").onclick=()=>setMode("moves");
+
+// pista automática si el jugador se queda quieto (mantiene el ritmo)
+setInterval(()=>{
+  if (busy || selected || hintSet || gameEnded || !gameStarted) return;
+  if (Date.now()-lastAct < 4000) return;
+  const h=findHint();
+  if (h){
+    hintSet=new Set([h.a.r+","+h.a.c, h.b.r+","+h.b.c]);
+    render();
+    setTimeout(()=>{ hintSet=null; render(); }, 1800);
+  }
+  lastAct=Date.now();
+}, 1500);
+
+document.getElementById("target").textContent = target;
+document.getElementById("level").textContent = "Nv."+level;
+updateLimitUI();
+renderInventory();
+newGrid();
+render();
+</script>
+</body>
+</html>

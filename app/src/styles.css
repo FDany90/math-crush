@@ -45,10 +45,16 @@ button { border: none; cursor: pointer; font-family: inherit; color: #fff; }
 .gstar { position: absolute; top: -5px; transform: translateX(-50%); font-size: 14px; color: #fff8; }
 
 .board-area { position: relative; width: min(94vw, 460px); margin-top: 18px; }
-.arrow-h { position: absolute; top: -13px; left: 8px; width: 40px; height: 0; border-top: 2px solid #ffffff55; }
+.arrow-h { position: absolute; top: -13px; width: 40px; height: 0; border-top: 2px solid #ffffff55; }
 .arrow-h::after { content: ''; position: absolute; right: -1px; top: -4px; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 7px solid #ffffff55; }
-.arrow-v { position: absolute; left: -13px; top: 8px; height: 40px; width: 0; border-left: 2px solid #ffffff55; }
+.arrow-h.start { left: 8px; }
+.arrow-h.mid { left: 50%; transform: translateX(-50%); }
+.arrow-h.end { right: 8px; }
+.arrow-v { position: absolute; left: -13px; height: 40px; width: 0; border-left: 2px solid #ffffff55; }
 .arrow-v::after { content: ''; position: absolute; bottom: -1px; left: -4px; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 7px solid #ffffff55; }
+.arrow-v.start { top: 8px; }
+.arrow-v.mid { top: 50%; transform: translateY(-50%); }
+.arrow-v.end { bottom: 8px; }
 
 .board-wrap { width: 100%; aspect-ratio: 1/1; background: var(--panel); border-radius: 18px; padding: 6px; box-shadow: 0 8px 0 rgba(0,0,0,.3), inset 0 0 0 2px rgba(255,255,255,.04); }
 .board-wrap canvas { width: 100% !important; height: 100% !important; display: block; border-radius: 12px; }

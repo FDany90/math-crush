@@ -157,8 +157,8 @@ export default function App() {
         </div>
 
         <div className="board-area">
-          <div className="arrow-h" />
-          <div className="arrow-v" />
+          <div className="arrow-h start" /><div className="arrow-h mid" /><div className="arrow-h end" />
+          <div className="arrow-v start" /><div className="arrow-v mid" /><div className="arrow-v end" />
           <div className="board-wrap" ref={mountRef} />
         </div>
 
@@ -229,7 +229,7 @@ export default function App() {
             <div className="ok">Puntos</div>
             <div className="os">{result.score}</div>
             <div className="card-btns">
-              <button onClick={() => setScreen('map')}>Mapa</button>
+              <button onClick={() => { setResult(null); setScreen('map') }}>Mapa</button>
               {result.win && result.index + 1 < LEVELS.length
                 ? <button className="primary" onClick={() => playLevel(result.index + 1)}>Siguiente ▶</button>
                 : <button className="primary" onClick={() => playLevel(result.index)}>Reintentar</button>}

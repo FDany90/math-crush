@@ -18,7 +18,9 @@ const BOOSTER_DEFS = [
   { id: 'rr', label: '🎯', kind: 'reroll',          base: 2 },
 ]
 
-const START_TIME = 120   // 2 minutos por nivel
+const START_TIME = 60    // 1 minuto base; cada cuenta suma tiempo
+const TIME_PER_CUENTA = 5 // segundos que otorga cada cuenta formada
+const MAX_TRIES = 10     // intentos: cada movimiento que NO forma cuenta resta 1
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 export class Controller {
@@ -42,27 +44,38 @@ export class Controller {
     this.ended = false
     this.busy = false
     this.started = false
-    this.score = 0
+    this.left = this.level.quota ?? 6      // cuentas que faltan completar
+    this.tries = this.level.tries ?? MAX_TRIES   // intentos restantes
+    this.moves = 0                         // movimientos hechos (para límite de pistas)
+    this.autoHintCount = 0                 // pistas automáticas ya mostradas
     this.combo = 0
     this.timeLeft = START_TIME
     this.deadline = 0
     this.timerOn = false
     if (this.timerId) clearTimeout(this.timerId)
+    this._clearAutoHint()
     this.selected = null
     this.activeBooster = null
     this.targets = []
+    this.tutorial = !!this.level.tutorial
     for (const b of this.boosters) b.n = b.base
     this._rebuild()
     this._pickTargets()
     this._pushHud()
     this._pushInventory()
+    this.hooks.setTutorial?.(this.tutorial
+      ? 'Arrastrá la ficha señalada hacia su vecina para formar el número de arriba 👆'
+      : null)
     this.hooks.setOverlay({ show: false })
+    this._startAutoHint()
   }
 
   // ---------- temporizador ----------
   _ensureStarted() {
     if (this.started || this.ended) return
     this.started = true
+    this.board.hideHandGuide()              // el jugador ya tomó el control: fuera la manito
+    if (this.tutorial) this.hooks.setTutorial?.('¡Muy bien! Seguí formando el número de arriba.')
     this.deadline = Date.now() + START_TIME * 1000
     this.timerOn = true
     this._tick()
@@ -72,7 +85,7 @@ export class Controller {
     const ms = this.deadline - Date.now()
     this.timeLeft = Math.max(0, ms / 1000)
     this.hooks.setTime(this.timeLeft)
-    if (ms <= 0) { this.timerOn = false; this._endLevel(); return }
+    if (ms <= 0) { this.timerOn = false; this._endLevel(false, 'time'); return }
     this.timerId = setTimeout(() => this._tick(), 200)
   }
 
@@ -86,21 +99,62 @@ export class Controller {
   // Los demás se conservan si siguen siendo alcanzables; si no, se reemplazan.
   _pickTargets(consumed = new Set()) {
     this._replenishOperators()
+    const n = this.level.nTargets ?? 3
     const keep = this.targets.filter((t) => !consumed.has(t))
-    let targets = pickTargets(this.board.gridChars(), this.level, keep)
+    let targets = pickTargets(this.board.gridChars(), this.level, keep, n)
     let tries = 0
     while (targets.length === 0 && tries < 14) {
       this._rebuild()
-      targets = pickTargets(this.board.gridChars(), this.level, [])
+      targets = pickTargets(this.board.gridChars(), this.level, [], n)
       tries++
     }
     this.targets = targets
     this._pushTargets(consumed.size > 0)
   }
 
+  // ---------- pistas automáticas (solo niveles 1 y 2, a los 5 s de inactividad) ----------
+  // config de pistas automáticas por nivel:
+  //  niveles 1-3 → solo en los primeros 3 movimientos (nivel 1 instantánea, 2-3 a los 5 s)
+  //  niveles 4-5 → a los 10 s, máximo 2 pistas
+  //  nivel 6+    → sin pistas automáticas
+  _autoHintConfig() {
+    const i = this.levelIndex
+    if (i <= 2) return { delay: this.tutorial ? 0 : 5000, maxMoves: 3, maxHints: Infinity }
+    if (i <= 4) return { delay: 10000, maxMoves: Infinity, maxHints: 2 }
+    return null
+  }
+  _startAutoHint() {
+    this._clearAutoHint()
+    if (this.ended) return
+    const cfg = this._autoHintConfig()
+    if (!cfg || this.moves >= cfg.maxMoves || this.autoHintCount >= cfg.maxHints) return
+    this.autoHintId = setTimeout(() => this._showAutoHint(), cfg.delay)
+  }
+  _clearAutoHint() {
+    if (this.autoHintId) { clearTimeout(this.autoHintId); this.autoHintId = null }
+  }
+  _showAutoHint() {
+    this.autoHintId = null
+    if (this.busy || this.ended) { this._startAutoHint(); return }
+    this.autoHintCount++
+    if (this.tutorial) {
+      const h = findHintFallback(this.board.gridChars(), this.targets, this.md)
+      if (h) this.board.showHandGuide(h.a, h.b)      // nivel 1: manito guía sobre la jugada
+    } else {
+      this.hint()                                    // pista normal (resalta la jugada)
+      this._startAutoHint()                          // repetir (frenado por maxMoves/maxHints)
+    }
+  }
+  // el jugador interactuó: sacar la guía y reiniciar el contador de la pista
+  _playerActed() {
+    this.board.hideHandGuide()
+    this._clearAutoHint()
+  }
+
   // ---------- interacción ----------
   async onTileTap(r, c) {
     if (this.busy || this.ended) return
+    this._playerActed()
     this._ensureStarted()
     if (this.activeBooster) return this._useBooster(r, c)
 
@@ -115,6 +169,7 @@ export class Controller {
   // arrastre: intercambia dos vecinas (a -> b)
   async onDragSwap(a, b) {
     if (this.busy || this.ended) return
+    this._playerActed()
     this._ensureStarted()
     if (this.activeBooster) return this.onTileTap(a.r, a.c)   // en modo power-up, vale como tap
     this.selected = null; this.board.select(null)
@@ -122,17 +177,21 @@ export class Controller {
   }
 
   async _commitSwap(a, b) {
+    this.moves++                           // cuenta el movimiento (para el límite de pistas)
     this.busy = true; this.board.locked = true
     await this.board.swap(a, b)
-    // estilo Candy Crush: si no forma cuenta, vuelve para atrás (gratis)
+    // si no forma cuenta, vuelve para atrás y cuesta un intento (anti prueba-y-error)
     if (!findMatchesMulti(this.board.gridChars(), this.targets, this.md).size) {
       await this.board.swap(b, a)
       this.busy = false; this.board.locked = false
-      this.hooks.toast('No forma cuenta ✗')
+      this._failMove()
       return
     }
     await sleep(60)
     const consumed = await this._resolve()
+    // dejar que termine la animación de recolección (fichas volando + chip inflándose)
+    // antes de recambiar los objetivos, así no se pisa con el cambio de chips
+    if (!this.ended && consumed.size > 0) await sleep(360)
     this.busy = false; this.board.locked = false
     this._afterMove(consumed)
   }
@@ -140,6 +199,7 @@ export class Controller {
   _afterMove(consumed) {
     if (this.ended) return
     this._pickTargets(consumed)
+    this._startAutoHint()
   }
 
   async _useBooster(r, c) {
@@ -181,25 +241,61 @@ export class Controller {
       if (all.size === 0) break
 
       combo++; this.combo = combo
-      let gained = all.size * 10 * combo
-      if (eq.size > 0) gained += 60 * combo
-      this.score += gained; this._pushHud()
+      const cuentas = tg.hit.size + (eq.size > 0 ? 1 : 0)   // cuentas formadas en este paso
+      const deliberate = combo === 1                        // combo 1 = jugada del jugador; 2+ = cascada "por azar"
       tg.hit.forEach((v) => consumed.add(v))
       if (tg.hit.size) this.hooks.targetHit?.([...tg.hit])   // avisar qué objetivo se logró
+      const bonus = TIME_PER_CUENTA * cuentas               // toda cuenta suma tiempo
+      if (cuentas > 0) {
+        if (deliberate) this._decCuentas(cuentas)           // solo la jugada del jugador cuenta al objetivo
+        else this.hooks.toast?.('¡Combo por azar! +' + bonus + 's ⏱')
+        this._addTime(bonus)
+      }
 
       const cells = [...all].map((k) => { const [r, c] = k.split(',').map(Number); return { r, c } })
       const ctr = this.board.cellsCenter(cells)
 
       await this.board.highlight(cells)   // resaltar la combinación antes de explotar
       this.board.shake(all.size > 6 ? 14 : 8)
-      this.board.popup(ctr.x, ctr.y, '+' + gained + (combo > 1 ? '  x' + combo : ''))
+      this.board.popup(ctr.x, ctr.y, '+' + bonus + 's' + (combo > 1 ? '  ¡combo x' + combo + '!' : ''))
+      // solo la cuenta del jugador vuela al chip del objetivo (las de azar dan tiempo, no objetivo)
+      if (deliberate) this.hooks.onCuenta?.({
+        cells: cells.map(({ r, c }) => ({ r, c, ch: grid[r]?.[c] })),
+        rows: this.board.rows, cols: this.board.cols, value: [...tg.hit][0],
+      })
       await this.board.clear(cells)
       await this.board.collapse(this.gen.randTile)
       this._applyTidy()
+      if (this.left <= 0) break          // ¡completó las cuentas del nivel!
     }
     this.combo = 0
     if (combo >= 3 && !this.ended) this._earnBooster()
+    if (this.left <= 0 && !this.ended) this._endLevel(true)
     return consumed
+  }
+
+  // descuenta cuentas de la meta del nivel y avisa a la UI (con animación)
+  _decCuentas(n) {
+    this.left = Math.max(0, this.left - n)
+    this.hooks.setCuentas?.({ left: this.left, quota: this.level.quota ?? 6, dec: true })
+  }
+
+  // suma segundos al reloj (extiende el deadline) con animación "+N"
+  _addTime(sec) {
+    if (!this.started || this.ended || sec <= 0) return
+    this.deadline += sec * 1000
+    this.timeLeft = Math.max(0, (this.deadline - Date.now()) / 1000)
+    this.hooks.setTime(this.timeLeft)
+    this.hooks.addTime?.(sec)
+  }
+
+  // movimiento que no formó cuenta: resta un intento; si se acaban, se pierde
+  _failMove() {
+    this.tries = Math.max(0, this.tries - 1)
+    this.hooks.setTries?.({ left: this.tries, dec: true })
+    if (this.tries <= 0) { this.hooks.toast('¡Sin intentos! ✗'); this._endLevel(false, 'moves'); return }
+    this.hooks.toast('No forma cuenta ✗  (te quedan ' + this.tries + ')')
+    this._startAutoHint()
   }
 
   _applyTidy() {
@@ -243,21 +339,42 @@ export class Controller {
   }
 
   // ---------- fin de nivel ----------
-  _endLevel() {
+  // completed = true si llegó a 0 cuentas; reason: 'completed' | 'time' | 'moves'.
+  _endLevel(completed = false, reason = completed ? 'completed' : 'time') {
     if (this.ended) return
     this.ended = true; this.timerOn = false; this.activeBooster = null; this.selected = null; this.board.select(null)
+    this.board.hideHandGuide()
+    this._clearAutoHint()
     if (this.timerId) clearTimeout(this.timerId)
-    const stars = starsFor(this.level, this.score)
+    const stars = starsFor(this.level, { completed, timeLeft: this.timeLeft, totalTime: START_TIME })
     this._pushInventory()
-    this.hooks.onLevelEnd({ index: this.levelIndex, score: this.score, stars, goal: this.level.goal })
+    this.hooks.onLevelEnd({
+      index: this.levelIndex, completed, reason, stars,
+      quota: this.level.quota ?? 6, left: this.left,
+      timeLeft: Math.max(0, this.timeLeft),
+    })
   }
 
   // ---------- pista (a pedido del jugador) ----------
   hint() {
     if (this.busy || this.ended) return
-    const h = findHintFallback(this.board.gridChars(), this.targets, this.md)
-    if (h) this.board.hint(h.a, h.b)
-    else this.hooks.toast('Sin jugadas — probá Mezclar')
+    const grid = this.board.gridChars()
+    const h = findHintFallback(grid, this.targets, this.md)
+    if (!h) { this.hooks.toast('Sin jugadas — probá Mezclar'); return }
+    // simular el swap para saber qué celdas forman la cuenta (en el tablero YA intercambiado)
+    const g = grid.map((row) => row.slice())
+    const tmp = g[h.a.r][h.a.c]; g[h.a.r][h.a.c] = g[h.b.r][h.b.c]; g[h.b.r][h.b.c] = tmp
+    // remapear esas posiciones a las fichas ACTUALES: el destino del swap se traduce
+    // a la ficha que hay que mover (su origen), para resaltar las piezas reales.
+    const toCurrent = ({ r, c }) => {
+      if (r === h.a.r && c === h.a.c) return { r: h.b.r, c: h.b.c }
+      if (r === h.b.r && c === h.b.c) return { r: h.a.r, c: h.a.c }
+      return { r, c }
+    }
+    const line = [...findMatchesMulti(g, this.targets, this.md)].map((k) => {
+      const [r, c] = k.split(',').map(Number); return toCurrent({ r, c })
+    })
+    this.board.hint(h.a, h.b, line)
   }
 
   // ---------- botones ----------
@@ -276,10 +393,14 @@ export class Controller {
   _pushTargets(flash) {
     this.hooks.setTarget({
       level: this.level.num, name: this.level.name,
-      list: [...this.targets], goal: this.level.goal, flash: !!flash,
+      list: [...this.targets], flash: !!flash,
     })
   }
-  _pushHud() { this.hooks.setScore(this.score); this.hooks.setTime(this.timeLeft) }
+  _pushHud() {
+    this.hooks.setTime(this.timeLeft)
+    this.hooks.setCuentas?.({ left: this.left, quota: this.level.quota ?? 6, dec: false })
+    this.hooks.setTries?.({ left: this.tries, dec: false })
+  }
   _pushInventory() {
     this.hooks.setInventory(
       this.boosters.filter((b) => this._allowed(b))

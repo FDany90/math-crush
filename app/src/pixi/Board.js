@@ -10,11 +10,17 @@ import { kindOf } from '../game/logic.js'
 export const TILE = 64;
 export const MAX_PX = TILE * 8;  // tamaño máximo (8x8) para inicializar el canvas
 
-const COLORS = {
-  num: { fill: 0x4f7cff, top: 0x6a93ff, text: 0xffffff },
-  op:  { fill: 0xff7b54, top: 0xff9b7a, text: 0x3a0f00 },
-  eq:  { fill: 0xffd23f, top: 0xffe07a, text: 0x5a4500 },
-};
+// Tiza de 2 colores: números en cyan, operadores en rosa, = en amarillo.
+// Devuelve el color de tiza (un único color por ficha; se dibuja como trazo + glow).
+const CHALK_NUM = 0x2563eb;   // azul vivo y oscuro (buen contraste con el número blanco)
+const CHALK_OP  = 0xdb2777;   // rosa/bordó fuerte
+const CHALK_EQ  = 0xe0a30f;   // oro
+function colorFor(ch) {
+  const k = kindOf(ch);
+  if (k === 'num') return CHALK_NUM;
+  if (k === 'eq') return CHALK_EQ;
+  return CHALK_OP;
+}
 
 function tween(target, props, dur = 0.2, ease = 'power2.out') {
   return new Promise((res) => gsap.to(target, { ...props, duration: dur, ease, onComplete: res }));
@@ -25,19 +31,56 @@ class Tile extends Container {
   setChar(ch) {
     this.ch = ch;
     this.removeChildren();
-    const k = kindOf(ch);
-    const col = COLORS[k];
-    const pad = 4, s = TILE - pad * 2, rad = 13;
+    const col = colorFor(ch);
+    const s = TILE - 8, rad = 13;
+
+    // sombrita
     const shadow = new Graphics();
-    shadow.roundRect(-s / 2, -s / 2 + 4, s, s, rad).fill({ color: 0x000000, alpha: 0.28 });
+    shadow.roundRect(-s / 2, -s / 2 + 3, s, s, rad).fill({ color: 0x000000, alpha: 0.22 });
     this.addChild(shadow);
-    const body = new Graphics();
-    body.roundRect(-s / 2, -s / 2, s, s, rad).fill(col.fill);
-    body.roundRect(-s / 2, -s / 2, s, s * 0.5, rad).fill({ color: col.top, alpha: 0.55 });
-    this.addChild(body);
+
+    // máscara redondeada: recorta el "pintado" a la forma de la ficha
+    const mask = new Graphics();
+    mask.roundRect(-s / 2, -s / 2, s, s, rad).fill(0xffffff);
+    this.addChild(mask);
+
+    // ficha = pizarrón NEGRO con tiza de color garabateada encima. El fondo es oscuro
+    // (color del pizarrón), y el color viene de las pinceladas diagonales a mano.
+    const paint = new Container();
+    const base = new Graphics();
+    base.roundRect(-s / 2, -s / 2, s, s, rad).fill({ color: 0x222d27, alpha: 0.92 });   // fondo negro pizarrón
+    paint.addChild(base);
+    // dir = 1 diagonal ↘ ; dir = -1 diagonal ↙ (perpendicular). Ambas irregulares:
+    // no forman una red, solo cubren más y quedan disparejas.
+    const scribble = (width, alpha, step, dir) => {
+      const g = new Graphics();
+      let x = -s;
+      while (x < s) {
+        const x1 = x + (Math.random() - 0.5) * 5, y1 = -s / 2 - 3 + (Math.random() - 0.5) * 7;
+        const x2 = x + dir * s + (Math.random() - 0.5) * 9, y2 = s / 2 + 3 + (Math.random() - 0.5) * 7;
+        const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * 7, my = (y1 + y2) / 2 + (Math.random() - 0.5) * 7;
+        g.moveTo(x1, y1).lineTo(mx, my).lineTo(x2, y2);          // trazo con un quiebre = hecho a mano
+        x += step + Math.random() * step;                        // espaciado irregular
+      }
+      g.stroke({ color: col, width, alpha });
+      paint.addChild(g);
+    };
+    scribble(3.2, 0.7, 4, 1);                                    // pinceladas principales ↘
+    scribble(1.6, 0.42, 7, 1);                                   // acentos ↘
+    scribble(2.6, 0.5, 6, -1);                                   // pasada perpendicular ↙ (cubre más, disparejo)
+    paint.mask = mask;
+    this.addChild(paint);
+
+    // contorno de tiza (doble trazo, leve desfasaje = dibujado a mano)
+    const outline = new Graphics();
+    outline.roundRect(-s / 2, -s / 2, s, s, rad).stroke({ color: 0xffffff, width: 2.5, alpha: 0.85, alignment: 0.5 });
+    outline.roundRect(-s / 2 + 1, -s / 2 - 1.5, s, s, rad).stroke({ color: 0xffffff, width: 1, alpha: 0.3, alignment: 0.5 });
+    this.addChild(outline);
+
+    // número/símbolo en tiza blanca (sobre el fondo oscuro de la ficha)
     const t = new Text({
       text: ch,
-      style: { fontFamily: 'system-ui, sans-serif', fontSize: 30, fontWeight: '800', fill: col.text },
+      style: { fontFamily: 'Tiza, "Patrick Hand", cursive', fontSize: 42, fill: 0xffffff },
     });
     t.anchor.set(0.5); t.y = -1;
     this.addChild(t);
@@ -60,6 +103,7 @@ export class Board {
     this.locked = false;
     this.selTile = null; this.selOutline = null;
     this.drag = null;
+    this._guideHand = null; this._guideTl = null; this._guideA = null;
 
     // el stage recibe los eventos de movimiento/soltar para el drag
     stage.eventMode = 'static';
@@ -109,6 +153,7 @@ export class Board {
   }
 
   build(grid) {
+    this.hideHandGuide();
     this.rows = grid.length; this.cols = grid[0].length;
     if (this.onResize) this.onResize(this.cols * TILE);  // canvas cuadrado del tamaño del nivel
     this.layer.removeChildren();
@@ -170,16 +215,28 @@ export class Board {
   }
 
   burst(x, y, color) {
-    for (let i = 0; i < 9; i++) {
+    // bocanadas de "humo": círculos tenues que se expanden y suben (polvo en el aire)
+    for (let i = 0; i < 4; i++) {
+      const puff = new Graphics();
+      puff.circle(0, 0, 7 + Math.random() * 6).fill({ color: i ? color : 0xf4f1e8, alpha: 0.2 });
+      puff.x = x + (Math.random() - 0.5) * 12;
+      puff.y = y + (Math.random() - 0.5) * 12;
+      this.fx.addChild(puff);
+      const dur = 0.6 + Math.random() * 0.35;
+      gsap.to(puff.scale, { x: 2.6, y: 2.6, duration: dur, ease: 'power1.out' });
+      gsap.to(puff, { y: puff.y - 16 - Math.random() * 12, alpha: 0, duration: dur, ease: 'power1.out', onComplete: () => puff.destroy() });
+    }
+    // specks de polvo: partículas chicas que se dispersan y caen (gravedad)
+    for (let i = 0; i < 16; i++) {
       const p = new Graphics();
-      p.circle(0, 0, 3 + Math.random() * 3).fill(color);
-      p.x = x; p.y = y;
+      p.circle(0, 0, 1 + Math.random() * 2).fill(i % 3 ? color : 0xf4f1e8);
+      p.x = x; p.y = y; p.alpha = 0.9;
       this.fx.addChild(p);
       const ang = Math.random() * Math.PI * 2;
-      const dist = 22 + Math.random() * 36;
+      const dist = 12 + Math.random() * 30;
       gsap.to(p, {
-        x: x + Math.cos(ang) * dist, y: y + Math.sin(ang) * dist, alpha: 0,
-        duration: 0.4 + Math.random() * 0.2, ease: 'power2.out', onComplete: () => p.destroy(),
+        x: x + Math.cos(ang) * dist, y: y + Math.sin(ang) * dist + 16,   // +16 = cae un poco
+        alpha: 0, duration: 0.5 + Math.random() * 0.4, ease: 'power2.out', onComplete: () => p.destroy(),
       });
     }
   }
@@ -187,15 +244,23 @@ export class Board {
   // resalta las fichas que formaron la combinación, para que se vean los números
   async highlight(cells) {
     const rings = [];
+    // bloom central: un destello de luz que se expande y se apaga
+    const ctr = this.cellsCenter(cells);
+    const bloom = new Graphics();
+    bloom.circle(0, 0, TILE * 0.55).fill({ color: 0xffffff, alpha: 0.45 });
+    bloom.x = ctr.x; bloom.y = ctr.y;
+    this.fx.addChild(bloom);
+    gsap.fromTo(bloom.scale, { x: 0.3, y: 0.3 }, { x: 2.4, y: 2.4, duration: 0.55, ease: 'power2.out' });
+    gsap.to(bloom, { alpha: 0, duration: 0.55, ease: 'power2.out', onComplete: () => { if (!bloom.destroyed) bloom.destroy(); } });
     for (const { r, c } of cells) {
       const t = this.tiles[r][c];
       if (!t) continue;
       const s = TILE - 6;
       const ring = new Graphics();
-      ring.roundRect(-s / 2, -s / 2, s, s, 13).stroke({ color: 0xffffff, width: 5, alignment: 0.5 });
+      ring.roundRect(-s / 2, -s / 2, s, s, 13).stroke({ color: 0xfff3c4, width: 5, alignment: 0.5 });
       t.addChild(ring);
       rings.push(ring);
-      gsap.to(t.scale, { x: 1.14, y: 1.14, duration: 0.26, yoyo: true, repeat: 1, ease: 'sine.inOut' });
+      gsap.to(t.scale, { x: 1.16, y: 1.16, duration: 0.26, yoyo: true, repeat: 1, ease: 'sine.inOut' });
       gsap.fromTo(ring, { alpha: 0.15 }, { alpha: 1, duration: 0.26, yoyo: true, repeat: 3, ease: 'sine.inOut' });
     }
     await new Promise((res) => setTimeout(res, 620));
@@ -208,9 +273,10 @@ export class Board {
       const t = this.tiles[r][c];
       if (!t) continue;
       this.tiles[r][c] = null;
-      this.burst(t.x, t.y, COLORS[kindOf(t.ch)].fill);
-      const p = tween(t.scale, { x: 1.5, y: 1.5 }, 0.24, 'power2.out')
-        .then(() => Promise.all([tween(t.scale, { x: 0, y: 0 }, 0.36, 'back.in(2)'), tween(t, { alpha: 0 }, 0.36)]))
+      this.burst(t.x, t.y, colorFor(t.ch));
+      // pop rápido: la ficha "despega" y el token DOM sigue el viaje al objetivo
+      const p = tween(t.scale, { x: 1.2, y: 1.2 }, 0.1, 'power2.out')
+        .then(() => Promise.all([tween(t.scale, { x: 0, y: 0 }, 0.18, 'back.in(2)'), tween(t, { alpha: 0 }, 0.18)]))
         .then(() => t.destroy());
       proms.push(p);
     }
@@ -227,7 +293,7 @@ export class Board {
           if (write !== r) {
             this.tiles[r][c] = null;
             this._place(t, write, c);
-            proms.push(tween(t, { y: this.py(write) }, 0.26, 'bounce.out'));
+            proms.push(tween(t, { y: this.py(write) }, 0.28, 'power2.in').then(() => this._squashLand(t)));
           }
           write--;
         }
@@ -236,10 +302,16 @@ export class Board {
       for (let r = write; r >= 0; r--) {
         const t = this._newTile(r, c, refill());
         t.y = -this.py(spawnAbove++);
-        proms.push(tween(t, { y: this.py(r) }, 0.3, 'bounce.out'));
+        proms.push(tween(t, { y: this.py(r) }, 0.34, 'power2.in').then(() => this._squashLand(t)));
       }
     }
     await Promise.all(proms);
+  }
+
+  // squash & stretch al aterrizar: la ficha se aplasta y se recupera con rebote elástico
+  _squashLand(t) {
+    if (!t || t.destroyed) return;
+    gsap.fromTo(t.scale, { x: 1.18, y: 0.82 }, { x: 1, y: 1, duration: 0.3, ease: 'elastic.out(1, 0.55)' });
   }
 
   cellsCenter(cells) {
@@ -251,7 +323,7 @@ export class Board {
   popup(x, y, text) {
     const t = new Text({
       text,
-      style: { fontFamily: 'system-ui, sans-serif', fontSize: 26, fontWeight: '900', fill: 0xffe07a, stroke: { color: 0x000000, width: 4 } },
+      style: { fontFamily: 'Fredoka, sans-serif', fontSize: 28, fontWeight: '700', fill: 0xffe07a, stroke: { color: 0x000000, width: 4 } },
     });
     t.anchor.set(0.5); t.x = x; t.y = y;
     this.fx.addChild(t);
@@ -268,10 +340,76 @@ export class Board {
       .to(this.root, { x: 0, y: 0, duration: 0.05 });
   }
 
-  hint(a, b) {
-    for (const cell of [a, b]) {
+  // anillo de color alrededor de una ficha (se devuelve para animar/destruir)
+  _ring(t, color, s = TILE - 6) {
+    const ring = new Graphics();
+    ring.roundRect(-s / 2, -s / 2, s, s, 13).stroke({ color, width: 5, alignment: 0.5 });
+    t.addChild(ring);
+    return ring;
+  }
+
+  // Pista: solo las fichas que forman la cuenta dan un saltito suave con brillo
+  // de borde (anillo verde). La ficha que queda fuera de la cuenta no se anima.
+  hint(a, b, line = []) {
+    line.forEach((cell, i) => {
       const t = this.tiles[cell.r]?.[cell.c];
-      if (t) gsap.fromTo(t.scale, { x: 1, y: 1 }, { x: 1.15, y: 1.15, duration: 0.35, yoyo: true, repeat: 3, ease: 'sine.inOut' });
+      if (!t) return;
+      gsap.killTweensOf(t); gsap.killTweensOf(t.scale);
+      const baseY = this.py(cell.r);
+      t.y = baseY;
+      const ring = this._ring(t, 0x7bed9f);
+      gsap.fromTo(ring, { alpha: 0 }, { alpha: 1, duration: 0.2, yoyo: true, repeat: 3, delay: i * 0.05, ease: 'sine.inOut', onComplete: () => { if (!ring.destroyed) ring.destroy(); } });
+      gsap.timeline({ delay: i * 0.05, repeat: 1, repeatDelay: 0.2 })
+        .to(t, { y: baseY - 7, duration: 0.2, ease: 'power2.out' })   // salto bajo y tranquilo
+        .to(t, { y: baseY, duration: 0.26, ease: 'power2.in' });
+      gsap.fromTo(t.scale, { x: 1, y: 1 }, { x: 1.05, y: 1.05, duration: 0.2, yoyo: true, repeat: 1, delay: i * 0.05, ease: 'sine.inOut' });
+    });
+  }
+
+  // ---------- guía del tutorial: una mano repite el gesto de arrastre ----------
+  // de la ficha `a` hacia su vecina `b` (la jugada que forma el objetivo).
+  // La ficha `a` "amaga" moverse (se desplaza ~1/3 hacia `b` y vuelve).
+  showHandGuide(a, b) {
+    this.hideHandGuide();
+    const tA = this.tiles[a.r]?.[a.c];
+    if (!tA) return;
+    const ax = this.px(a.c), ay = this.py(a.r);
+    const bx = this.px(b.c), by = this.py(b.r);
+    const nx = ax + (bx - ax) * 0.34, ny = ay + (by - ay) * 0.34;   // amago: 34% hacia el vecino
+    this._guideA = { tile: tA, x: ax, y: ay };
+
+    const hand = new Text({ text: '👆', style: { fontFamily: 'system-ui, sans-serif', fontSize: 46 } });
+    hand.anchor.set(0.25, 0.05);   // la yema del dedo cae sobre el centro de la ficha
+    this.fx.addChild(hand);
+    this._guideHand = hand;
+
+    const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.5 });
+    this._guideTl = tl;
+    tl.set(hand, { alpha: 0, x: ax + 10, y: ay + 14 })
+      .set(tA.scale, { x: 1, y: 1 })
+      .set(tA, { x: ax, y: ay })
+      .to(hand, { alpha: 1, duration: 0.2 })
+      .to(hand.scale, { x: 0.82, y: 0.82, duration: 0.14 })                       // "agarra"
+      .to(tA.scale, { x: 1.08, y: 1.08, duration: 0.14 }, '<')
+      .to(hand, { x: bx + 10, y: by + 14, duration: 0.6, ease: 'power1.inOut' })  // arrastra
+      .to(tA, { x: nx, y: ny, duration: 0.6, ease: 'power1.inOut' }, '<')         // la ficha amaga seguirla
+      .to(hand.scale, { x: 1, y: 1, duration: 0.14 })                             // "suelta"
+      .to(tA.scale, { x: 1, y: 1, duration: 0.14 }, '<')
+      .to(tA, { x: ax, y: ay, duration: 0.3, ease: 'power2.out' }, '<')           // y vuelve a su lugar
+      .to(hand, { alpha: 0, duration: 0.25 }, '+=0.1');
+  }
+
+  hideHandGuide() {
+    if (this._guideTl) { this._guideTl.kill(); this._guideTl = null; }
+    if (this._guideHand && !this._guideHand.destroyed) this._guideHand.destroy();
+    this._guideHand = null;
+    if (this._guideA) {
+      const { tile, x, y } = this._guideA;
+      if (tile && !tile.destroyed) {
+        gsap.killTweensOf(tile); gsap.killTweensOf(tile.scale);
+        tile.x = x; tile.y = y; tile.scale.set(1, 1);
+      }
+      this._guideA = null;
     }
   }
 }

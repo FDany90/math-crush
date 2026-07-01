@@ -25,3 +25,7 @@ Thumbs.db
 
 # config local del harness / Claude
 .claude/
+
+# skills de diseño instalados (terceros, locales, no van al repo)
+.agents/
+skills-lock.json

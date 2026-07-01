@@ -187,8 +187,6 @@ export default function App() {
   const [tutorial, setTutorial] = useState(null)     // texto guía (solo niveles tutorial)
   const [inventory, setInventory] = useState([])
   const [result, setResult] = useState(null)          // {index,score,stars,win}
-  const [toast, setToast] = useState(null)
-  const toastTimer = useRef(null)
   const menuDoodles = useMemo(() => buildDoodles(), [screen])   // nuevos garabatos cada vez que se abre el menú
   const mapDoodles = useMemo(() => buildMapDoodles(10), [screen])
 
@@ -255,11 +253,8 @@ export default function App() {
             })
           }
         },
-        toast: (msg) => {
-          setToast(msg)
-          clearTimeout(toastTimer.current)
-          toastTimer.current = setTimeout(() => setToast(null), 1200)
-        },
+        // Notificación de arriba desactivada: molestaba y desacomodaba el layout en mobile.
+        toast: () => {},
       }
       const board = new Board(
         app.stage,
@@ -364,7 +359,7 @@ export default function App() {
           </div>
           <h1>Math <span>Crush</span></h1>
           <p className="tagline">Formá el resultado · armá cuentas · subí de nivel</p>
-          <button className="big-btn" onClick={() => setScreen('map')}>Jugar ▶</button>
+          <button className="big-btn" onClick={() => setScreen('map')}>Jugar</button>
         </div>
       )}
 
@@ -420,14 +415,13 @@ export default function App() {
             <div className="card-btns">
               <button onClick={() => { setResult(null); setScreen('map') }}>Mapa</button>
               {result.win && result.index + 1 < LEVELS.length
-                ? <button className="primary" onClick={() => playLevel(result.index + 1)}>Siguiente ▶</button>
+                ? <button className="primary" onClick={() => playLevel(result.index + 1)}>Siguiente</button>
                 : <button className="primary" onClick={() => playLevel(result.index)}>Reintentar</button>}
             </div>
           </div>
         </div>
       )}
 
-      {toast && <div className="toast">{toast}</div>}
 
       {/* capa de tokens que vuelan al objetivo (efecto collect) */}
       <div className="fly-overlay" ref={overlayRef} />

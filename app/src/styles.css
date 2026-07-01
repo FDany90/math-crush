@@ -198,7 +198,8 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
   background:
     radial-gradient(circle at 50% 0%, #2b3a31, #1f2a26),
     repeating-linear-gradient(115deg, #ffffff05 0 2px, transparent 2px 7px);
-  border-radius: 16px; padding: 26px 34px; text-align: center;
+  border-radius: 16px; padding: 26px 28px; text-align: center;
+  width: min(92vw, 420px); max-width: 92vw;
   border: 7px solid var(--wood); outline: 2px solid var(--wood-dark);
   box-shadow: 0 9px 0 var(--wood-dark), inset 0 0 30px #00000055;
   animation: cardpop .3s ease;
@@ -209,7 +210,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .card .os { font-family: var(--font-tiza); font-size: 52px; font-weight: 700; color: var(--chalk); }
 .card .stars .st { text-shadow: 0 0 6px #0006; }
 .card-btns { display: flex; gap: 14px; margin-top: 24px; justify-content: center; }
-.card-btns button { flex: 1 1 0; min-width: 120px; font-family: var(--font-tiza); font-weight: 700; font-size: 23px; letter-spacing: .5px; padding: 12px 22px; border-radius: 16px; transition: box-shadow .06s, transform .06s; }
+.card-btns button { flex: 1 1 0; min-width: 0; font-family: var(--font-tiza); font-weight: 700; font-size: 23px; letter-spacing: .5px; padding: 12px 18px; border-radius: 16px; white-space: nowrap; transition: box-shadow .06s, transform .06s; }
 /* secundario (Mapa): botón de tiza con contorno */
 .card-btns button:not(.primary) { background: #2b3a31; border: 2px solid #ffffff33; color: var(--chalk); box-shadow: 0 5px 0 rgba(0,0,0,.45); }
 /* primario (Siguiente/Reintentar): botón "candy" con sombra inferior */
@@ -217,5 +218,3 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .card-btns button:active { transform: translateY(3px); }
 .card-btns button:not(.primary):active { box-shadow: 0 2px 0 rgba(0,0,0,.45); }
 .card-btns button.primary:active { box-shadow: 0 2px 0 #2b53c0; }
-
-.toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: #000a; padding: 8px 16px; border-radius: 20px; font-weight: 700; z-index: 60; pointer-events: none; }

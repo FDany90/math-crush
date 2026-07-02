@@ -4,7 +4,7 @@
 > Arrastrás fichas y, si formás un **resultado objetivo** en una línea, explota.
 > **Tema visual: "Pizarrón de colores"** (tiza de colores sobre pizarrón, marco de madera). Ver **§9**.
 
-Última actualización: **2026-06-30**.
+Última actualización: **2026-07-01** (sesión de correcciones del playtest mobile — ver **§10**).
 
 ---
 
@@ -22,12 +22,14 @@
 
 ## 2. Estructura del juego
 
-- **Modo:** **completá N cuentas contrarreloj**. Cada nivel tiene una `quota` de cuentas a formar; ganás al llegar a **0 cuentas** antes de que se acabe el reloj. El reloj arranca en **1 minuto** (`START_TIME=60`) y **cada cuenta suma +5 s** (`TIME_PER_CUENTA`), con animación "+5" sobre el reloj.
+- **Modo:** **completá N cuentas contrarreloj**. Cada nivel tiene una `quota` de cuentas a formar; ganás al llegar a **0 cuentas** antes de que se acabe el reloj. El reloj arranca en **2 minutos** (`START_TIME=120`, subido desde 60 el 2026-07-01) y **cada cuenta suma +5 s** (`TIME_PER_CUENTA`), con animación "+5" sobre el reloj. El reloj **arranca recién en el primer movimiento** y se **pausa** mientras hay un mensaje del coach (ver §10).
 - **Cuenta:** cada objetivo formado (un "Formá 5" cumplido) o ecuación = 1 cuenta → descuenta del objetivo (tally) y suma tiempo. **Solo la jugada del jugador cuenta al objetivo**; las **cascadas "por azar"** (combo ≥ 2) NO descuentan objetivo pero **dan combo + tiempo**.
-- **Intentos:** empezás con **10** (`MAX_TRIES`, override por nivel con `tries`). Cada movimiento que **NO** forma cuenta resta 1 intento (los correctos son gratis). Si llegás a 0 → perdés (mensaje "¡Te quedaste sin intentos!"). Evita el prueba-y-error al azar.
-- **Estrellas:** por **rapidez** = cuánto tiempo sobró al completar. `frac = timeLeft/START_TIME` (60): 3★ si `frac ≥ 0.5`, 2★ si `≥ 0.25`, 1★ si completaste. Si se acaba el tiempo sin terminar: 0★ (se pierde). Afinable por nivel con `star2`/`star3`. ⚠️ **Pendiente calibrar:** como el tiempo crece con las cuentas, hoy las 3★ salen fáciles.
-- **Pistas automáticas:** niveles 1-3 → solo en los **primeros 3 movimientos** (nivel 1 = manito instantánea; 2-3 = pista a los 5 s). Niveles 4-5 → a los **10 s** de inactividad, **máx. 2 pistas**. Nivel 6+ → ninguna. Código: `Controller._autoHintConfig/_startAutoHint/_showAutoHint`. El botón 💡 manual siempre está.
-- **Mapa:** camino serpenteante (estilo Candy Crush). El nivel 1 está **abajo**, se sube. Cada nivel se **desbloquea** al sacar ≥1★ en el anterior. El **nivel actual** se resalta con un cartel "¡Acá!".
+- **Intentos:** empezás con **10** (`MAX_TRIES`, override por nivel con `tries`). Cada movimiento que **NO** forma cuenta resta 1 intento (los correctos son gratis) y **frena con un mensaje flotante** "Te quedan N movimientos…". Si llegás a 0 → perdés. Evita el prueba-y-error al azar.
+- **Pistas:** el botón 💡 **manual está limitado a 3 por partida** (`MAX_HINTS=3`, override por nivel con `hints`); al agotarse el botón queda deshabilitado. Las **pistas automáticas** (abajo) **no** gastan ese cupo.
+- **"+1 minuto" (continuar):** al perder, se puede **seguir hasta 2 veces** por partida (`MAX_CONTINUES=2`); suma 60 s (`CONTINUE_TIME`) y, si perdiste por intentos, también repone intentos. Método `Controller.resumeWithBonus()`.
+- **Estrellas:** por **rapidez** = cuánto tiempo sobró al completar. `frac = timeLeft/START_TIME` (120): 3★ si `frac ≥ 0.5`, 2★ si `≥ 0.25`, 1★ si completaste. Si se acaba el tiempo sin terminar: 0★ (se pierde). Afinable por nivel con `star2`/`star3`. ⚠️ **Pendiente calibrar:** como el tiempo crece con las cuentas, hoy las 3★ salen fáciles (usar las **métricas**, §11).
+- **Pistas automáticas:** niveles 1-3 → solo en los **primeros 3 movimientos** (nivel 1 = manito instantánea; 2-3 = pista a los 5 s). Niveles 4-5 → a los **10 s** de inactividad, **máx. 2 pistas**. Nivel 6+ → ninguna. Código: `Controller._autoHintConfig/_startAutoHint/_showAutoHint`. No se disparan mientras hay un mensaje del coach (`coachActive`).
+- **Mapa:** camino serpenteante (estilo Candy Crush), rediseñado con color y mascota (ver §9). El nivel 1 está **abajo**, se sube. Cada nivel se **desbloquea** al sacar ≥1★ en el anterior. El **nivel actual** se resalta con un cartel "¡Acá!". **Tocar un nodo abre un pop-up de inicio** ("Nivel N" + "¡Jugar!"). **El mapa es la pantalla principal** (ya no tiene header con título/botón Menú).
 - **Progreso:** se guarda en `localStorage` (`math_progress`). Reset: `localStorage.removeItem('math_progress')` en la consola (F12).
 
 ---
@@ -41,6 +43,7 @@ npm run dev        # http://localhost:5173  (hot-reload)
 - Mobile (misma WiFi): `http://192.168.1.2:5173` (verificar IP con `ipconfig`). Falta la regla de firewall del puerto 5173 (requiere admin): `New-NetFirewallRule -DisplayName "Vite 5173" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5173 -Profile Any`.
 - Frenar servers: `Get-Process node | Stop-Process`.
 - Build: `npm run build`. Deploy: conectado a GitHub `FDany90/math-crush` → Vercel auto-deploya. En Vercel el **Root Directory debe ser `app`**.
+- **Métricas (Supabase):** para que registre eventos hay que definir `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en `app/.env` (local, ignorado por git) y en **Vercel → Settings → Environment Variables** (producción). Sin esas variables el juego funciona igual pero guarda solo en `localStorage`. Ver **§11**.
 
 ---
 
@@ -51,15 +54,17 @@ app/
 ├── MOTOR.md                # explica a fondo cómo se calcula/valida/ejecuta una cuenta
 └── src/
     ├── main.jsx
-    ├── App.jsx             # UI: pantallas (menú/mapa/juego), HUD, mapa SVG, overlays
+    ├── App.jsx             # UI: pantallas (menú/mapa/juego), HUD, mapa SVG, overlays, coach, pop-ups
     ├── styles.css
+    ├── metrics.js          # MÉTRICAS: ID anónimo + nick, envío de eventos a Supabase (§11)
     ├── game/
     │   ├── logic.js        # LÓGICA PURA: evalExpr, objetivos inteligentes, matches, generación
     │   ├── levels.js       # DEFINICIÓN DE NIVELES (lo que se toca para diseñar niveles)
-    │   └── controller.js   # ORQUESTACIÓN: drag, cascada, timer, power-ups, fin de nivel
+    │   └── controller.js   # ORQUESTACIÓN: drag, cascada, timer, pausa/coach, pistas, fin de nivel
     └── pixi/
-        └── Board.js        # RENDER WebGL + animaciones (swap, explosión, gravedad, etc.)
+        └── Board.js        # RENDER WebGL + animaciones (swap, explosión, gravedad, mascota/doodles no)
 ```
+> `supabase.sql` (crear tablas + RLS) y `.env.example` (plantilla de credenciales) también viven en `app/`.
 
 **Cómo funciona el motor (cálculo/validación/ejecución): ver [`app/MOTOR.md`](app/MOTOR.md).** Resumen:
 - **Validar** = `evalExpr(segmento) === objetivo`.
@@ -84,6 +89,7 @@ Cada nivel es un objeto con estos campos:
 | `tMin` / `tMax` | Rango preferido del objetivo | `1` / `8` |
 | `quota` | **Cuentas a completar** para ganar el nivel | `6` |
 | `tries` | (opcional) intentos antes de perder (default `MAX_TRIES`=10) | `10` |
+| `hints` | (opcional) pistas manuales por partida (default `MAX_HINTS`=3) | `3` |
 | `star2` / `star3` | (opcional) umbrales de tiempo restante para 2★/3★ | `0.25` / `0.5` |
 | `nTargets` | Cuántos objetivos a la vez (default 3) | `1` |
 | `tutorial` | Muestra la **manito guía** + cartel de instrucción | `true` |
@@ -107,14 +113,15 @@ Cada nivel es un objeto con estos campos:
 
 ## 6. Pendientes / próximos pasos
 
-**Calibrar (lo primero a hacer jugando):**
-- [ ] **Umbrales de estrellas (`star2`/`star3`)**: como el tiempo crece con las cuentas (+5 s c/u), las 3★ salen fáciles. Recalibrar por rapidez real.
-- [ ] **`quota` por nivel** y el balance tiempo base (60 s) / bonus (+5 s).
+**Calibrar (lo primero a hacer jugando) — ahora con datos:**
+- [ ] **Umbrales de estrellas (`star2`/`star3`)**: como el tiempo crece con las cuentas (+5 s c/u), las 3★ salen fáciles. Recalibrar por rapidez real **usando las métricas** (§11): cuántas pistas y "+1 min" se piden por nivel.
+- [ ] **`quota` por nivel** y el balance tiempo base (120 s) / bonus (+5 s).
 
 **Fase 4 (juice) — falta:**
-- [ ] **Mascota** (búho profe / tiza con cara) en menú o juego.
+- [x] **Mascota** (búho profe de tiza) — hecha en el mapa (§9). Falta llevarla al menú/juego si se quiere.
 - [ ] Doodles en el **fondo del juego** (ya están en menú y mapa).
-- [ ] Más juice: partículas al ganar, wiggle idle de fichas, trail al arrastrar, vida en botón "Siguiente".
+- [ ] Más juice: partículas al ganar, wiggle idle de fichas, trail al arrastrar.
+- [ ] **Performance render:** cachear texturas de fichas (`Board.Tile.setChar` redibuja ~70 trazos de tiza + `Text` por ficha; en cascadas 8×8 puede tironear). Candidato: pre-render a textura + `Sprite`, o `BitmapText` para los números. (Ya se optimizó el motor, ver §12.)
 
 **Ideas de niveles nuevas:**
 - [ ] **Niveles de resultados negativos** (ej. "Hacé −3"). Hoy `targetPool` filtra `v > 0`; habría que permitir un rango negativo (`tMin`/`tMax` negativos) y dejar pasar `v < 0` en el pool. `isTargetExpr` ya compara con `===`, así que matchea negativos sin cambios. Mostrar el chip "Hacé −3".
@@ -135,7 +142,8 @@ Cada nivel es un objeto con estos campos:
 
 - **Drag & drop** en vez de tap-tap (más natural). El tap quedó solo para power-ups.
 - **Objetivo inteligente** (hasta 3 a la vez, siempre resolubles) en vez de número al azar.
-- **Modo "completá N cuentas"** (en vez de score-attack). Contrarreloj: **1 min base + 5 s por cuenta**; estrellas por rapidez. Combos por azar (cascadas) dan tiempo pero NO cuentan al objetivo.
+- **Modo "completá N cuentas"** (en vez de score-attack). Contrarreloj: **2 min base + 5 s por cuenta** (era 1 min hasta el 2026-07-01); estrellas por rapidez. Combos por azar (cascadas) dan tiempo pero NO cuentan al objetivo.
+- **Sin boosters** (2026-07-01): se quitaron los power-ups y "Mezclar" del juego; quedó solo la Pista (limitada) + Ajustes. El código de boosters sigue en `controller.js` pero **desconectado de la UI**.
 - **Tema "Pizarrón de colores"** (reskin, ver §9): se descartó el look "caramelo"; fichas = tiza de color garabateada sobre pizarrón negro.
 - **Lectura en una sola dirección** (`→` y `↓`); se descartó la bidireccional por ser matemáticamente ambigua. Flechas en la UI lo indican.
 - **`maxDigits` por nivel**: en niveles bajos solo números de 1 cifra (no `34−25`).
@@ -161,11 +169,58 @@ Cada nivel es un objeto con estos campos:
 
 **Fichas (`Board.js` → `Tile.setChar`):** fondo oscuro "pizarrón" con **pinceladas de tiza garabateadas a mano** (diagonales irregulares con quiebre, recortadas con máscara redondeada) + contorno de tiza + número en fuente Tiza blanca.
 
-**HUD (`App.jsx`):** fila superior en grilla **Intentos (✋, sin label) · Tiempo (grande) · Tally**. Debajo, **tarjeta de objetivo** a ancho completo ("Formá N o N o N"). **Cuentas restantes = marcas de tiza (tally)**, agrupadas de a 5 (4 + diagonal tachada); se borran al completar (componente `Tally`).
+**HUD (`App.jsx`):** fila superior en grilla **Intentos (número solo, sin ícono) · Tiempo (grande) · Tally**. Debajo, **tarjeta de objetivo** a ancho completo ("Formá N o N o N"). **Cuentas restantes = marcas de tiza (tally)**, agrupadas de a 5 (4 + diagonal tachada); se borran al completar (componente `Tally`). Más aire entre header/objetivo/tablero/botones (ajustado el 2026-07-01). Abajo, **solo** los botones **💡 Pista (N)** (cyan, con badge de cantidad; deshabilitado a 0) y **⚙ Ajustes** (circular violeta). El menú de ajustes tiene **"Abandonar nivel"** (volver al mapa).
 
 **Animaciones:**
 - **Recolección (collect):** al hacer una cuenta, las fichas hacen *pop* y salen **tokens que vuelan al chip del objetivo** (capa DOM `fly-overlay`, porque el chip está fuera del canvas); el chip se **infla** al recibirlos (`.absorb`). Delay ~360 ms antes de recambiar objetivos. Cambio de objetivo animado (`chipIn`/`chipOut`).
 - **"+5" de tiempo:** sube desde el reloj al sumar tiempo (`showTimeBonus`, `.time-bonus`).
 - **Squash & stretch:** las fichas caen con gravedad y **se aplastan al aterrizar** (`Board._squashLand`).
 - **Bloom/destello:** flash de luz al formar la cuenta (`Board.highlight`), + nube de **polvo/humo de tiza** al explotar (`Board.burst`).
-- **Menú:** título centrado en Tiza, **botón "Jugar" amarillo de tiza con vida** (latido + glow + destello `btnShine`), **borde de madera** en la pantalla, y **garabatos/cuentas de tiza al azar** que se regeneran al abrir el menú (`buildDoodles`). El **mapa** también tiene garabatos de fondo (`buildMapDoodles`).
+- **Menú:** título centrado en Tiza, **botón "Jugar" amarillo de tiza con vida** (latido + glow + destello `btnShine`), **borde de madera** en la pantalla, y **garabatos/cuentas de tiza al azar** que se regeneran al abrir el menú (`buildDoodles`).
+
+**Mapa rediseñado (2026-07-01) — "pizarrón con color":**
+- **Fondo con zonas de color** por bloque de niveles (cyan→rosa→oro→violeta→verde de abajo hacia arriba) + **blobs difusos** de color (`.map-bg`).
+- **Camino de tiza brillante** con rayas de color (`.road-under/base/dash`) y glow.
+- **Nodos por zona** (`--nc` = `zoneColor(size)`): anillo de tiza dibujado (borde punteado); el **actual grande** con glow + "¡Acá!" + pulso; **completados** más chicos; **bloqueados** apagados con 🔒.
+- **Garabatos SVG** temáticos a los costados (estrella, casa, árbol, planeta, libro, corazón, foco…) con filtro `chalkRough` (temblor a mano) que flotan (`ChalkDoodle`, `buildMapDoodles`).
+- **Mascota de tiza** = búho-profe (`Mascota`, SVG) junto al nivel actual: **saluda con el brazo**, flota, globito "¡Vamos!".
+- ⚠️ Detalle técnico: `.map-path` usa **`flex: none`** para ocupar toda su altura (si no, al ser hijos `position:absolute`, el flex encogía la altura y los doodles/fondo en `%` se apretaban arriba). El scroll al fondo (nivel 1) ocurre **solo al entrar** al mapa (`useEffect` sobre `screen`), no en cada render.
+
+---
+
+## 10. Flujo de nivel, coach/tutorial y pop-ups (2026-07-01)
+
+**Inicio de nivel (estilo Candy Crush):** tocar un nodo del mapa abre un **pop-up** ("Nivel N" + nombre + descripción + botón **"¡Jugar!"**). Estado `startPopup` en `App.jsx`; `openStart(i)` lo abre, `playLevel(i)` arranca.
+
+**Fin de nivel:**
+- **Ganás** → **pantalla de victoria** a pantalla completa (`winScreen`): "¡Nivel superado!" + estrellas que rebotan + **confeti** (`buildConfetti`) + destello. Dura ~3,4 s (o tap para saltear, `advanceFromWin`). Luego vuelve al **mapa** y, tras ~1,6 s (`startPopupTimer`, para que se vea el mapa), abre el **pop-up de inicio del siguiente nivel**.
+- **Perdés** → tarjeta con botón **"+1 minuto"** (si quedan continues, hasta 2×; `resumeWithBonus`) y un único botón **"Salir"** (al mapa). Ya no hay botón "Mapa/Reintentar" separado (Reintentar = volver a tocar el nivel en el mapa).
+
+**Coach = mensajes flotantes que PAUSAN el juego** (`App.jsx` estado `coach` = array de pasos; `Controller.pause()/resume()/_coach()/coachDismissed()`):
+- Overlay semitransparente; se cierra tocando (avanza de paso o reanuda). El elemento señalado (objetivo o tally) se **eleva por encima del velo con glow** (`.coach-hl`, prop `highlight: 'target'|'tally'`).
+- Mientras hay coach: reloj pausado + `coachActive` bloquea pistas/manito automáticas.
+- **Tutorial (nivel 1) DINÁMICO** (no todo junto): 1 mensaje al arrancar ("Arrastrá una ficha… formar el número de arriba", resalta el objetivo) y, **después del primer acierto**, otro ("¡Así se hace!…", resalta el tally). Reemplaza al viejo `tutorial-banner` (eliminado).
+- **Movimiento equivocado:** frena y muestra "Eso no forma una cuenta. Te quedan N movimientos…" (`_failMove`).
+- **Nivel 2, primera cuenta:** frena el reloj y muestra "Te quedan X cuentas por hacer" resaltando el **tally** (`_afterMove`, flag `coachedFirstCuenta`).
+
+---
+
+## 11. Métricas de playtest (Supabase) — `src/metrics.js`
+
+**Objetivo:** juntar datos de amigos/testers para **balancear niveles** (cuántas pistas y "+1 min" se piden, victorias/derrotas por nivel).
+
+- **Identidad:** UUID anónimo persistente en `localStorage` (`math_player_id`) + **nick opcional**. El nick se pide en un **pop-up al empezar el nivel 3** (`math_nick_asked` evita repetir; salteable).
+- **Eventos** (`trackEvent(kind, levelIdx, meta)`): `start` · `win` (meta: stars, timeLeft) · `lose` (meta: reason, left) · `hint` · `continue`. Fire-and-forget; siempre guarda **copia local** (`math_metrics`) como fallback.
+- **Backend:** Supabase proyecto `hpotzavqnrimfqtnnwxe`. Tablas `players` y `events` con **RLS** (el cliente solo puede *insert*; nadie lee con la anon key). SQL en **`app/supabase.sql`** (incluye queries para balancear).
+- ⚠️ **`upsert` choca con RLS** en Supabase → en `players` usamos `update` + `insert` planos (el error de PK duplicada se ignora). No volver a usar `upsert`.
+- **Config:** `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (nueva *publishable key* `sb_publishable_…`) en `app/.env` (local) y Vercel (prod). Sin eso → solo localStorage.
+- **Leer métricas:** Supabase → SQL Editor, queries del final de `supabase.sql` (resumen por nivel; pistas/continues por intento).
+
+---
+
+## 12. Optimizaciones de performance (2026-07-01)
+
+- **`logic.js` `targetPool` / `findHintFallback`:** hacían **clone de toda la grilla** por cada swap candidato (hasta ~128/llamada) → ahora **swap in-place** sobre la copia descartable y se deshace (menos GC tras cada movimiento).
+- **`findHintFallback`:** antes re-escaneaba **todo el tablero** (`findMatchesMulti`) por candidato (~160k evals en 8×8). Como el tablero está resuelto, ahora solo chequea las **4 líneas afectadas** por el swap (`lineHasMatch`) con early-exit → pista casi instantánea.
+- **`App.jsx`:** `mapGeometry` y `currentLevel` **memoizados** (`useMemo`) para no recalcularse en cada tick del reloj (5×/seg).
+- **Pendiente (mayor):** cachear texturas de fichas en `Board.js` (ver §6).

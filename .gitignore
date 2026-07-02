@@ -23,6 +23,11 @@ Thumbs.db
 # vercel
 .vercel
 
+# variables de entorno (credenciales Supabase, etc.)
+.env
+app/.env
+app/.env.local
+
 # config local del harness / Claude
 .claude/
 

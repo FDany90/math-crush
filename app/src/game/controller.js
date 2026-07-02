@@ -18,9 +18,12 @@ const BOOSTER_DEFS = [
   { id: 'rr', label: '🎯', kind: 'reroll',          base: 2 },
 ]
 
-const START_TIME = 60    // 1 minuto base; cada cuenta suma tiempo
+const START_TIME = 120   // 2 minutos base; cada cuenta suma tiempo
 const TIME_PER_CUENTA = 5 // segundos que otorga cada cuenta formada
 const MAX_TRIES = 10     // intentos: cada movimiento que NO forma cuenta resta 1
+const MAX_HINTS = 3      // pistas manuales permitidas por partida
+const MAX_CONTINUES = 2  // veces que se puede "seguir con +1 min" al perder
+const CONTINUE_TIME = 60 // segundos que da cada "+1 min"
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 export class Controller {
@@ -46,6 +49,8 @@ export class Controller {
     this.started = false
     this.left = this.level.quota ?? 6      // cuentas que faltan completar
     this.tries = this.level.tries ?? MAX_TRIES   // intentos restantes
+    this.hintsLeft = this.level.hints ?? MAX_HINTS  // pistas manuales que quedan
+    this.continues = 0                     // veces que ya usó "+1 min"
     this.moves = 0                         // movimientos hechos (para límite de pistas)
     this.autoHintCount = 0                 // pistas automáticas ya mostradas
     this.combo = 0
@@ -141,7 +146,7 @@ export class Controller {
       const h = findHintFallback(this.board.gridChars(), this.targets, this.md)
       if (h) this.board.showHandGuide(h.a, h.b)      // nivel 1: manito guía sobre la jugada
     } else {
-      this.hint()                                    // pista normal (resalta la jugada)
+      this.hint(false)                               // pista automática: NO gasta el cupo manual
       this._startAutoHint()                          // repetir (frenado por maxMoves/maxHints)
     }
   }
@@ -352,15 +357,41 @@ export class Controller {
       index: this.levelIndex, completed, reason, stars,
       quota: this.level.quota ?? 6, left: this.left,
       timeLeft: Math.max(0, this.timeLeft),
+      continuesLeft: MAX_CONTINUES - this.continues,   // cuántos "+1 min" quedan
     })
   }
 
-  // ---------- pista (a pedido del jugador) ----------
-  hint() {
+  // "+1 min": el jugador perdió pero elige seguir. Reponemos tiempo (y intentos
+  // si se habían agotado) y reanudamos el mismo nivel. Máximo MAX_CONTINUES veces.
+  resumeWithBonus() {
+    if (!this.ended || this.continues >= MAX_CONTINUES) return
+    this.continues++
+    this.hooks.onAddMinute?.(this.levelIndex)          // métrica
+    this.ended = false
+    this.busy = false
+    this.board.locked = false
+    if (this.tries <= 0) this.tries = this.level.tries ?? MAX_TRIES   // reponer intentos
+    this.hooks.setTries?.({ left: this.tries, dec: false })
+    this.started = true
+    this.timerOn = true
+    this.timeLeft = Math.max(0, this.timeLeft) + CONTINUE_TIME
+    this.deadline = Date.now() + this.timeLeft * 1000
+    this.hooks.setTime(this.timeLeft)
+    this.hooks.addTime?.(CONTINUE_TIME)
+    this.hooks.setOverlay({ show: false })             // cierra el pop-up de resultado
+    this._tick()
+    this._startAutoHint()
+  }
+
+  // ---------- pista ----------
+  // manual = true → la pide el jugador con el botón (gasta 1 del cupo de 3).
+  // manual = false → pista automática (no gasta cupo).
+  hint(manual = true) {
     if (this.busy || this.ended) return
+    if (manual && this.hintsLeft <= 0) return       // sin pistas disponibles
     const grid = this.board.gridChars()
     const h = findHintFallback(grid, this.targets, this.md)
-    if (!h) { this.hooks.toast('Sin jugadas — probá Mezclar'); return }
+    if (!h) return                                  // sin jugadas (no gasta pista)
     // simular el swap para saber qué celdas forman la cuenta (en el tablero YA intercambiado)
     const g = grid.map((row) => row.slice())
     const tmp = g[h.a.r][h.a.c]; g[h.a.r][h.a.c] = g[h.b.r][h.b.c]; g[h.b.r][h.b.c] = tmp
@@ -375,6 +406,11 @@ export class Controller {
       const [r, c] = k.split(',').map(Number); return toCurrent({ r, c })
     })
     this.board.hint(h.a, h.b, line)
+    if (manual) {
+      this.hintsLeft = Math.max(0, this.hintsLeft - 1)
+      this.hooks.setHints?.(this.hintsLeft)
+      this.hooks.onHintUsed?.(this.levelIndex)      // métrica
+    }
   }
 
   // ---------- botones ----------
@@ -400,6 +436,7 @@ export class Controller {
     this.hooks.setTime(this.timeLeft)
     this.hooks.setCuentas?.({ left: this.left, quota: this.level.quota ?? 6, dec: false })
     this.hooks.setTries?.({ left: this.tries, dec: false })
+    this.hooks.setHints?.(this.hintsLeft)
   }
   _pushInventory() {
     this.hooks.setInventory(

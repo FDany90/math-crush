@@ -3,6 +3,7 @@ import { Application } from 'pixi.js'
 import { Board, MAX_PX } from './pixi/Board.js'
 import { Controller } from './game/controller.js'
 import { LEVELS } from './game/levels.js'
+import { initMetrics, getNick, setNick, trackEvent } from './metrics.js'
 
 // color de tiza del token según el tipo de ficha (coincide con Board.js)
 const OPS = ['+', '−', '×', '÷']
@@ -41,6 +42,20 @@ function buildDoodles() {
   return items.map((t, i) => ({ t, ...spots[i % spots.length], rot: (rnd(2) ? 1 : -1) * (4 + rnd(11)) }))
 }
 
+// confeti para la pantalla de "Nivel superado"
+function buildConfetti(n = 20) {
+  const rnd = (x) => Math.floor(Math.random() * x)
+  const colors = ['#ffd23f', '#4f8cff', '#ec4899', '#f4f1e8', '#f59e0b', '#7fdfff']
+  return Array.from({ length: n }, () => ({
+    left: rnd(100) + '%',
+    delay: (rnd(70) / 100) + 's',
+    dur: (1.1 + rnd(90) / 100) + 's',
+    color: colors[rnd(colors.length)],
+    rot: rnd(360),
+    size: (7 + rnd(8)),
+  }))
+}
+
 // garabatos repartidos a lo largo del mapa (fondo del camino)
 function buildMapDoodles(n) {
   const rnd = (x) => Math.floor(Math.random() * x)
@@ -62,6 +77,12 @@ const PROGRESS_KEY = 'math_progress'
 function loadProgress() {
   try { return JSON.parse(localStorage.getItem(PROGRESS_KEY)) || { stars: {} } }
   catch { return { stars: {} } }
+}
+
+// Descripción corta del nivel para el pop-up de inicio (estilo Candy Crush)
+function levelBrief(lv) {
+  if (lv.tutorial) return 'Arrastrá fichas y formá el número de arriba 👆'
+  return `Completá ${lv.quota ?? 6} cuentas antes de que se acabe el tiempo`
 }
 
 // ---------- geometría del mapa (camino serpenteante) ----------
@@ -184,11 +205,19 @@ export default function App() {
   const [cuentasPop, setCuentasPop] = useState(0)                 // contador para reanimar el decremento
   const [tries, setTries] = useState(0)                           // intentos restantes
   const [triesPop, setTriesPop] = useState(0)
+  const [hints, setHints] = useState(0)                           // pistas manuales que quedan
+  const [startPopup, setStartPopup] = useState(null)              // índice del nivel a arrancar (pop-up)
+  const [winScreen, setWinScreen] = useState(null)                // {index, stars} pantalla de victoria
+  const winTimer = useRef(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)         // pop-up de ajustes en el juego
+  const [nickOpen, setNickOpen] = useState(false)                 // pop-up "Ingresá tu Nick" (nivel 3)
+  const [nickInput, setNickInput] = useState('')
   const [tutorial, setTutorial] = useState(null)     // texto guía (solo niveles tutorial)
   const [inventory, setInventory] = useState([])
   const [result, setResult] = useState(null)          // {index,score,stars,win}
   const menuDoodles = useMemo(() => buildDoodles(), [screen])   // nuevos garabatos cada vez que se abre el menú
   const mapDoodles = useMemo(() => buildMapDoodles(10), [screen])
+  const confetti = useMemo(() => (winScreen ? buildConfetti(22) : []), [winScreen])
 
   useEffect(() => {
     if (initedRef.current) return
@@ -214,7 +243,9 @@ export default function App() {
       } catch { /* sin conexión: cae a la fuente fallback */ }
 
       const hooks = {
-        setTime: setTimeLeft, setInventory, setTutorial,
+        setTime: setTimeLeft, setInventory, setTutorial, setHints,
+        onHintUsed: (index) => trackEvent('hint', index),
+        onAddMinute: (index) => trackEvent('continue', index),
         setCuentas: ({ left, quota, dec }) => {
           setCuentas({ left, quota })
           if (dec) setCuentasPop((p) => p + 1)
@@ -241,8 +272,8 @@ export default function App() {
         addTime: (sec) => showTimeBonus(sec),
         setConfig: () => {},
         setOverlay: (o) => { if (!o.show) setResult(null) },
-        onLevelEnd: ({ index, completed, reason, stars, quota, left, timeLeft }) => {
-          setResult({ index, completed, reason, stars, quota, left, timeLeft, win: completed })
+        onLevelEnd: ({ index, completed, reason, stars, quota, left, timeLeft, continuesLeft }) => {
+          trackEvent(completed ? 'win' : 'lose', index, { stars, reason, left, timeLeft: Math.round(timeLeft) })
           if (stars >= 1) {
             setProgress((p) => {
               const prev = p.stars[index] || 0
@@ -251,6 +282,17 @@ export default function App() {
               localStorage.setItem(PROGRESS_KEY, JSON.stringify(next))
               return next
             })
+          }
+          if (completed) {
+            // ganó: pantalla de victoria con estrellas (~3,4 s) y luego auto-avanza
+            // al mapa + pop-up de inicio del siguiente nivel (estilo Candy Crush).
+            setResult(null)
+            setWinScreen({ index, stars })
+            clearTimeout(winTimer.current)
+            winTimer.current = setTimeout(() => advanceFromWin(index), 3400)
+          } else {
+            // perdió: tarjeta con opción de "+1 min" (limitada).
+            setResult({ index, completed, reason, stars, quota, left, timeLeft, win: false, continuesLeft })
           }
         },
         // Notificación de arriba desactivada: molestaba y desacomodaba el layout en mobile.
@@ -269,11 +311,27 @@ export default function App() {
     return () => { destroyed = true; if (app) app.destroy(true) }
   }, [])
 
+  useEffect(() => { initMetrics() }, [])                          // ID anónimo + upsert jugador
+
   const isUnlocked = (i) => i === 0 || (progress.stars[i - 1] || 0) >= 1
+  // tocar un nodo del mapa abre el pop-up de inicio del nivel (estilo Candy Crush)
+  const openStart = (i) => { if (isUnlocked(i)) setStartPopup(i) }
+  // fin de la pantalla de victoria: al mapa + pop-up de inicio del siguiente nivel
+  const advanceFromWin = useCallback((index) => {
+    clearTimeout(winTimer.current)
+    setWinScreen(null)
+    setScreen('map')
+    if (index + 1 < LEVELS.length) setStartPopup(index + 1)
+  }, [])
   const playLevel = (i) => {
     if (!isUnlocked(i)) return
-    setCurIdx(i); setResult(null); setScreen('game')
+    setStartPopup(null); setCurIdx(i); setResult(null); setScreen('game')
     ctrlRef.current?.startLevel(i)
+    trackEvent('start', i)
+    // Pedir el nick al empezar el nivel 3 (índice 2), solo si no lo puso aún.
+    if (i === 2 && !getNick() && !localStorage.getItem('math_nick_asked')) {
+      setNickInput(''); setNickOpen(true)
+    }
   }
 
   const mapGeo = mapGeometry(LEVELS.length)
@@ -294,11 +352,6 @@ export default function App() {
     <div className="app">
       {/* ---------- pantalla de juego (siempre montada para conservar el canvas Pixi) ---------- */}
       <div className="game" style={{ display: screen === 'game' ? 'flex' : 'none' }}>
-        <div className="topbar">
-          <button className="back" onClick={() => setScreen('map')}>← Mapa</button>
-          <div className="lvl-name">Nivel {target.level} · {target.name}</div>
-        </div>
-
         {/* Fila superior: intentos · tiempo · tally (cuentas restantes) */}
         <div className="top-row">
           <div className="tries-big">
@@ -330,19 +383,12 @@ export default function App() {
           <div className="board-wrap" ref={mountRef} />
         </div>
 
-        <div className="inventory">
-          {inventory.map((b) => (
-            <div key={b.id}
-              className={'boost' + (b.n <= 0 ? ' empty' : '') + (b.active ? ' active' : '')}
-              onClick={() => ctrlRef.current?.activateBooster(b.id)}>
-              {b.label}<span className="badge">{b.n}</span>
-            </div>
-          ))}
-        </div>
-
         <div className="controls">
-          <button onClick={() => ctrlRef.current?.hint()}>💡 Pista</button>
-          <button onClick={() => ctrlRef.current?.shuffle()}>Mezclar</button>
+          <button className="hint-btn" disabled={hints <= 0}
+            onClick={() => ctrlRef.current?.hint()}>
+            💡 Pista <span className="hint-n">{hints}</span>
+          </button>
+          <button className="gear-btn" aria-label="Ajustes" onClick={() => setSettingsOpen(true)}>⚙</button>
         </div>
       </div>
 
@@ -392,7 +438,7 @@ export default function App() {
                 <button key={i}
                   className={'node' + (unlocked ? '' : ' locked') + (i === currentLevel ? ' current' : '')}
                   style={{ top: p.y + 'px', left: (p.x / MAP_W * 100) + '%' }}
-                  onClick={() => playLevel(i)}>
+                  onClick={() => openStart(i)}>
                   {i === currentLevel && <span className="node-here">¡Acá!</span>}
                   {unlocked && <span className="node-name">{lv.name}</span>}
                   <span className="node-num">{unlocked ? i + 1 : '🔒'}</span>
@@ -404,24 +450,90 @@ export default function App() {
         </div>
       )}
 
-      {/* ---------- resultado de nivel ---------- */}
-      {result && (
+      {/* ---------- pantalla de victoria (auto-avanza a los ~3,4 s) ---------- */}
+      {winScreen && (
+        <div className="win-cele" onClick={() => advanceFromWin(winScreen.index)}>
+          <div className="confetti" aria-hidden="true">
+            {confetti.map((c, i) => (
+              <span key={i} style={{
+                left: c.left, width: c.size + 'px', height: c.size * 1.6 + 'px',
+                background: c.color, animationDelay: c.delay, animationDuration: c.dur,
+                transform: `rotate(${c.rot}deg)`,
+              }} />
+            ))}
+          </div>
+          <div className="win-inner">
+            <div className="win-title">¡Nivel superado!</div>
+            <div className="win-sub">¡Buen trabajo! Seguí así 🎉</div>
+            <div className="win-stars"><Stars n={winScreen.stars} size={58} /></div>
+            <div className="win-hint">tocá para seguir</div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- pop-up de inicio de nivel (estilo Candy Crush) ---------- */}
+      {startPopup != null && (
+        <div className="overlay" onClick={() => setStartPopup(null)}>
+          <div className="card start" onClick={(e) => e.stopPropagation()}>
+            <button className="card-x" aria-label="Cerrar" onClick={() => setStartPopup(null)}>✕</button>
+            <div className="start-lvl">Nivel {startPopup + 1}</div>
+            <div className="start-name">{LEVELS[startPopup].name}</div>
+            <div className="start-desc">{levelBrief(LEVELS[startPopup])}</div>
+            <button className="start-play" onClick={() => playLevel(startPopup)}>¡Jugar!</button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- resultado de nivel (solo cuando se pierde) ---------- */}
+      {result && !result.win && (
         <div className="overlay">
           <div className="card">
-            <div className="ot">{result.win ? '¡Nivel superado!' : (result.reason === 'moves' ? '¡Te quedaste sin intentos!' : '¡Se acabó el tiempo!')}</div>
-            <Stars n={result.stars} size={34} />
-            <div className="ok">{result.win ? '⏱ Tiempo restante' : 'Cuentas que faltaron'}</div>
-            <div className="os">{result.win ? fmtTime(result.timeLeft) : result.left}</div>
+            <div className="ot">{result.reason === 'moves' ? '¡Te quedaste sin intentos!' : '¡Se acabó el tiempo!'}</div>
+            <div className="ok">Cuentas que faltaron</div>
+            <div className="os">{result.left}</div>
+            {result.continuesLeft > 0 && (
+              <button className="continue-btn" onClick={() => ctrlRef.current?.resumeWithBonus()}>
+                +1 minuto
+              </button>
+            )}
             <div className="card-btns">
-              <button onClick={() => { setResult(null); setScreen('map') }}>Mapa</button>
-              {result.win && result.index + 1 < LEVELS.length
-                ? <button className="primary" onClick={() => playLevel(result.index + 1)}>Siguiente</button>
-                : <button className="primary" onClick={() => playLevel(result.index)}>Reintentar</button>}
+              <button onClick={() => { setResult(null); setScreen('map') }}>Salir</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* ---------- pop-up de ajustes (dentro del juego) ---------- */}
+      {settingsOpen && (
+        <div className="overlay" onClick={() => setSettingsOpen(false)}>
+          <div className="card settings" onClick={(e) => e.stopPropagation()}>
+            <button className="card-x" aria-label="Cerrar" onClick={() => setSettingsOpen(false)}>✕</button>
+            <div className="start-lvl">Ajustes</div>
+            <div className="start-name">Nivel {target.level}</div>
+            <button className="start-play" onClick={() => setSettingsOpen(false)}>Seguir jugando</button>
+            <button className="leave-btn" onClick={() => { setSettingsOpen(false); setResult(null); setScreen('map') }}>Abandonar nivel</button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- pop-up "Ingresá tu Nick" (aparece al empezar el nivel 3) ---------- */}
+      {nickOpen && (
+        <div className="overlay">
+          <div className="card nick">
+            <div className="start-name">Ingresá tu Nick</div>
+            <div className="start-desc">Para las pruebas del juego. Es opcional, podés saltearlo.</div>
+            <input className="nick-input" type="text" maxLength={24} autoFocus
+              placeholder="Tu apodo" value={nickInput}
+              onChange={(e) => setNickInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && nickInput.trim()) { setNick(nickInput); localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) } }} />
+            <button className="start-play" disabled={!nickInput.trim()}
+              onClick={() => { setNick(nickInput); localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) }}>
+              Guardar
+            </button>
+            <button className="leave-btn" onClick={() => { localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) }}>Saltear</button>
+          </div>
+        </div>
+      )}
 
       {/* capa de tokens que vuelan al objetivo (efecto collect) */}
       <div className="fly-overlay" ref={overlayRef} />

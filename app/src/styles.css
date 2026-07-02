@@ -39,10 +39,8 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .app { min-height: 100%; }
 .game { flex-direction: column; align-items: center; padding-bottom: 24px; }
 
-.topbar { display: flex; align-items: center; gap: 10px; width: min(94vw, 460px); margin-top: 12px; }
 .back { background: #3a2d63; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 700; box-shadow: 0 3px 0 rgba(0,0,0,.3); }
 .back:active { transform: translateY(2px); }
-.lvl-name { font-family: var(--font-chalk); font-weight: 400; font-size: 18px; opacity: .95; color: var(--chalk); }
 
 .hud { display: flex; gap: 8px; width: min(94vw, 460px); margin: 10px 0 6px; }
 .stat { flex: 1; background: var(--panel); border: 2px solid #ffffff1a; border-radius: 14px; padding: 8px 6px; text-align: center; box-shadow: 0 4px 0 rgba(0,0,0,.3); }
@@ -68,7 +66,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 @keyframes chipOut { to { transform: scale(.2); opacity: 0; } }
 
 /* ---- HUD: fila superior (intentos · tiempo · tally) + objetivo a ancho completo ---- */
-.top-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; width: min(94vw, 460px); margin: 4px auto 8px; }
+.top-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; width: min(94vw, 460px); margin: 16px auto 8px; }
 .top-row .tries-big { justify-self: start; }
 .top-row .tally { justify-self: end; }
 .time-big { font-family: var(--font-tiza); font-size: 48px; font-weight: 700; line-height: 1; letter-spacing: 1px; text-align: center; text-shadow: 0 3px 0 #00000040; display: inline-block; }
@@ -141,8 +139,12 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .boost.empty { opacity: .35; pointer-events: none; }
 
 .controls { display: flex; gap: 10px; margin: 14px 0 0; }
-.controls button { background: var(--num); border-radius: 12px; padding: 10px 22px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 0 rgba(0,0,0,.35); }
+.controls button { background: var(--num); border-radius: 12px; padding: 10px 22px; font-family: var(--font-display); font-weight: 700; font-size: 16px; color: #fff; box-shadow: 0 4px 0 rgba(0,0,0,.35); }
 .controls button:active { transform: translateY(2px); }
+.controls button:disabled { opacity: .4; box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+.hint-btn .hint-n { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; margin-left: 6px; padding: 0 5px; border-radius: 10px; background: #ffffff2e; font-size: 13px; }
+.gear-btn { background: var(--panel); color: var(--chalk); border: 2px solid #ffffff1a; border-radius: 12px; padding: 10px 16px; font-size: 20px; line-height: 1; box-shadow: 0 4px 0 rgba(0,0,0,.35); }
+.gear-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,.35); }
 
 /* ---------- pantallas (menú / mapa) ---------- */
 .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; overflow-y: auto; }
@@ -218,3 +220,65 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .card-btns button:active { transform: translateY(3px); }
 .card-btns button:not(.primary):active { box-shadow: 0 2px 0 rgba(0,0,0,.45); }
 .card-btns button.primary:active { box-shadow: 0 2px 0 #2b53c0; }
+
+/* botón "+1 minuto" (seguir tras perder) = tiza amarilla, destacado */
+.continue-btn { display: block; width: 100%; margin: 20px 0 4px; font-family: var(--font-tiza); font-weight: 700; font-size: 26px; letter-spacing: .5px; padding: 12px 18px; border-radius: 16px; color: #4a3a00; background: linear-gradient(160deg, var(--eq2), var(--eq)); border: 3px solid #f4f1e8; box-shadow: 0 5px 0 #b8860b, 0 0 18px #ffd23f66; }
+.continue-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #b8860b; }
+
+/* botón "Abandonar nivel" (dentro de Ajustes): secundario, discreto */
+.leave-btn { display: block; margin: 14px auto 0; font-family: var(--font-chalk); font-size: 17px; color: var(--chalk-dim); background: transparent; border: none; text-decoration: underline; }
+.leave-btn:active { color: var(--red); }
+
+/* ---------- pop-up de inicio de nivel (estilo Candy Crush) ---------- */
+.card.start { position: relative; }
+.card-x { position: absolute; top: -14px; right: -14px; width: 34px; height: 34px; border-radius: 50%; background: var(--red); color: #fff; font-size: 16px; font-weight: 800; border: 3px solid #f4f1e8; box-shadow: 0 3px 0 rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; }
+.card-x:active { transform: translateY(2px); }
+.start-lvl { font-family: var(--font-tiza); font-size: 26px; color: var(--eq); text-shadow: 0 2px 0 #00000040; }
+.start-name { font-family: var(--font-tiza); font-size: 40px; font-weight: 700; color: var(--chalk); margin: 2px 0 10px; line-height: 1; }
+.start-desc { font-family: var(--font-chalk); font-size: 18px; color: var(--chalk-dim); margin: 0 auto 22px; max-width: 15em; }
+.start-play { font-family: var(--font-tiza); font-weight: 700; font-size: 30px; letter-spacing: 1px; padding: 12px 44px; border-radius: 16px; color: #4a3a00; background: linear-gradient(160deg, var(--eq2), var(--eq)); border: 3px solid #f4f1e8; box-shadow: 0 6px 0 #b8860b, 0 0 22px #ffd23f77; animation: btnPulse 1.8s ease-in-out infinite; }
+.start-play:active { animation: none; transform: translateY(3px); box-shadow: 0 3px 0 #b8860b; }
+.start-play:disabled { opacity: .5; animation: none; box-shadow: 0 4px 0 #b8860b; }
+
+/* input del pop-up de nick */
+.nick-input { display: block; width: 100%; margin: 4px 0 18px; padding: 12px 14px; border-radius: 12px; border: 2px solid #ffffff33; background: #14201b; color: var(--chalk); font-family: var(--font-chalk); font-size: 20px; text-align: center; outline: none; }
+.nick-input:focus { border-color: var(--eq); box-shadow: 0 0 0 3px #ffd23f33; }
+.nick-input::placeholder { color: #ffffff44; }
+
+/* ---------- pantalla de "Nivel superado" (celebración, auto-avanza) ---------- */
+.win-cele {
+  position: fixed; inset: 0; z-index: 70; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 32%, #34463b 0%, #1f2a26 55%, #141d19 100%);
+  animation: winFade .35s ease;
+}
+@keyframes winFade { from { opacity: 0; } to { opacity: 1; } }
+.win-inner { position: relative; z-index: 2; text-align: center; padding: 20px; }
+/* destello detrás de las estrellas */
+.win-inner::before {
+  content: ''; position: absolute; top: 44%; left: 50%; width: 340px; height: 340px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, #ffd23f55 0%, #ffd23f00 62%); z-index: -1;
+  animation: winGlow 2.4s ease-in-out infinite;
+}
+@keyframes winGlow { 0%, 100% { opacity: .55; transform: translate(-50%,-50%) scale(1); } 50% { opacity: .9; transform: translate(-50%,-50%) scale(1.12); } }
+.win-title { font-family: var(--font-tiza); font-size: 50px; font-weight: 700; color: var(--eq); text-shadow: 0 3px 0 #00000045; animation: winTitle .5s cubic-bezier(.2,1.5,.4,1) both; }
+@keyframes winTitle { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.win-sub { font-family: var(--font-chalk); font-size: 20px; color: var(--chalk); opacity: .9; margin: 8px 0 22px; animation: winFade .5s ease .2s both; }
+.win-stars { display: inline-block; }
+.win-stars .st { color: #ffffff26; }
+.win-stars .st.on { color: var(--eq); text-shadow: 0 0 14px var(--eq); animation: starPop .55s cubic-bezier(.2,1.6,.4,1) both; }
+.win-stars .st.on:nth-child(1) { animation-delay: .35s; }
+.win-stars .st.on:nth-child(2) { animation-delay: .55s; }
+.win-stars .st.on:nth-child(3) { animation-delay: .75s; }
+@keyframes starPop { 0% { transform: scale(0) rotate(-40deg); } 70% { transform: scale(1.35) rotate(8deg); } 100% { transform: scale(1) rotate(0); } }
+.win-hint { font-family: var(--font-chalk); font-size: 15px; color: var(--chalk-dim); margin-top: 30px; animation: winFade 1s ease 1.4s both, hintBlink 1.4s ease-in-out 1.6s infinite; }
+@keyframes hintBlink { 0%, 100% { opacity: .45; } 50% { opacity: .9; } }
+/* confeti que cae */
+.confetti { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.confetti span { position: absolute; top: -24px; border-radius: 2px; opacity: .95; animation-name: confettiFall; animation-timing-function: linear; animation-iteration-count: infinite; }
+@keyframes confettiFall {
+  0% { transform: translateY(-24px) rotate(0deg); opacity: 0; }
+  8% { opacity: 1; }
+  100% { transform: translateY(105vh) rotate(600deg); opacity: 1; }
+}

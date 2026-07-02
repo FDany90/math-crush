@@ -82,7 +82,9 @@ class Tile extends Container {
       text: ch,
       style: { fontFamily: 'Tiza, "Patrick Hand", cursive', fontSize: 42, fill: 0xffffff },
     });
-    t.anchor.set(0.5); t.y = -1;
+    t.anchor.set(0.5);
+    // el glifo '−' de la fuente Tiza cae bajo (parece guión bajo): subirlo para centrarlo
+    t.y = ch === '−' ? -10 : -1;
     this.addChild(t);
   }
 }

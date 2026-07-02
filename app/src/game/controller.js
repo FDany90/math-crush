@@ -345,8 +345,13 @@ export class Controller {
     this.tries = Math.max(0, this.tries - 1)
     this.hooks.setTries?.({ left: this.tries, dec: true })
     if (this.tries <= 0) { this._endLevel(false, 'moves'); return }
-    // frenar y avisar: mensaje flotante (pausa el reloj; coachDismissed() retoma la manito)
-    this._coach([{ text: 'Eso no forma una cuenta. Te quedan ' + this.tries + ' movimientos: pensá bien antes de mover.' }])
+    // avisar SOLO la primera vez en todo el juego (nunca más, en ningún nivel)
+    try {
+      if (!localStorage.getItem('math_coached_wrongmove')) {
+        localStorage.setItem('math_coached_wrongmove', '1')
+        this._coach([{ text: 'Eso no forma una cuenta. Te quedan ' + this.tries + ' movimientos: pensá bien antes de mover.' }])
+      }
+    } catch { /* sin localStorage: no avisar */ }
   }
 
   _applyTidy() {

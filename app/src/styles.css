@@ -66,7 +66,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 @keyframes chipOut { to { transform: scale(.2); opacity: 0; } }
 
 /* ---- HUD: fila superior (intentos · tiempo · tally) + objetivo a ancho completo ---- */
-.top-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; width: min(94vw, 460px); margin: 16px auto 8px; }
+.top-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; width: min(94vw, 460px); margin: 16px auto 14px; }
 .top-row .tries-big { justify-self: start; }
 .top-row .tally { justify-self: end; }
 .time-big { font-family: var(--font-tiza); font-size: 48px; font-weight: 700; line-height: 1; letter-spacing: 1px; text-align: center; text-shadow: 0 3px 0 #00000040; display: inline-block; }
@@ -83,7 +83,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 /* "+Ns" que sube desde el reloj */
 .time-bonus { position: fixed; font-family: var(--font-tiza); font-size: 30px; color: #7bed9f; text-shadow: 0 0 10px #2ed57388; pointer-events: none; transform: translate(-50%,-50%); z-index: 46; }
 
-.obj-card { width: min(94vw, 460px); margin: 0 auto 6px; background: var(--panel); border: 2px solid #ffffff1a; border-radius: 16px; padding: 8px 12px 10px; box-shadow: 0 4px 0 rgba(0,0,0,.3); display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.obj-card { width: min(94vw, 460px); margin: 0 auto; background: var(--panel); border: 2px solid #ffffff1a; border-radius: 16px; padding: 8px 12px 10px; box-shadow: 0 4px 0 rgba(0,0,0,.3); display: flex; flex-direction: column; align-items: center; gap: 7px; }
 .obj-top { display: flex; align-items: center; justify-content: center; gap: 7px; flex-wrap: wrap; }
 .obj-label { font-family: var(--font-chalk); font-size: 18px; color: var(--chalk); opacity: .85; }
 
@@ -109,7 +109,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .goalfill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #5cd66b, #37b24d); transition: width .25s ease; }
 .gstar { position: absolute; top: -5px; transform: translateX(-50%); font-size: 14px; color: #fff8; }
 
-.board-area { position: relative; width: min(94vw, 460px); margin-top: 18px; }
+.board-area { position: relative; width: min(94vw, 460px); margin-top: 30px; }
 .arrow-h { position: absolute; top: -13px; width: 40px; height: 0; border-top: 2px solid #ffffff55; }
 .arrow-h::after { content: ''; position: absolute; right: -1px; top: -4px; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 7px solid #ffffff55; }
 .arrow-h.start { left: 8px; }
@@ -134,7 +134,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .boost.active { outline: 3px solid #fff; }
 .boost.empty { opacity: .35; pointer-events: none; }
 
-.controls { display: flex; gap: 12px; margin: 16px 0 0; align-items: center; }
+.controls { display: flex; gap: 12px; margin: 26px 0 0; align-items: center; }
 .controls button { font-family: var(--font-display); font-weight: 800; color: #fff; border: 2px solid #ffffff33; box-shadow: 0 4px 0 rgba(0,0,0,.4), inset 0 2px 0 #ffffff40; transition: transform .06s, box-shadow .06s; }
 .controls button:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.4), inset 0 2px 0 #ffffff40; }
 /* Pista = botón cyan de tiza con badge de cantidad */

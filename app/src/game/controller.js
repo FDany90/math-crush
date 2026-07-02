@@ -51,7 +51,9 @@ export class Controller {
     this.tries = this.level.tries ?? MAX_TRIES   // intentos restantes
     this.hintsLeft = this.level.hints ?? MAX_HINTS  // pistas manuales que quedan
     this.continues = 0                     // veces que ya usó "+1 min"
-    this.coachedFirstCuenta = false        // ya se mostró el coach de "cuentas restantes"
+    this.coachedFirstCuenta = false        // ya se mostró el coach de "cuentas restantes" (nivel 2)
+    this.coachedTutorialFirst = false      // ya se mostró el 2do paso del tutorial (nivel 1)
+    this.coachActive = false               // hay un mensaje del coach en pantalla (pausa pistas/manito)
     this.moves = 0                         // movimientos hechos (para límite de pistas)
     this.autoHintCount = 0                 // pistas automáticas ya mostradas
     this.combo = 0
@@ -70,16 +72,11 @@ export class Controller {
     this._pushHud()
     this._pushInventory()
     this.hooks.setOverlay({ show: false })
-    // Tutorial (nivel 1): indicaciones flotantes en vez de banner en el layout.
-    // Como el reloj arranca recién en el primer movimiento, estos mensajes no
-    // consumen tiempo. Se cierran tocando la pantalla.
+    // Tutorial (nivel 1): un mensaje flotante corto para arrancar; el resto se
+    // va indicando MIENTRAS jugás (después del primer acierto), no todo junto.
+    // Como el reloj arranca recién en el primer movimiento, no consume tiempo.
     if (this.tutorial) {
-      const t = this.targets[0]
-      this.hooks.coach?.([
-        { text: '¡Hola! Arrastrá una ficha hacia su vecina para intercambiarlas.' },
-        { text: 'Tu objetivo: formá una cuenta que dé ' + t + '  (por ejemplo, sumar hasta ' + t + ').', highlight: 'target' },
-        { text: 'Cuando una fila o columna da el resultado, ¡explota! Tocá para empezar 👆' },
-      ])
+      this._coach([{ text: 'Arrastrá una ficha hacia su vecina para formar el número de arriba.', highlight: 'target' }])
     }
     this._startAutoHint()
   }
@@ -101,17 +98,26 @@ export class Controller {
     this.timerOn = false
     if (this.timerId) clearTimeout(this.timerId)
   }
-  // reanuda el reloj tras cerrar un mensaje del coach
+  // reanuda el reloj (si corresponde; antes del primer movimiento no hace nada)
   resume() {
     if (!this.started || this.ended || this.timerOn) return
     this.deadline = Date.now() + this.timeLeft * 1000
     this.timerOn = true
     this._tick()
   }
-  // muestra un mensaje flotante (coach) y frena el reloj hasta que el jugador toque
+  // muestra un mensaje flotante (coach): pausa el reloj y bloquea pistas/manito
+  // automáticas mientras está en pantalla (para que no se solapen).
   _coach(steps) {
     this.pause()
+    this.coachActive = true
+    this._clearAutoHint()
     this.hooks.coach?.(steps)
+  }
+  // el jugador cerró el último mensaje del coach: reanuda reloj y pistas automáticas
+  coachDismissed() {
+    this.coachActive = false
+    this.resume()
+    this._startAutoHint()
   }
   _tick() {
     if (!this.timerOn) return
@@ -158,7 +164,7 @@ export class Controller {
   }
   _startAutoHint() {
     this._clearAutoHint()
-    if (this.ended) return
+    if (this.ended || this.coachActive) return
     const cfg = this._autoHintConfig()
     if (!cfg || this.moves >= cfg.maxMoves || this.autoHintCount >= cfg.maxHints) return
     this.autoHintId = setTimeout(() => this._showAutoHint(), cfg.delay)
@@ -232,12 +238,19 @@ export class Controller {
   _afterMove(consumed) {
     if (this.ended) return
     this._pickTargets(consumed)
-    this._startAutoHint()
+    // Tutorial (nivel 1): 2do paso, recién DESPUÉS del primer acierto (no todo junto al arrancar).
+    if (this.tutorial && consumed.size > 0 && !this.coachedTutorialFirst) {
+      this.coachedTutorialFirst = true
+      this._coach([{ text: '¡Así se hace! Repetí hasta completar todas las cuentas.', highlight: 'tally' }])
+      return   // coachDismissed() retoma la manito automática al cerrar el mensaje
+    }
     // Nivel 2: al resolver la PRIMERA cuenta, frenar el reloj y señalar cuántas faltan.
     if (this.levelIndex === 1 && consumed.size > 0 && !this.coachedFirstCuenta && this.left > 0) {
       this.coachedFirstCuenta = true
       this._coach([{ text: '¡Bien! Te quedan ' + this.left + ' cuentas por hacer. Completá todas antes de que se acabe el tiempo.', highlight: 'tally' }])
+      return
     }
+    this._startAutoHint()
   }
 
   async _useBooster(r, c) {
@@ -332,9 +345,8 @@ export class Controller {
     this.tries = Math.max(0, this.tries - 1)
     this.hooks.setTries?.({ left: this.tries, dec: true })
     if (this.tries <= 0) { this._endLevel(false, 'moves'); return }
-    // frenar y avisar: mensaje flotante (pausa el reloj hasta que toque)
+    // frenar y avisar: mensaje flotante (pausa el reloj; coachDismissed() retoma la manito)
     this._coach([{ text: 'Eso no forma una cuenta. Te quedan ' + this.tries + ' movimientos: pensá bien antes de mover.' }])
-    this._startAutoHint()
   }
 
   _applyTidy() {

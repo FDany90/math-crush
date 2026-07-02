@@ -255,12 +255,13 @@ export function targetPool(grid, level) {
     for (let c = 0; c < C; c++) {
       for (const [r2, c2] of [[r, c + 1], [r + 1, c]]) {
         if (r2 >= R || c2 >= C) continue;
-        const g = grid.map((row) => row.slice());
-        const t = g[r][c]; g[r][c] = g[r2][c2]; g[r2][c2] = t;
+        // swap in-place sobre la copia descartable (evita clonar toda la grilla por candidato)
+        const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
         const s = new Set();
-        valuesOfLine(getRow(g, r), s, md); valuesOfLine(getCol(g, c), s, md);
-        if (r2 !== r) valuesOfLine(getRow(g, r2), s, md);
-        if (c2 !== c) valuesOfLine(getCol(g, c2), s, md);
+        valuesOfLine(getRow(grid, r), s, md); valuesOfLine(getCol(grid, c), s, md);
+        if (r2 !== r) valuesOfLine(getRow(grid, r2), s, md);
+        if (c2 !== c) valuesOfLine(getCol(grid, c2), s, md);
+        grid[r2][c2] = grid[r][c]; grid[r][c] = t;   // deshacer el swap
         for (const v of s) if (!base.has(v) && v > 0 && v <= level.tMax) cand.add(v);
       }
     }
@@ -293,16 +294,41 @@ export function pickTargets(grid, level, keep = [], count = 3) {
 
 export const adjacent = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.c - b.c) === 1;
 
+// ¿alguna sub-línea (len>=3) forma una ecuación válida o alcanza un objetivo?
+function lineHasMatch(chars, targetSet, maxDigits) {
+  const n = chars.length;
+  for (let start = 0; start < n; start++) {
+    for (let end = n; end > start + 2; end--) {
+      const seg = chars.slice(start, end);
+      if (isValidEquation(seg, maxDigits)) return true;
+      if (!seg.includes(EQ) && seg.some((c) => OPS.includes(c))) {
+        const v = evalExpr(seg, maxDigits);
+        if (v !== null && targetSet.has(v)) return true;
+      }
+    }
+  }
+  return false;
+}
+
 // Busca un swap adyacente que forme alguna jugada (para la pista / anti-deadlock).
+// El tablero está en estado resuelto (sin matches), así que un swap solo puede crear
+// un match en las líneas que pasan por las celdas intercambiadas: chequeamos solo esas
+// (en vez de re-escanear TODO el tablero por cada candidato) y hacemos swap in-place.
 export function findHintFallback(grid, targets, maxDigits = Infinity) {
   const [ROWS, COLS] = dimsOf(grid);
+  const targetSet = new Set(targets);
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       for (const [r2, c2] of [[r, c + 1], [r + 1, c]]) {
         if (r2 >= ROWS || c2 >= COLS) continue;
-        const g = grid.map((row) => row.slice());
-        const t = g[r][c]; g[r][c] = g[r2][c2]; g[r2][c2] = t;
-        if (findMatchesMulti(g, targets, maxDigits).size > 0) return { a: { r, c }, b: { r: r2, c: c2 } };
+        const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
+        const ok =
+          lineHasMatch(getRow(grid, r), targetSet, maxDigits) ||
+          lineHasMatch(getCol(grid, c), targetSet, maxDigits) ||
+          (r2 !== r && lineHasMatch(getRow(grid, r2), targetSet, maxDigits)) ||
+          (c2 !== c && lineHasMatch(getCol(grid, c2), targetSet, maxDigits));
+        grid[r2][c2] = grid[r][c]; grid[r][c] = t;   // deshacer el swap
+        if (ok) return { a: { r, c }, b: { r: r2, c: c2 } };
       }
     }
   }

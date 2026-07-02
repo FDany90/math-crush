@@ -277,6 +277,7 @@ export default function App() {
   const [startPopup, setStartPopup] = useState(null)              // índice del nivel a arrancar (pop-up)
   const [winScreen, setWinScreen] = useState(null)                // {index, stars} pantalla de victoria
   const winTimer = useRef(null)
+  const startPopupTimer = useRef(null)
   const [settingsOpen, setSettingsOpen] = useState(false)         // pop-up de ajustes en el juego
   const [nickOpen, setNickOpen] = useState(false)                 // pop-up "Ingresá tu Nick" (nivel 3)
   const [nickInput, setNickInput] = useState('')
@@ -391,22 +392,27 @@ export default function App() {
 
   const isUnlocked = (i) => i === 0 || (progress.stars[i - 1] || 0) >= 1
   // tocar un nodo del mapa abre el pop-up de inicio del nivel (estilo Candy Crush)
-  const openStart = (i) => { if (isUnlocked(i)) setStartPopup(i) }
-  // fin de la pantalla de victoria: al mapa + pop-up de inicio del siguiente nivel
+  const openStart = (i) => { clearTimeout(startPopupTimer.current); if (isUnlocked(i)) setStartPopup(i) }
+  // fin de la pantalla de victoria: al mapa (se deja ver un momento) y RECIÉN
+  // después el pop-up de inicio del siguiente nivel — no aparecen pegados.
   const advanceFromWin = useCallback((index) => {
     clearTimeout(winTimer.current)
     setWinScreen(null)
     setScreen('map')
-    if (index + 1 < LEVELS.length) setStartPopup(index + 1)
+    clearTimeout(startPopupTimer.current)
+    if (index + 1 < LEVELS.length) {
+      startPopupTimer.current = setTimeout(() => setStartPopup(index + 1), 1600)
+    }
   }, [])
-  // cerrar el mensaje flotante: avanza al siguiente paso o, si era el último, reanuda el reloj
+  // cerrar el mensaje flotante: avanza al siguiente paso o, si era el último, reanuda el juego
   const dismissCoach = () => {
     if (!coach) return
     if (coach.length > 1) setCoach(coach.slice(1))
-    else { setCoach(null); ctrlRef.current?.resume() }
+    else { setCoach(null); ctrlRef.current?.coachDismissed() }
   }
   const playLevel = (i) => {
     if (!isUnlocked(i)) return
+    clearTimeout(startPopupTimer.current)
     setStartPopup(null); setCoach(null); setCurIdx(i); setResult(null); setScreen('game')
     ctrlRef.current?.startLevel(i)
     trackEvent('start', i)
@@ -416,9 +422,9 @@ export default function App() {
     }
   }
 
-  const mapGeo = mapGeometry(LEVELS.length)
+  const mapGeo = useMemo(() => mapGeometry(LEVELS.length), [])   // geometría fija; no recalcular por tick
   // nivel actual = primero desbloqueado sin completar (o el último desbloqueado)
-  const currentLevel = (() => {
+  const currentLevel = useMemo(() => {
     let last = 0
     for (let i = 0; i < LEVELS.length; i++) {
       if (!isUnlocked(i)) continue
@@ -426,7 +432,7 @@ export default function App() {
       if (!(progress.stars[i] >= 1)) return i
     }
     return last
-  })()
+  }, [progress])
   const tsec = Math.ceil(timeLeft)
   const timeStr = Math.floor(tsec / 60) + ':' + String(tsec % 60).padStart(2, '0')
 

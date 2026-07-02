@@ -173,13 +173,13 @@ function mapGeometry(n) {
 
 // Cuentas restantes como marcas de tiza (tally), agrupadas de a 5 (4 + diagonal).
 // Las completadas se "borran" (se atenúan con transición).
-function Tally({ quota, left }) {
+function Tally({ quota, left, hl }) {
   const done = Math.max(0, quota - left)
   const groups = []
   for (let i = 0; i < quota; i += 5) groups.push(Math.min(5, quota - i))
   let idx = 0
   return (
-    <div className="tally" role="img" aria-label={`${left} cuentas restantes`}>
+    <div className={'tally' + (hl ? ' coach-hl' : '')} role="img" aria-label={`${left} cuentas restantes`}>
       {groups.map((n, gi) => (
         <span className="tally-group" key={gi}>
           {Array.from({ length: n }).map((_, k) => {
@@ -280,7 +280,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)         // pop-up de ajustes en el juego
   const [nickOpen, setNickOpen] = useState(false)                 // pop-up "Ingresá tu Nick" (nivel 3)
   const [nickInput, setNickInput] = useState('')
-  const [tutorial, setTutorial] = useState(null)     // texto guía (solo niveles tutorial)
+  const [coach, setCoach] = useState(null)           // mensajes flotantes (tutorial/avisos); array de pasos
   const [inventory, setInventory] = useState([])
   const [result, setResult] = useState(null)          // {index,score,stars,win}
   const menuDoodles = useMemo(() => buildDoodles(), [screen])   // nuevos garabatos cada vez que se abre el menú
@@ -311,7 +311,8 @@ export default function App() {
       } catch { /* sin conexión: cae a la fuente fallback */ }
 
       const hooks = {
-        setTime: setTimeLeft, setInventory, setTutorial, setHints,
+        setTime: setTimeLeft, setInventory, setHints,
+        coach: (steps) => setCoach(steps),
         onHintUsed: (index) => trackEvent('hint', index),
         onAddMinute: (index) => trackEvent('continue', index),
         setCuentas: ({ left, quota, dec }) => {
@@ -398,9 +399,15 @@ export default function App() {
     setScreen('map')
     if (index + 1 < LEVELS.length) setStartPopup(index + 1)
   }, [])
+  // cerrar el mensaje flotante: avanza al siguiente paso o, si era el último, reanuda el reloj
+  const dismissCoach = () => {
+    if (!coach) return
+    if (coach.length > 1) setCoach(coach.slice(1))
+    else { setCoach(null); ctrlRef.current?.resume() }
+  }
   const playLevel = (i) => {
     if (!isUnlocked(i)) return
-    setStartPopup(null); setCurIdx(i); setResult(null); setScreen('game')
+    setStartPopup(null); setCoach(null); setCurIdx(i); setResult(null); setScreen('game')
     ctrlRef.current?.startLevel(i)
     trackEvent('start', i)
     // Pedir el nick al empezar el nivel 3 (índice 2), solo si no lo puso aún.
@@ -431,14 +438,13 @@ export default function App() {
         <div className="top-row">
           <div className="tries-big">
             <span key={triesPop} className={'tries-num' + (triesPop > 0 ? ' pop' : '') + (tries <= 3 ? ' low' : '')}>{tries}</span>
-            <span className="tries-ico">✋</span>
           </div>
           <div className={'time-big' + (tsec <= 15 ? ' low' : '')}>{timeStr}</div>
-          <Tally quota={cuentas.quota} left={cuentas.left} />
+          <Tally quota={cuentas.quota} left={cuentas.left} hl={coach?.[0]?.highlight === 'tally'} />
         </div>
 
         {/* Objetivo: qué formar (ancho completo, entran los de 2 dígitos) */}
-        <div className="obj-card">
+        <div className={'obj-card' + (coach?.[0]?.highlight === 'target' ? ' coach-hl' : '')}>
           <div className="obj-top" key={(target.list || []).join('-')}>
             <span className="obj-label">Formá</span>
             {(target.list || []).map((t, i) => (
@@ -449,8 +455,6 @@ export default function App() {
             ))}
           </div>
         </div>
-
-        {tutorial && <div className="tutorial-banner">{tutorial}</div>}
 
         <div className="board-area">
           <div className="arrow-h start" /><div className="arrow-h mid" /><div className="arrow-h end" />
@@ -607,7 +611,7 @@ export default function App() {
             <div className="start-lvl">Ajustes</div>
             <div className="start-name">Nivel {target.level}</div>
             <button className="start-play" onClick={() => setSettingsOpen(false)}>Seguir jugando</button>
-            <button className="leave-btn" onClick={() => { setSettingsOpen(false); setResult(null); setScreen('map') }}>Abandonar nivel</button>
+            <button className="leave-btn" onClick={() => { setSettingsOpen(false); setCoach(null); setResult(null); setScreen('map') }}>Abandonar nivel</button>
           </div>
         </div>
       )}
@@ -627,6 +631,16 @@ export default function App() {
               Guardar
             </button>
             <button className="leave-btn" onClick={() => { localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) }}>Saltear</button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- mensaje flotante del coach (tutorial / avisos; pausa el reloj) ---------- */}
+      {coach && coach[0] && (
+        <div className="coach" onClick={dismissCoach}>
+          <div className={'coach-bubble' + (coach[0].highlight ? ' point-' + coach[0].highlight : '')}>
+            <div className="coach-text">{coach[0].text}</div>
+            <div className="coach-hint">{coach.length > 1 ? 'tocá para seguir →' : 'tocá para continuar'}</div>
           </div>
         </div>
       )}

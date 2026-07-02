@@ -79,7 +79,6 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .tries-num { font-family: var(--font-tiza); font-size: 40px; font-weight: 700; line-height: 1; display: inline-block; }
 .tries-num.low { color: var(--red); }
 .tries-num.pop { animation: triesDrop .45s ease; }
-.tries-ico { font-size: 20px; opacity: .65; margin-top: -2px; }
 
 /* "+Ns" que sube desde el reloj */
 .time-bonus { position: fixed; font-family: var(--font-tiza); font-size: 30px; color: #7bed9f; text-shadow: 0 0 10px #2ed57388; pointer-events: none; transform: translate(-50%,-50%); z-index: 46; }
@@ -110,9 +109,6 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .goalfill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #5cd66b, #37b24d); transition: width .25s ease; }
 .gstar { position: absolute; top: -5px; transform: translateX(-50%); font-size: 14px; color: #fff8; }
 
-.tutorial-banner { width: min(94vw, 460px); margin: 6px 0 2px; background: var(--panel); border: 2px dashed #ffffff33; border-radius: 12px; padding: 9px 14px; font-family: var(--font-chalk); font-size: 17px; font-weight: 400; line-height: 1.3; text-align: center; color: var(--chalk); box-shadow: 0 4px 0 rgba(0,0,0,.3); animation: tbPulse 1.8s ease-in-out infinite; }
-@keyframes tbPulse { 0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,.3); } 50% { box-shadow: 0 4px 0 rgba(0,0,0,.3), 0 0 14px #ffd23f66; } }
-
 .board-area { position: relative; width: min(94vw, 460px); margin-top: 18px; }
 .arrow-h { position: absolute; top: -13px; width: 40px; height: 0; border-top: 2px solid #ffffff55; }
 .arrow-h::after { content: ''; position: absolute; right: -1px; top: -4px; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 7px solid #ffffff55; }
@@ -138,13 +134,25 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .boost.active { outline: 3px solid #fff; }
 .boost.empty { opacity: .35; pointer-events: none; }
 
-.controls { display: flex; gap: 10px; margin: 14px 0 0; }
-.controls button { background: var(--num); border-radius: 12px; padding: 10px 22px; font-family: var(--font-display); font-weight: 700; font-size: 16px; color: #fff; box-shadow: 0 4px 0 rgba(0,0,0,.35); }
-.controls button:active { transform: translateY(2px); }
-.controls button:disabled { opacity: .4; box-shadow: 0 2px 0 rgba(0,0,0,.35); }
-.hint-btn .hint-n { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; margin-left: 6px; padding: 0 5px; border-radius: 10px; background: #ffffff2e; font-size: 13px; }
-.gear-btn { background: var(--panel); color: var(--chalk); border: 2px solid #ffffff1a; border-radius: 12px; padding: 10px 16px; font-size: 20px; line-height: 1; box-shadow: 0 4px 0 rgba(0,0,0,.35); }
-.gear-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+.controls { display: flex; gap: 12px; margin: 16px 0 0; align-items: center; }
+.controls button { font-family: var(--font-display); font-weight: 800; color: #fff; border: 2px solid #ffffff33; box-shadow: 0 4px 0 rgba(0,0,0,.4), inset 0 2px 0 #ffffff40; transition: transform .06s, box-shadow .06s; }
+.controls button:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.4), inset 0 2px 0 #ffffff40; }
+/* Pista = botón cyan de tiza con badge de cantidad */
+.hint-btn { display: inline-flex; align-items: center; gap: 9px; padding: 12px 24px; border-radius: 16px; font-size: 18px; letter-spacing: .3px; background: linear-gradient(165deg, #74c4ff, #3f86e6); }
+.hint-btn:disabled { opacity: .45; }
+.hint-btn .hint-n { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: #00000033; border: 1.5px solid #ffffff66; font-size: 14px; font-weight: 800; }
+/* Ajustes = botón circular violeta */
+.gear-btn { width: 52px; height: 52px; padding: 0; border-radius: 50%; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(165deg, #b28bff, #7a5ae0); }
+
+/* ---------- coach: mensaje flotante que pausa el juego ---------- */
+.coach { position: fixed; inset: 0; z-index: 55; display: flex; align-items: center; justify-content: center; background: #0d130f88; animation: winFade .2s ease; }
+.coach-bubble { position: relative; width: min(84vw, 380px); background: linear-gradient(180deg, #2b3a31, #1f2a26); border: 3px solid var(--eq); border-radius: 18px; padding: 20px 22px; text-align: center; box-shadow: 0 10px 30px #000a, 0 0 24px #ffd23f44; animation: cardpop .3s ease; }
+.coach-text { font-family: var(--font-chalk); font-size: 21px; line-height: 1.35; color: var(--chalk); }
+.coach-hint { font-family: var(--font-chalk); font-size: 14px; color: var(--eq); margin-top: 12px; animation: hintBlink 1.3s ease-in-out infinite; }
+
+/* elemento resaltado por el coach: sale por encima del velo y titila */
+.coach-hl { position: relative; z-index: 56; border-radius: 14px; box-shadow: 0 0 0 3px var(--eq), 0 0 22px var(--eq); animation: coachGlow 1s ease-in-out infinite; }
+@keyframes coachGlow { 0%, 100% { box-shadow: 0 0 0 3px var(--eq), 0 0 16px var(--eq); } 50% { box-shadow: 0 0 0 4px var(--eq), 0 0 30px var(--eq); } }
 
 /* ---------- pantallas (menú / mapa) ---------- */
 .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; overflow-y: auto; }

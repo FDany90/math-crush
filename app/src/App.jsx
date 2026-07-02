@@ -56,21 +56,88 @@ function buildConfetti(n = 20) {
   }))
 }
 
-// garabatos repartidos a lo largo del mapa (fondo del camino)
+// ---------- paleta y decoración de tiza del mapa ----------
+// color de tiza por "zona" (tamaño de tablero) → da variedad y sensación de avance
+const ZONE_COLORS = { 4: '#7fdfff', 5: '#ff79b8', 6: '#ffd23f', 7: '#b98cff', 8: '#7bed9f' }
+const zoneColor = (size) => ZONE_COLORS[size] || '#7fdfff'
+const CHALK_COLORS = ['#7fdfff', '#ff79b8', '#ffd23f', '#b98cff', '#7bed9f', '#f4f1e8']
+const DOODLE_TYPES = ['star', 'house', 'tree', 'planet', 'book', 'spark', 'heart', 'triangle', 'bulb']
+
+// garabatos SVG repartidos a los costados del camino (flotan suave)
 function buildMapDoodles(n) {
   const rnd = (x) => Math.floor(Math.random() * x)
-  const eq = () => { const a = 1 + rnd(9), b = 1 + rnd(9); return `${a} + ${b} = ${a + b}` }
   const out = []
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n * 1.4; i++) {
     const side = i % 2 ? 'left' : 'right'
     out.push({
-      t: i % 2 ? eq() : DOODLE_MARKS[rnd(DOODLE_MARKS.length)],
-      top: (4 + (i * 92) / n + rnd(5)) + '%',
-      [side]: (2 + rnd(9)) + '%',
-      rot: (rnd(2) ? 1 : -1) * (4 + rnd(10)),
+      type: DOODLE_TYPES[rnd(DOODLE_TYPES.length)],
+      color: CHALK_COLORS[rnd(CHALK_COLORS.length)],
+      top: (2 + (i * 96) / (n * 1.4) + rnd(4)) + '%',
+      side,
+      off: (1 + rnd(9)),
+      size: 28 + rnd(30),
+      rot: (rnd(2) ? 1 : -1) * rnd(18),
+      dur: (3 + rnd(4)),
+      delay: rnd(30) / 10,
     })
   }
   return out
+}
+
+// dibujitos de tiza (SVG con trazo, se ven "dibujados a mano" con el filtro chalkRough)
+function ChalkDoodle({ type, color, size }) {
+  const p = { fill: 'none', stroke: color, strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }
+  const svg = (kids) => (
+    <svg viewBox="0 0 32 32" width={size} height={size} style={{ filter: 'url(#chalkRough)', overflow: 'visible' }}>{kids}</svg>
+  )
+  switch (type) {
+    case 'star':     return svg(<path {...p} d="M16 3l3.6 7.4 8 1.1-5.9 5.5 1.5 8L16 28.6 8.8 32.5l1.5-8L4.4 11.5l8-1.1z" />)
+    case 'house':    return svg(<><path {...p} d="M5 16L16 6l11 10" /><path {...p} d="M8 15v11h16V15" /><path {...p} d="M14 26v-6h4v6" /></>)
+    case 'tree':     return svg(<><path {...p} d="M16 4l7 11H9z" /><path {...p} d="M16 11l6 9H10z" /><path {...p} d="M16 20v7" /></>)
+    case 'planet':   return svg(<><circle {...p} cx="16" cy="15" r="8" /><ellipse {...p} cx="16" cy="16" rx="15" ry="4.5" transform="rotate(-20 16 16)" /></>)
+    case 'book':     return svg(<><path {...p} d="M6 8c4-2 8-2 10 0 2-2 6-2 10 0v16c-4-2-8-2-10 0-2-2-6-2-10 0z" /><path {...p} d="M16 8v16" /></>)
+    case 'spark':    return svg(<><path {...p} d="M16 4v24M4 16h24" /><path {...p} d="M8 8l16 16M24 8L8 24" opacity=".7" /></>)
+    case 'heart':    return svg(<path {...p} d="M16 27C6 20 4 13 8 9c3-3 6-1 8 2 2-3 5-5 8-2 4 4 2 11-8 18z" />)
+    case 'triangle': return svg(<path {...p} d="M16 5l12 22H4z" />)
+    case 'bulb':     return svg(<><path {...p} d="M16 4a8 8 0 0 1 5 14c-1 1-1 2-1 3h-8c0-1 0-2-1-3a8 8 0 0 1 5-14z" /><path {...p} d="M12 25h8M13 28h6" /></>)
+    default:         return svg(<circle {...p} cx="16" cy="16" r="10" />)
+  }
+}
+
+// Mascota: búho-profe de tiza (cuerpo cyan, cachetes rosa, birrete dorado, saluda)
+function Mascota() {
+  const p = { fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' }
+  return (
+    <svg className="mascota-svg" viewBox="0 0 120 130" width="96" style={{ filter: 'url(#chalkRough)', overflow: 'visible' }}>
+      {/* cuerpo */}
+      <path {...p} stroke="#7fdfff" strokeWidth="3" d="M60 40c-20 0-30 16-30 38 0 24 14 40 30 40s30-16 30-40c0-22-10-38-30-38z" fill="#7fdfff22" />
+      {/* orejas/plumas */}
+      <path {...p} stroke="#7fdfff" strokeWidth="3" d="M38 48c-6-6-8-14-6-18 5 1 11 6 13 13M82 48c6-6 8-14 6-18-5 1-11 6-13 13" />
+      {/* ojos */}
+      <circle {...p} stroke="#f4f1e8" strokeWidth="3" cx="49" cy="66" r="11" fill="#1f2a26" />
+      <circle {...p} stroke="#f4f1e8" strokeWidth="3" cx="71" cy="66" r="11" fill="#1f2a26" />
+      <circle cx="52" cy="64" r="3.4" fill="#f4f1e8" />
+      <circle cx="74" cy="64" r="3.4" fill="#f4f1e8" />
+      {/* pico */}
+      <path {...p} stroke="#ffd23f" strokeWidth="3" d="M60 74l-5 7h10z" fill="#ffd23f55" />
+      {/* cachetes */}
+      <circle cx="38" cy="78" r="5" fill="#ff79b855" />
+      <circle cx="82" cy="78" r="5" fill="#ff79b855" />
+      {/* pancita (líneas) */}
+      <path {...p} stroke="#7fdfff" strokeWidth="2" d="M50 92c6 4 14 4 20 0M52 100c5 3 11 3 16 0" opacity=".8" />
+      {/* patitas */}
+      <path {...p} stroke="#ffd23f" strokeWidth="3" d="M52 118v6m-3-3h6M68 118v6m-3-3h6" />
+      {/* brazo que saluda */}
+      <path className="mascota-arm" {...p} stroke="#7fdfff" strokeWidth="3" d="M88 84c8-2 14-8 16-16" />
+      {/* birrete (profe de mates) */}
+      <g stroke="#ffd23f" strokeWidth="3" fill="none" strokeLinejoin="round">
+        <path d="M60 20L40 28l20 8 20-8z" fill="#ffd23f33" />
+        <path {...p} d="M50 33v8c0 3 20 3 20 0v-8" />
+        <path {...p} d="M80 28v10" />
+        <circle cx="80" cy="40" r="2.5" fill="#ffd23f" />
+      </g>
+    </svg>
+  )
 }
 
 const PROGRESS_KEY = 'math_progress'
@@ -139,6 +206,7 @@ export default function App() {
   const initedRef = useRef(false)
   const overlayRef = useRef(null)
   const lastListRef = useRef('')
+  const mapScrollRef = useRef(null)
 
   // Efecto "collect": las fichas consumidas vuelan al chip del objetivo y, al llegar,
   // el chip se infla (los absorbe). Tokens en DOM porque el chip vive fuera del canvas.
@@ -216,7 +284,7 @@ export default function App() {
   const [inventory, setInventory] = useState([])
   const [result, setResult] = useState(null)          // {index,score,stars,win}
   const menuDoodles = useMemo(() => buildDoodles(), [screen])   // nuevos garabatos cada vez que se abre el menú
-  const mapDoodles = useMemo(() => buildMapDoodles(10), [screen])
+  const mapDoodles = useMemo(() => buildMapDoodles(LEVELS.length), [screen])
   const confetti = useMemo(() => (winScreen ? buildConfetti(22) : []), [winScreen])
 
   useEffect(() => {
@@ -312,6 +380,13 @@ export default function App() {
   }, [])
 
   useEffect(() => { initMetrics() }, [])                          // ID anónimo + upsert jugador
+  // scrollear al fondo (nivel 1) SOLO al entrar al mapa; no en cada render
+  // (antes el ref inline lo reseteaba al abrir el pop-up de "Jugar")
+  useEffect(() => {
+    if (screen === 'map' && mapScrollRef.current) {
+      mapScrollRef.current.scrollTop = mapScrollRef.current.scrollHeight
+    }
+  }, [screen])
 
   const isUnlocked = (i) => i === 0 || (progress.stars[i - 1] || 0) >= 1
   // tocar un nodo del mapa abre el pop-up de inicio del nivel (estilo Candy Crush)
@@ -411,38 +486,59 @@ export default function App() {
 
       {/* ---------- mapa de niveles ---------- */}
       {screen === 'map' && (
-        <div className="screen map" ref={(el) => { if (el) el.scrollTop = el.scrollHeight }}>
-          <div className="map-head">
-            <button className="back" onClick={() => setScreen('menu')}>← Menú</button>
-            <h2>Mapa de niveles</h2>
-          </div>
+        <div className="screen map" ref={mapScrollRef}>
+          {/* filtro "tiza" (trazo dibujado a mano) para doodles y mascota */}
+          <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
+            <defs>
+              <filter id="chalkRough" x="-20%" y="-20%" width="140%" height="140%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="n" />
+                <feDisplacementMap in="SourceGraphic" in2="n" scale="1.7" />
+              </filter>
+            </defs>
+          </svg>
           <div className="map-path" style={{ height: mapGeo.H + 'px' }}>
+            <div className="map-bg" aria-hidden="true"><span className="blob b1" /><span className="blob b2" /><span className="blob b3" /></div>
             <svg className="map-road" viewBox={`0 0 ${MAP_W} ${mapGeo.H}`} preserveAspectRatio="none"
               style={{ height: mapGeo.H + 'px' }}>
+              <path className="road-under" d={mapGeo.d} vectorEffect="non-scaling-stroke" />
               <path className="road-base" d={mapGeo.d} vectorEffect="non-scaling-stroke" />
               <path className="road-dash" d={mapGeo.d} vectorEffect="non-scaling-stroke" />
             </svg>
             <div className="map-doodles" aria-hidden="true">
               {mapDoodles.map((d, i) => (
-                <span key={i} className="doodle"
-                  style={{ top: d.top, left: d.left, right: d.right, transform: `rotate(${d.rot}deg)` }}>
-                  {d.t}
+                <span key={i} className="doodle-svg"
+                  style={{ top: d.top, [d.side]: d.off + '%', ['--rot']: d.rot + 'deg',
+                    animationDuration: d.dur + 's', animationDelay: d.delay + 's' }}>
+                  <ChalkDoodle type={d.type} color={d.color} size={d.size} />
                 </span>
               ))}
             </div>
+            {/* mascota de tiza junto al nivel actual */}
+            {mapGeo.pts[currentLevel] && (() => {
+              const cp = mapGeo.pts[currentLevel]
+              const right = cp.x / MAP_W < 0.5
+              return (
+                <div className={'map-mascot' + (right ? ' right' : ' left')}
+                  style={{ top: cp.y + 'px' }} aria-hidden="true">
+                  <div className="mascot-bubble">¡Vamos!</div>
+                  <Mascota />
+                </div>
+              )
+            })()}
             {LEVELS.map((lv, i) => {
               const unlocked = isUnlocked(i)
               const stars = progress.stars[i] || 0
               const p = mapGeo.pts[i]
+              const done = stars >= 1 && i !== currentLevel
               return (
                 <button key={i}
-                  className={'node' + (unlocked ? '' : ' locked') + (i === currentLevel ? ' current' : '')}
-                  style={{ top: p.y + 'px', left: (p.x / MAP_W * 100) + '%' }}
+                  className={'node' + (unlocked ? '' : ' locked') + (i === currentLevel ? ' current' : '') + (done ? ' done' : '')}
+                  style={{ top: p.y + 'px', left: (p.x / MAP_W * 100) + '%', '--nc': zoneColor(lv.size) }}
                   onClick={() => openStart(i)}>
                   {i === currentLevel && <span className="node-here">¡Acá!</span>}
-                  {unlocked && <span className="node-name">{lv.name}</span>}
+                  {unlocked && i === currentLevel && <span className="node-name">{lv.name}</span>}
                   <span className="node-num">{unlocked ? i + 1 : '🔒'}</span>
-                  {unlocked && <Stars n={stars} size={10} />}
+                  {unlocked && <Stars n={stars} size={11} />}
                 </button>
               )
             })}

@@ -4,7 +4,8 @@
 // ====================================================================
 import {
   newGrid, tidyBoard, ensureMinOperators, findEquationCells, findTargetCellsMulti,
-  findMatchesMulti, findHintFallback, pickTargets, adjacent,
+  findMatchesMulti, findHintFallback, pickTargets, adjacent, breakFormedTargets, plantTargetMove,
+  countTargetMoves, addTargetMovesSubtle,
 } from './logic.js'
 import { getLevel, makeGen, randTarget, starsFor, symbolAllowed } from './levels.js'
 
@@ -44,6 +45,8 @@ export class Controller {
     this.level = getLevel(index)
     this.gen = makeGen(this.level, this.cfg)
     this.md = this.level.maxDigits
+    this.mo = this.level.maxOps ?? 1       // operadores por cuenta (1 = num op num; 2+ para niveles avanzados)
+    this.fixedTarget = this.level.target ?? null   // objetivo fijo (nueva mecánica); null = objetivos rotativos
     this.ended = false
     this.busy = false
     this.started = false
@@ -131,6 +134,13 @@ export class Controller {
   _rebuild() {
     const n = this.level.size
     this.board.build(newGrid(this.gen, n, n, this.md))
+    // objetivo fijo: el tablero se genera sesgado y puede traer objetivos YA formados;
+    // los rompemos para que arranque "resuelto" (sin matches).
+    if (this.fixedTarget != null) {
+      const grid = this.board.gridChars()
+      const changed = breakFormedTargets(grid, this.gen, [this.fixedTarget], this.md, this.mo)
+      if (changed.length) this.board.applyChars(changed, grid)
+    }
   }
 
   // ---------- objetivos inteligentes (hasta 3) ----------
@@ -138,6 +148,26 @@ export class Controller {
   // Los demás se conservan si siguen siendo alcanzables; si no, se reemplazan.
   _pickTargets(consumed = new Set()) {
     this._replenishOperators()
+    // Objetivo fijo: no rota. Aseguramos que siempre haya AL MENOS una jugada que
+    // forme el objetivo; si el tablero quedó sin salida (raro por el sesgo), rebuild.
+    if (this.fixedTarget != null) {
+      this.targets = [this.fixedTarget]
+      // Mantener el tablero "sano": si quedan menos de MIN_MOVES jugadas al objetivo,
+      // agregarlas de a UNA pieza (sutil, de abajo hacia arriba) hasta tener MIN_MOVES.
+      const MIN_MOVES = 3
+      const grid = this.board.gridChars()
+      if (countTargetMoves(grid, this.targets, this.md, this.mo, MIN_MOVES) < MIN_MOVES) {
+        const changed = addTargetMovesSubtle(grid, this.gen, this.targets, this.md, this.mo, MIN_MOVES)
+        if (changed.length) this.board.applyChars(changed, grid)
+        // último recurso (rarísimo): si aún no hay ninguna jugada, plantar una
+        if (!findHintFallback(this.board.gridChars(), this.targets, this.md, this.mo)) {
+          const g2 = this.board.gridChars(); const ch2 = plantTargetMove(g2, this.gen)
+          if (ch2.length) this.board.applyChars(ch2, g2)
+        }
+      }
+      this._pushTargets(false)
+      return
+    }
     const n = this.level.nTargets ?? 3
     const keep = this.targets.filter((t) => !consumed.has(t))
     let targets = pickTargets(this.board.gridChars(), this.level, keep, n)
@@ -177,7 +207,7 @@ export class Controller {
     if (this.busy || this.ended) { this._startAutoHint(); return }
     this.autoHintCount++
     if (this.tutorial) {
-      const h = findHintFallback(this.board.gridChars(), this.targets, this.md)
+      const h = findHintFallback(this.board.gridChars(), this.targets, this.md, this.mo)
       if (h) this.board.showHandGuide(h.a, h.b)      // nivel 1: manito guía sobre la jugada
     } else {
       this.hint(false)                               // pista automática: NO gasta el cupo manual
@@ -220,7 +250,7 @@ export class Controller {
     this.busy = true; this.board.locked = true
     await this.board.swap(a, b)
     // si no forma cuenta, vuelve para atrás y cuesta un intento (anti prueba-y-error)
-    if (!findMatchesMulti(this.board.gridChars(), this.targets, this.md).size) {
+    if (!findMatchesMulti(this.board.gridChars(), this.targets, this.md, this.mo).size) {
       await this.board.swap(b, a)
       this.busy = false; this.board.locked = false
       this._failMove()
@@ -276,7 +306,7 @@ export class Controller {
   }
 
   async _resolveIfAny() {
-    if (findMatchesMulti(this.board.gridChars(), this.targets, this.md).size) { await sleep(60); return await this._resolve() }
+    if (findMatchesMulti(this.board.gridChars(), this.targets, this.md, this.mo).size) { await sleep(60); return await this._resolve() }
     return new Set()
   }
 
@@ -287,12 +317,14 @@ export class Controller {
     while (!this.ended) {
       const grid = this.board.gridChars()
       const eq = findEquationCells(grid, this.md)
-      const tg = findTargetCellsMulti(grid, this.targets, this.md)
+      const tg = findTargetCellsMulti(grid, this.targets, this.md, this.mo)
       const all = new Set([...eq, ...tg.cells])
       if (all.size === 0) break
 
       combo++; this.combo = combo
-      const cuentas = tg.hit.size + (eq.size > 0 ? 1 : 0)   // cuentas formadas en este paso
+      // cuentas por SEGMENTO (no por valor distinto): formar el objetivo 2 veces en un
+      // movimiento cuenta 2. Los combos (combo≥2) igual NO descuentan del objetivo (abajo).
+      const cuentas = tg.segs + (eq.size > 0 ? 1 : 0)
       const deliberate = combo === 1                        // combo 1 = jugada del jugador; 2+ = cascada "por azar"
       tg.hit.forEach((v) => consumed.add(v))
       if (tg.hit.size) this.hooks.targetHit?.([...tg.hit])   // avisar qué objetivo se logró
@@ -441,7 +473,7 @@ export class Controller {
     if (this.busy || this.ended) return
     if (manual && this.hintsLeft <= 0) return       // sin pistas disponibles
     const grid = this.board.gridChars()
-    const h = findHintFallback(grid, this.targets, this.md)
+    const h = findHintFallback(grid, this.targets, this.md, this.mo)
     if (!h) return                                  // sin jugadas (no gasta pista)
     // simular el swap para saber qué celdas forman la cuenta (en el tablero YA intercambiado)
     const g = grid.map((row) => row.slice())
@@ -453,7 +485,7 @@ export class Controller {
       if (r === h.b.r && c === h.b.c) return { r: h.a.r, c: h.a.c }
       return { r, c }
     }
-    const line = [...findMatchesMulti(g, this.targets, this.md)].map((k) => {
+    const line = [...findMatchesMulti(g, this.targets, this.md, this.mo)].map((k) => {
       const [r, c] = k.split(',').map(Number); return toCurrent({ r, c })
     })
     this.board.hint(h.a, h.b, line)

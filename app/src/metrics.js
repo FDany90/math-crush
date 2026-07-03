@@ -40,6 +40,7 @@ export function setNick(nick) {
 }
 
 export function hasSupabase() { return !!supabase }
+export function getSupabase() { return supabase }   // para la página /metricas
 
 // Crea/actualiza la fila del jugador. NO usamos upsert: con RLS, INSERT..ON CONFLICT
 // falla (choca con las policies). Hacemos update (si existe) + insert (si es la 1a vez;

@@ -13,6 +13,10 @@ const dimsOf = (grid) => [grid.length, grid[0].length];
 export function isSpecial(ch) { return ch === EQ || OPS.includes(ch); }
 export function randDigit() { return DIGITS[Math.floor(Math.random() * 10)]; }
 
+// cantidad de operadores en un segmento. Una "cuenta" simple tiene 1 (num op num);
+// maxOps limita cuántos se permiten (default 1 = sin cuentas encadenadas tipo a+b−c).
+export function opCount(chars) { let n = 0; for (const c of chars) if (OPS.includes(c)) n++; return n; }
+
 export function kindOf(ch) {
   if (ch === EQ) return "eq";
   if (OPS.includes(ch)) return "op";
@@ -65,10 +69,11 @@ export function isValidEquation(chars, maxDigits = Infinity) {
   return Math.abs(lv - rv) < 1e-9;
 }
 
-export function isTargetExpr(chars, target, maxDigits = Infinity) {
+export function isTargetExpr(chars, target, maxDigits = Infinity, maxOps = 1) {
   if (chars.length < 3) return false;
   if (chars.includes(EQ)) return false;
-  if (!chars.some((c) => OPS.includes(c))) return false;
+  const ops = opCount(chars);
+  if (ops < 1 || ops > maxOps) return false;
   const v = evalExpr(chars, maxDigits);
   return v !== null && Math.abs(v - target) < 1e-9;
 }
@@ -109,41 +114,46 @@ export function findEquationCells(grid, maxDigits = Infinity) {
 }
 
 // Busca segmentos que den CUALQUIERA de los objetivos activos.
-// Devuelve { cells: Set("r,c"), hit: Set(valores cumplidos) }.
-function scanLineMulti(cells, targetSet, outCells, outHit, maxDigits) {
-  let start = 0;
+// Devuelve el nº de segmentos encontrados en la línea (para contar cuentas por segmento,
+// no por valor distinto: formar el objetivo 2 veces en un movimiento = 2 cuentas).
+function scanLineMulti(cells, targetSet, outCells, outHit, maxDigits, maxOps = 1) {
+  let start = 0, segs = 0;
   while (start < cells.length) {
     let bestEnd = -1, bestVal = null;
     for (let end = cells.length; end > start + 2; end--) {
       const seg = cells.slice(start, end).map((x) => x.ch);
       if (seg.includes(EQ)) continue;
-      if (!seg.some((c) => OPS.includes(c))) continue;
+      const ops = opCount(seg);
+      if (ops < 1 || ops > maxOps) continue;
       const v = evalExpr(seg, maxDigits);
       if (v !== null && targetSet.has(v)) { bestEnd = end; bestVal = v; break; }
     }
     if (bestEnd !== -1) {
       for (let k = start; k < bestEnd; k++) outCells.add(cells[k].r + "," + cells[k].c);
       outHit.add(bestVal);
+      segs++;
       start = bestEnd;
     } else start++;
   }
+  return segs;
 }
-export function findTargetCellsMulti(grid, targets, maxDigits = Infinity) {
+export function findTargetCellsMulti(grid, targets, maxDigits = Infinity, maxOps = 1) {
   const [ROWS, COLS] = dimsOf(grid);
   const targetSet = new Set(targets);
   const cells = new Set(), hit = new Set();
+  let segs = 0;   // cantidad de cuentas formadas (por segmento)
   for (let r = 0; r < ROWS; r++) {
     const line = []; for (let c = 0; c < COLS; c++) line.push({ r, c, ch: grid[r][c] });
-    scanLineMulti(line, targetSet, cells, hit, maxDigits);
+    segs += scanLineMulti(line, targetSet, cells, hit, maxDigits, maxOps);
   }
   for (let c = 0; c < COLS; c++) {
     const line = []; for (let r = 0; r < ROWS; r++) line.push({ r, c, ch: grid[r][c] });
-    scanLineMulti(line, targetSet, cells, hit, maxDigits);
+    segs += scanLineMulti(line, targetSet, cells, hit, maxDigits, maxOps);
   }
-  return { cells, hit };
+  return { cells, hit, segs };
 }
-export function findMatchesMulti(grid, targets, maxDigits = Infinity) {
-  return new Set([...findEquationCells(grid, maxDigits), ...findTargetCellsMulti(grid, targets, maxDigits).cells]);
+export function findMatchesMulti(grid, targets, maxDigits = Infinity, maxOps = 1) {
+  return new Set([...findEquationCells(grid, maxDigits), ...findTargetCellsMulti(grid, targets, maxDigits, maxOps).cells]);
 }
 
 // --------- mantenimiento del tablero ----------
@@ -222,12 +232,13 @@ export function newGrid(gen, rows, cols, maxDigits = Infinity) {
 
 // --------- objetivo inteligente ----------
 // Todos los valores enteros que se pueden formar en una línea (segmentos len>=3 con operador).
-function valuesOfLine(cells, set, maxDigits) {
+function valuesOfLine(cells, set, maxDigits, maxOps = 1) {
   const n = cells.length;
   for (let i = 0; i < n; i++) {
     for (let j = i + 2; j < n; j++) {
       const seg = cells.slice(i, j + 1);
-      if (!seg.some((c) => OPS.includes(c))) continue;
+      const ops = opCount(seg);
+      if (ops < 1 || ops > maxOps) continue;
       const v = evalExpr(seg, maxDigits);
       if (v !== null && Number.isInteger(v)) set.add(v);
     }
@@ -236,11 +247,11 @@ function valuesOfLine(cells, set, maxDigits) {
 const getRow = (grid, r) => grid[r].slice();
 const getCol = (grid, c) => grid.map((row) => row[c]);
 
-export function achievableValues(grid, maxDigits) {
+export function achievableValues(grid, maxDigits, maxOps = 1) {
   const [R, C] = dimsOf(grid);
   const s = new Set();
-  for (let r = 0; r < R; r++) valuesOfLine(getRow(grid, r), s, maxDigits);
-  for (let c = 0; c < C; c++) valuesOfLine(getCol(grid, c), s, maxDigits);
+  for (let r = 0; r < R; r++) valuesOfLine(getRow(grid, r), s, maxDigits, maxOps);
+  for (let c = 0; c < C; c++) valuesOfLine(getCol(grid, c), s, maxDigits, maxOps);
   return s;
 }
 
@@ -248,7 +259,8 @@ export function achievableValues(grid, maxDigits) {
 // (candidatos válidos para objetivo). Nunca mayores al tMax del nivel.
 export function targetPool(grid, level) {
   const md = level.maxDigits;
-  const base = achievableValues(grid, md);
+  const mo = level.maxOps ?? 1;               // operadores por cuenta (1 = num op num)
+  const base = achievableValues(grid, md, mo);
   const [R, C] = dimsOf(grid);
   const cand = new Set();
   for (let r = 0; r < R; r++) {
@@ -258,9 +270,9 @@ export function targetPool(grid, level) {
         // swap in-place sobre la copia descartable (evita clonar toda la grilla por candidato)
         const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
         const s = new Set();
-        valuesOfLine(getRow(grid, r), s, md); valuesOfLine(getCol(grid, c), s, md);
-        if (r2 !== r) valuesOfLine(getRow(grid, r2), s, md);
-        if (c2 !== c) valuesOfLine(getCol(grid, c2), s, md);
+        valuesOfLine(getRow(grid, r), s, md, mo); valuesOfLine(getCol(grid, c), s, md, mo);
+        if (r2 !== r) valuesOfLine(getRow(grid, r2), s, md, mo);
+        if (c2 !== c) valuesOfLine(getCol(grid, c2), s, md, mo);
         grid[r2][c2] = grid[r][c]; grid[r][c] = t;   // deshacer el swap
         for (const v of s) if (!base.has(v) && v > 0 && v <= level.tMax) cand.add(v);
       }
@@ -294,16 +306,137 @@ export function pickTargets(grid, level, keep = [], count = 3) {
 
 export const adjacent = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.c - b.c) === 1;
 
+// --------- tableros "sesgados al objetivo" (nivel con target fijo) ---------
+// Tríos [a, op, b] de UNA cifra tales que a op b == level.target. Sirven para
+// ponderar el bag de fichas (que caiga mayormente lo que forma el objetivo).
+export function targetTriples(level) {
+  const T = level.target;
+  const digs = level.digits.map(Number);
+  const out = [];
+  for (const op of level.ops) {
+    for (const a of digs) for (const b of digs) {
+      let v;
+      if (op === '+') v = a + b;
+      else if (op === '−') v = a - b;
+      else if (op === '×') v = a * b;
+      else v = (b !== 0 && a % b === 0) ? a / b : NaN;   // ÷ entero
+      if (v === T) out.push([String(a), op, String(b)]);
+    }
+  }
+  return out;
+}
+
+// Cuenta cuántos swaps adyacentes forman el objetivo (corta al llegar a `cap`).
+export function countTargetMoves(grid, targets, maxDigits = Infinity, maxOps = 1, cap = Infinity) {
+  const [R, C] = dimsOf(grid);
+  const set = new Set(targets);
+  let n = 0;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    for (const [r2, c2] of [[r, c + 1], [r + 1, c]]) {
+      if (r2 >= R || c2 >= C) continue;
+      const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
+      const ok =
+        lineHasMatch(getRow(grid, r), set, maxDigits, maxOps) ||
+        lineHasMatch(getCol(grid, c), set, maxDigits, maxOps) ||
+        (r2 !== r && lineHasMatch(getRow(grid, r2), set, maxDigits, maxOps)) ||
+        (c2 !== c && lineHasMatch(getCol(grid, c2), set, maxDigits, maxOps));
+      grid[r2][c2] = grid[r][c]; grid[r][c] = t;
+      if (ok && ++n >= cap) return n;
+    }
+  }
+  return n;
+}
+
+// Agrega movimientos "de a poco": cambia UNA pieza (un dígito) por vez, lo menos
+// brusco posible y de ABAJO hacia arriba (el fondo es lo que se queda sin juego),
+// hasta llegar a `want` movimientos. Evita dejar el objetivo ya formado. Devuelve celdas.
+export function addTargetMovesSubtle(grid, gen, targets, maxDigits = Infinity, maxOps = 1, want = 3) {
+  const [R, C] = dimsOf(grid);
+  const cands = gen.hot && gen.hot.length ? gen.hot : (gen.triples || []).flatMap(([a, , b]) => [a, b]);
+  const changed = [];
+  let cur = countTargetMoves(grid, targets, maxDigits, maxOps, want);
+  let guard = 0;
+  while (cur < want && guard++ < 10) {
+    let best = null;
+    for (let r = R - 1; r >= 0 && !best; r--) {
+      for (let c = 0; c < C && !best; c++) {
+        const orig = grid[r][c];
+        if (isSpecial(orig)) continue;                 // tocamos dígitos (num→num = mínimo cambio)
+        for (const v of cands) {
+          if (v === orig) continue;
+          grid[r][c] = v;
+          const formed = findTargetCellsMulti(grid, targets, maxDigits, maxOps).cells.size;
+          const moves = formed ? -1 : countTargetMoves(grid, targets, maxDigits, maxOps, want + 1);
+          grid[r][c] = orig;
+          if (moves > cur) { best = { r, c, v, moves }; break; }
+        }
+      }
+    }
+    if (!best) break;                                  // no encontró cambio de 1 pieza
+    grid[best.r][best.c] = best.v;
+    changed.push([best.r, best.c]);
+    cur = best.moves;
+  }
+  return changed;
+}
+
+function evalOp(aCh, op, bCh) {
+  const a = parseInt(aCh, 10), b = parseInt(bCh, 10);
+  if (op === '+') return a + b;
+  if (op === '−') return a - b;
+  if (op === '×') return a * b;
+  return b !== 0 && a % b === 0 ? a / b : NaN;   // ÷
+}
+
+// Si el tablero quedó SIN jugadas al objetivo, "planta" una a un movimiento: en una
+// fila deja a-op-filler y justo debajo del filler pone b, así un swap vertical forma
+// a op b == target. filler se elige para NO dejar la fila ya formada. Devuelve celdas.
+export function plantTargetMove(grid, gen) {
+  const triples = gen.triples || [];
+  const [R, C] = dimsOf(grid);
+  if (!triples.length || R < 2 || C < 3) return [];
+  const [a, op, b] = triples[Math.floor(Math.random() * triples.length)];
+  const T = evalOp(a, op, b);
+  const r = Math.floor(Math.random() * (R - 1));
+  const c = Math.floor(Math.random() * (C - 2));
+  let filler = b, guard = 0;
+  do { filler = gen.randDigit(); guard++; }
+  while (guard < 30 && (filler === b || evalOp(a, op, filler) === T));
+  grid[r][c] = a; grid[r][c + 1] = op; grid[r][c + 2] = filler; grid[r + 1][c + 2] = b;
+  return [[r, c], [r, c + 1], [r, c + 2], [r + 1, c + 2]];
+}
+
+// Rompe los objetivos YA formados en el tablero (cambia un dígito por segmento)
+// para que arranque "resuelto" (sin matches). Devuelve celdas cambiadas.
+export function breakFormedTargets(grid, gen, targets, maxDigits = Infinity, maxOps = 1) {
+  const changed = [];
+  let guard = 0;
+  let cells = findTargetCellsMulti(grid, targets, maxDigits, maxOps).cells;
+  while (cells.size && guard++ < 80) {
+    let broke = false;
+    for (const key of cells) {
+      const [r, c] = key.split(',').map(Number);
+      if (!isSpecial(grid[r][c])) { grid[r][c] = gen.randDigit(); changed.push([r, c]); broke = true; break; }
+    }
+    if (!broke) break;
+    cells = findTargetCellsMulti(grid, targets, maxDigits, maxOps).cells;
+  }
+  return changed;
+}
+
 // ¿alguna sub-línea (len>=3) forma una ecuación válida o alcanza un objetivo?
-function lineHasMatch(chars, targetSet, maxDigits) {
+function lineHasMatch(chars, targetSet, maxDigits, maxOps = 1) {
   const n = chars.length;
   for (let start = 0; start < n; start++) {
     for (let end = n; end > start + 2; end--) {
       const seg = chars.slice(start, end);
       if (isValidEquation(seg, maxDigits)) return true;
-      if (!seg.includes(EQ) && seg.some((c) => OPS.includes(c))) {
-        const v = evalExpr(seg, maxDigits);
-        if (v !== null && targetSet.has(v)) return true;
+      if (!seg.includes(EQ)) {
+        const ops = opCount(seg);
+        if (ops >= 1 && ops <= maxOps) {
+          const v = evalExpr(seg, maxDigits);
+          if (v !== null && targetSet.has(v)) return true;
+        }
       }
     }
   }
@@ -314,7 +447,7 @@ function lineHasMatch(chars, targetSet, maxDigits) {
 // El tablero está en estado resuelto (sin matches), así que un swap solo puede crear
 // un match en las líneas que pasan por las celdas intercambiadas: chequeamos solo esas
 // (en vez de re-escanear TODO el tablero por cada candidato) y hacemos swap in-place.
-export function findHintFallback(grid, targets, maxDigits = Infinity) {
+export function findHintFallback(grid, targets, maxDigits = Infinity, maxOps = 1) {
   const [ROWS, COLS] = dimsOf(grid);
   const targetSet = new Set(targets);
   for (let r = 0; r < ROWS; r++) {
@@ -323,10 +456,10 @@ export function findHintFallback(grid, targets, maxDigits = Infinity) {
         if (r2 >= ROWS || c2 >= COLS) continue;
         const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
         const ok =
-          lineHasMatch(getRow(grid, r), targetSet, maxDigits) ||
-          lineHasMatch(getCol(grid, c), targetSet, maxDigits) ||
-          (r2 !== r && lineHasMatch(getRow(grid, r2), targetSet, maxDigits)) ||
-          (c2 !== c && lineHasMatch(getCol(grid, c2), targetSet, maxDigits));
+          lineHasMatch(getRow(grid, r), targetSet, maxDigits, maxOps) ||
+          lineHasMatch(getCol(grid, c), targetSet, maxDigits, maxOps) ||
+          (r2 !== r && lineHasMatch(getRow(grid, r2), targetSet, maxDigits, maxOps)) ||
+          (c2 !== c && lineHasMatch(getCol(grid, c2), targetSet, maxDigits, maxOps));
         grid[r2][c2] = grid[r][c]; grid[r][c] = t;   // deshacer el swap
         if (ok) return { a: { r, c }, b: { r: r2, c: c2 } };
       }

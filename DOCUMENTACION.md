@@ -224,3 +224,29 @@ Cada nivel es un objeto con estos campos:
 - **`findHintFallback`:** antes re-escaneaba **todo el tablero** (`findMatchesMulti`) por candidato (~160k evals en 8×8). Como el tablero está resuelto, ahora solo chequea las **4 líneas afectadas** por el swap (`lineHasMatch`) con early-exit → pista casi instantánea.
 - **`App.jsx`:** `mapGeometry` y `currentLevel` **memoizados** (`useMemo`) para no recalcularse en cada tick del reloj (5×/seg).
 - **Pendiente (mayor):** cachear texturas de fichas en `Board.js` (ver §6).
+
+---
+
+## 13. Rediseño de mecánica: objetivo fijo + tablero "target-rich" (2026-07-03)
+
+**Por qué:** el modo de objetivos rotativos se sentía "sopa de letras" (ves un número y lo cazás). Nueva mecánica: **un objetivo fijo** por nivel y un **tablero diseñado para estar lleno de formas de llegar a ese número**; la meta es **repetirlo `quota` veces**.
+
+**Se activa** con el campo `target: N` en `levels.js`. Si un nivel lo tiene, usa la mecánica nueva; si no, sigue con los **objetivos inteligentes rotativos** de siempre.
+
+**Cómo funciona (código):**
+- **Objetivo fijo, no rota:** el controlador fuerza `targets = [target]` (`Controller.fixedTarget`); la tarjeta muestra siempre "Formá N".
+- **Generador sesgado** (`makeTargetGen` en `levels.js`): las fichas caen mayormente de los **operandos** que forman el objetivo (`HOT_BIAS=0.78`) + más operadores (`TARGET_PCT_OPS=33`) → tablero lleno de jugadas a un movimiento. `targetTriples(level)` enumera los `[a, op, b]` que dan el objetivo.
+- **Arranca "resuelto":** `breakFormedTargets` rompe los objetivos ya formados al construir (`_rebuild`).
+- **Mantenimiento sutil (clave):** tras CADA movimiento, si quedan **menos de 3** jugadas al objetivo (`countTargetMoves`), se agregan **de a 1 pieza** (`addTargetMovesSubtle`, cambia un dígito, **de abajo hacia arriba** para revivir el fondo del tablero) hasta tener 3. Medido: ~1.4 piezas por ajuste, nunca deja <3 ni objetivos pre-formados. Último recurso (rarísimo): `plantTargetMove` (planta una jugada a un movimiento).
+
+**Reglas de conteo (transversales a TODOS los niveles):**
+- **1 operador por cuenta** (`maxOps=1`; sin `7−3+1`). Pendiente: `maxOps:2` en niveles 20+ con aviso.
+- **Conteo por segmento:** formar el objetivo 2 veces en un movimiento cuenta **2** (`findTargetCellsMulti` devuelve `segs`; el controlador usa `tg.segs`).
+- **Combos** (cuentas al caer fichas, combo≥2): dan **tiempo** pero **NO** descuentan del objetivo (decisión confirmada).
+
+**Estructura de niveles al 2026-07-03:**
+- **Niveles 1-10 = BLOQUE SUMAS** (objetivo fijo, 1 cifra, solo `+`): objetivo 4→13, tablero 4×4→6×6, quota 5→15. Para que el jugador agarre la mecánica.
+- **Niveles 11+** = los avanzados viejos (restas, multiplicación, división, ecuaciones) **con objetivos rotativos** — marcados **WIP: a rediseñar**.
+- ⚠️ Cambió la cantidad/orden de niveles → **resetear** `localStorage.removeItem('math_progress')`.
+
+**Pendiente (próximo foco):** el bloque de 10 sumas puede sentirse **monótono**. Antes de rediseñar los niveles 11+, hacer una **investigación de diseño de juegos mobile** para sumar **motivadores/desbloqueos** (progresión, recompensas, variedad) que enganchen a seguir jugando.

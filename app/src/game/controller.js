@@ -5,7 +5,7 @@
 import {
   newGrid, tidyBoard, ensureMinOperators, findEquationCells, findTargetCellsMulti,
   findMatchesMulti, findHintFallback, pickTargets, adjacent, breakFormedTargets, plantTargetMove,
-  countTargetMoves, addTargetMovesSubtle,
+  countTargetMoves, addTargetMovesSubtle, destrandOperators,
 } from './logic.js'
 import { getLevel, makeGen, randTarget, starsFor, symbolAllowed } from './levels.js'
 
@@ -136,38 +136,51 @@ export class Controller {
     this.board.build(newGrid(this.gen, n, n, this.md))
     // objetivo fijo: el tablero se genera sesgado y puede traer objetivos YA formados;
     // los rompemos para que arranque "resuelto" (sin matches).
-    if (this.fixedTarget != null) {
-      const grid = this.board.gridChars()
-      const changed = breakFormedTargets(grid, this.gen, [this.fixedTarget], this.md, this.mo)
-      if (changed.length) this.board.applyChars(changed, grid)
-    }
+    if (this.fixedTarget != null) this._healFixedBoard()
   }
 
   // ---------- objetivos inteligentes (hasta 3) ----------
   // consumed = valores que se cumplieron este movimiento (se descartan y reemplazan).
   // Los demás se conservan si siguen siendo alcanzables; si no, se reemplazan.
+  // Mantenimiento del tablero de objetivo fijo (todo sobre una grilla en memoria):
+  // saca operadores varados, repone con buena distribución, rompe cuentas YA formadas y
+  // asegura el mínimo de jugadas al objetivo. Aplica los cambios SIN animación (el
+  // controller lo llama durante el temblor de aterrizaje, para esconderlos ahí).
+  _healFixedBoard() {
+    this.targets = [this.fixedTarget]
+    const grid = this.board.gridChars()
+    const changed = []
+    // 1) operadores: sacar los varados + reponer hasta el piso con buena distribución
+    const min = Math.ceil(this.level.size * 1.2)
+    changed.push(...destrandOperators(grid, this.gen))
+    changed.push(...ensureMinOperators(grid, this.gen, min))
+    // 2) romper cuentas YA formadas (el paso 1 pudo dejar un '+' entre dos dígitos que
+    //    suman el objetivo). El tablero se entrega resuelto: sólo jugadas a un movimiento.
+    changed.push(...breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo))
+    // 3) asegurar el mínimo de jugadas al objetivo (sutil, de abajo hacia arriba).
+    //    Escala con el tablero, pero suave en los chicos (5×5→3, 6×6→5, 7×7→6, 8×8→7).
+    const MIN_MOVES = this.level.minMoves ?? (this.level.size <= 5 ? 3 : this.level.size - 1)
+    if (countTargetMoves(grid, this.targets, this.md, this.mo, MIN_MOVES) < MIN_MOVES) {
+      changed.push(...addTargetMovesSubtle(grid, this.gen, this.targets, this.md, this.mo, MIN_MOVES))
+      // último recurso (rarísimo): si aún no hay ninguna jugada, plantar una
+      if (!findHintFallback(grid, this.targets, this.md, this.mo)) {
+        changed.push(...plantTargetMove(grid, this.gen))
+      }
+    }
+    // dedup de celdas tocadas por varios pasos; aplicar SIN animación
+    const uniq = [...new Map(changed.map(([r, c]) => [r + ',' + c, [r, c]])).values()]
+    if (uniq.length) this.board.applyCharsPlain(uniq, grid)
+  }
+
   _pickTargets(consumed = new Set()) {
-    this._replenishOperators()
-    // Objetivo fijo: no rota. Aseguramos que siempre haya AL MENOS una jugada que
-    // forme el objetivo; si el tablero quedó sin salida (raro por el sesgo), rebuild.
+    // Objetivo fijo: no rota. El mantenimiento del tablero se hace en el ATERRIZAJE
+    // (ver _resolve / _healFixedBoard); acá sólo fijamos y mostramos el objetivo.
     if (this.fixedTarget != null) {
       this.targets = [this.fixedTarget]
-      // Mantener el tablero "sano": si quedan menos de MIN_MOVES jugadas al objetivo,
-      // agregarlas de a UNA pieza (sutil, de abajo hacia arriba) hasta tener MIN_MOVES.
-      const MIN_MOVES = 3
-      const grid = this.board.gridChars()
-      if (countTargetMoves(grid, this.targets, this.md, this.mo, MIN_MOVES) < MIN_MOVES) {
-        const changed = addTargetMovesSubtle(grid, this.gen, this.targets, this.md, this.mo, MIN_MOVES)
-        if (changed.length) this.board.applyChars(changed, grid)
-        // último recurso (rarísimo): si aún no hay ninguna jugada, plantar una
-        if (!findHintFallback(this.board.gridChars(), this.targets, this.md, this.mo)) {
-          const g2 = this.board.gridChars(); const ch2 = plantTargetMove(g2, this.gen)
-          if (ch2.length) this.board.applyChars(ch2, g2)
-        }
-      }
       this._pushTargets(false)
       return
     }
+    this._replenishOperators()
     const n = this.level.nTargets ?? 3
     const keep = this.targets.filter((t) => !consumed.has(t))
     let targets = pickTargets(this.board.gridChars(), this.level, keep, n)
@@ -267,6 +280,9 @@ export class Controller {
 
   _afterMove(consumed) {
     if (this.ended) return
+    // El temblor ya ocurrió al EXPLOTAR la cuenta (en _resolve). Acá el mantenimiento
+    // cambia las fichas necesarias de forma sutil (sin un segundo temblor), como parte
+    // del mismo momento en que el tablero se asienta.
     this._pickTargets(consumed)
     // Tutorial (nivel 1): 2do paso, recién DESPUÉS del primer acierto (no todo junto al arrancar).
     if (this.tutorial && consumed.size > 0 && !this.coachedTutorialFirst) {
@@ -339,7 +355,6 @@ export class Controller {
       const ctr = this.board.cellsCenter(cells)
 
       await this.board.highlight(cells)   // resaltar la combinación antes de explotar
-      this.board.shake(all.size > 6 ? 14 : 8)
       this.board.popup(ctr.x, ctr.y, '+' + bonus + 's' + (combo > 1 ? '  ¡combo x' + combo + '!' : ''))
       // solo la cuenta del jugador vuela al chip del objetivo (las de azar dan tiempo, no objetivo)
       if (deliberate) this.hooks.onCuenta?.({
@@ -354,6 +369,13 @@ export class Controller {
     this.combo = 0
     if (combo >= 3 && !this.ended) this._earnBooster()
     if (this.left <= 0 && !this.ended) this._endLevel(true)
+    // ATERRIZAJE: recién ahora, con todas las piezas ya en su nueva posición, tiembla
+    // (la sacudida del aterrizaje) y, DENTRO de ese temblor, el mantenimiento cambia
+    // las fichas necesarias sin ninguna animación (queda escondido en la sacudida).
+    if (!this.ended && consumed.size > 0) {
+      this.board.shake(12)
+      if (this.fixedTarget != null) this._healFixedBoard()
+    }
     return consumed
   }
 
@@ -395,8 +417,12 @@ export class Controller {
   // repone operadores si el tablero quedó con pocos (piso ~1.2 por fila)
   _replenishOperators() {
     const grid = this.board.gridChars()
+    // 1) sacar operadores varados (esquinas / sin uso posible) → dígitos
+    const strand = destrandOperators(grid, this.gen)
+    // 2) reponer hasta el piso, con buena distribución (sin amontonar)
     const min = Math.ceil(this.level.size * 1.2)
-    const changed = ensureMinOperators(grid, this.gen, min)
+    const add = ensureMinOperators(grid, this.gen, min)
+    const changed = [...strand, ...add]
     if (changed.length) this.board.applyChars(changed, grid)
   }
 

@@ -198,17 +198,49 @@ function ensureRowOperators(grid, gen, min, max) {
   }
 }
 
+// ¿un operador en (r,c) puede ser el centro de "num op num" en ALGUNA línea?
+// (necesita dos vecinos NO especiales enfrentados, en fila o en columna).
+function opUsableAt(grid, r, c, ROWS, COLS) {
+  const hMid = c > 0 && c < COLS - 1 && !isSpecial(grid[r][c - 1]) && !isSpecial(grid[r][c + 1]);
+  const vMid = r > 0 && r < ROWS - 1 && !isSpecial(grid[r - 1][c]) && !isSpecial(grid[r + 1][c]);
+  return hMid || vMid;
+}
+
+// Convierte a dígito los operadores VARADOS: los que no pueden ser el centro de una
+// cuenta en ninguna línea (esquinas, o rodeados de otros operadores/bordes). Limpia
+// el tablero de operadores inservibles. Un solo paso (quitar especiales sólo puede
+// mejorar a los vecinos, nunca empeorarlos). Devuelve celdas cambiadas.
+export function destrandOperators(grid, gen) {
+  const [ROWS, COLS] = dimsOf(grid);
+  const changed = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (!OPS.includes(grid[r][c])) continue;
+    if (!opUsableAt(grid, r, c, ROWS, COLS)) { grid[r][c] = gen.randDigit(); changed.push([r, c]); }
+  }
+  return changed;
+}
+
 // Mantiene un mínimo de operadores en el tablero (repone tras consumirlos).
-// Sólo AGREGA operadores (convierte dígitos); nunca los quita. Devuelve celdas cambiadas.
+// Sólo AGREGA operadores (convierte dígitos); nunca los quita. Elige celdas donde el
+// operador SIRVE (centro de una cuenta) y REPARTIDAS (evita amontonarlos). Devuelve celdas.
 export function ensureMinOperators(grid, gen, min) {
   const [ROWS, COLS] = dimsOf(grid);
+  const isOp = (r, c) => r >= 0 && c >= 0 && r < ROWS && c < COLS && OPS.includes(grid[r][c]);
   let count = 0;
   for (const row of grid) for (const ch of row) if (OPS.includes(ch)) count++;
   const changed = [];
   let guard = 0;
   while (count < min && guard++ < 200) {
-    const r = Math.floor(Math.random() * ROWS), c = Math.floor(Math.random() * COLS);
-    if (isSpecial(grid[r][c])) continue;
+    let best = null, bestScore = Infinity;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (isSpecial(grid[r][c]) || !opUsableAt(grid, r, c, ROWS, COLS)) continue;  // no varados
+      // menos operadores vecinos = mejor reparto; desempate al azar
+      const adj = (isOp(r, c - 1) ? 1 : 0) + (isOp(r, c + 1) ? 1 : 0) + (isOp(r - 1, c) ? 1 : 0) + (isOp(r + 1, c) ? 1 : 0);
+      const score = adj * 2 + Math.random();
+      if (score < bestScore) { bestScore = score; best = [r, c]; }
+    }
+    if (!best) break;                                   // no hay lugar sano -> mejor no forzar
+    const [r, c] = best;
     grid[r][c] = gen.ops[Math.floor(Math.random() * gen.ops.length)];
     count++; changed.push([r, c]);
   }

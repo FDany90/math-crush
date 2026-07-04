@@ -201,6 +201,16 @@ export class Board {
     }
   }
 
+  // Aplica cambios de mantenimiento SIN NINGUNA animación: sólo cambia el glifo, en el
+  // acto. El controller lo llama durante el temblor de aterrizaje, así el cambio queda
+  // escondido en la sacudida (nada de achicar/agrandar la ficha).
+  applyCharsPlain(changed, grid) {
+    for (const [r, c] of changed) {
+      const t = this.tiles[r]?.[c];
+      if (t) t.setChar(grid[r][c]);
+    }
+  }
+
   async swap(a, b) {
     const ta = this.tiles[a.r][a.c], tb = this.tiles[b.r][b.c];
     this._place(tb, a.r, a.c);

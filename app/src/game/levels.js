@@ -43,7 +43,9 @@ export const LEVELS = [
   { name: 'Modo relax',       size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 9,        quota: 10, relax: true },       // 🎁 twist: sin reloj
   { name: 'Una docena',       size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12,       quota: 10 },
   { name: 'Fiebre de combos', size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 7,        quota: 10, comboFever: true },  // 🎁 twist: los combos cuentan DOBLE
-  { name: 'Cambia el objetivo', size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 10, targetTo: 6, quota: 15 },           // 🎁 twist: cambia a mitad (nivel 10 → quota 15)
+  // Nivel 10 = ACUMULATIVO (hito de fin de mundo): formá cualquiera de estos resultados y su
+  // VALOR se suma a un total; ganás al llegar a 100. Ver DISEÑO §7.5 / PLAN_SESION_AUTONOMA.
+  { name: 'Sumá hasta 100',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [6, 8, 10], accum: { start: 0, goal: 100 }, quota: 99 },  // 🏁 acumulativo
 
   // ================= MUNDO RESTA (niveles 11-15, objetivo fijo, mecánica nueva) =================
   // Resta de 1 cifra, resultados CHICOS y fáciles (≥0, sin negativos aún). Mismo motor
@@ -63,6 +65,38 @@ export const LEVELS = [
   { name: 'Doble relax',    size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 6], quota: 10, relax: true },       // 🎁 sin reloj
   { name: 'Doble combos',   size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 7], quota: 10, comboFever: true },  // 🎁 combos x2
   { name: 'Resta maestra',  size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7], quota: 15 },                    // tablero 7×7
+  // Nivel 20 = ACUMULATIVO resta: arrancás en 40 y cada resta BAJA el total; ganás al llegar a 0.
+  { name: 'Bajá a 0',       size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3, 4, 5], accum: { start: 40, goal: 0 }, quota: 99 },  // 🏁 acumulativo
+
+  // ================= MUNDO MULTIPLICACIÓN (21-30, objetivo fijo) =================
+  // Productos de 1 cifra. Empieza con tablas chicas (2×3=6) y sube. Dobles intercalados.
+  // Nota: productos altos = MENOS pares (20 solo 4×5; 36 solo 4×9,6×6). Banda cómoda 6-24.
+  { name: 'Tabla fácil',    size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 6,        quota: 10 },  // 2×3, 1×6
+  { name: 'Por cuatro',     size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 8,        quota: 10 },  // 2×4
+  { name: 'La docena',      size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 12,       quota: 10 },  // 3×4, 2×6
+  { name: 'Doble por',      size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: [6, 12],  quota: 10 },  // 🎁 doble
+  { name: 'Más grande',     size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 18,       quota: 10 },  // 3×6, 2×9
+  { name: 'Por seis',       size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 24,       quota: 10 },  // 4×6, 3×8
+  { name: 'Relax por',      size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 16,       quota: 10, relax: true },       // 🎁 sin reloj (4×4, 2×8)
+  { name: 'Doble grande',   size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: [8, 24],  quota: 15 },  // 🎁 doble
+  { name: 'Fiebre por',     size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 12,       quota: 15, comboFever: true },  // 🎁 combos x2
+  // Nivel 30 = ACUMULATIVO multiplicación: sumá los productos hasta llegar a 100.
+  { name: 'Multiplicá a 100', size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: [6, 8, 12], accum: { start: 0, goal: 100 }, quota: 99 },  // 🏁 acumulativo
+
+  // ================= MUNDO DIVISIÓN (31-40, objetivo fijo, ÷ exacta) =================
+  // División exacta de 1 cifra. Cocientes CHICOS (2,3,4): los altos casi no tienen pares
+  // (÷5 solo 5÷1). Mucho 2 y 3 con dobles/twists para variar. Ver PLAN §D6.
+  { name: 'Primera división', size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 2,      quota: 10 },  // 6÷3, 8÷4
+  { name: 'Dividí en 3',    size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 3,        quota: 10 },  // 6÷2, 9÷3
+  { name: 'Doble división', size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3],   quota: 10 },  // 🎁 doble
+  { name: 'A la mitad',     size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 2,        quota: 10, relax: true },       // 🎁 sin reloj
+  { name: 'Por cuatro ÷',   size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 4,        quota: 10 },  // 8÷2, 4÷1
+  { name: 'Doble ÷',        size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 4],   quota: 10 },  // 🎁 doble
+  { name: 'Fiebre ÷',       size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 3,        quota: 10, comboFever: true },  // 🎁 combos x2
+  { name: 'División difícil', size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 2,      quota: 15 },  // tablero 7×7
+  { name: 'Doble maestro',  size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3],   quota: 15 },  // 🎁 doble
+  // Nivel 40 = ACUMULATIVO división: arrancás en 24 y cada división BAJA el total hasta 0.
+  { name: 'Dividí a 0',     size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3, 4], accum: { start: 24, goal: 0 }, quota: 99 },  // 🏁 acumulativo
 ];
 
 export const LEVEL_COUNT = LEVELS.length;

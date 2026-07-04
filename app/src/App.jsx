@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Application } from 'pixi.js'
 import { Board, MAX_PX } from './pixi/Board.js'
-import { Controller } from './game/controller.js'
+import { Controller, getHintPool, setHintPool, HINTS_MAX } from './game/controller.js'
 import { LEVELS } from './game/levels.js'
 import { initMetrics, getNick, setNick, trackEvent } from './metrics.js'
 
@@ -56,10 +56,16 @@ function buildConfetti(n = 20) {
   }))
 }
 
-// ---------- paleta y decoración de tiza del mapa ----------
-// color de tiza por "zona" (tamaño de tablero) → da variedad y sensación de avance
-const ZONE_COLORS = { 4: '#7fdfff', 5: '#ff79b8', 6: '#ffd23f', 7: '#b98cff', 8: '#7bed9f' }
-const zoneColor = (size) => ZONE_COLORS[size] || '#7fdfff'
+// ---------- MUNDOS por operación (bloques de 10 niveles) ----------
+// Cada mundo = un sector del mapa con su símbolo, nombre y color de tiza (más sobrio).
+const WORLDS = [
+  { at: 0,  name: 'SUMA',           sym: '+', color: '#8ecae6' },
+  { at: 10, name: 'RESTA',          sym: '−', color: '#e6a0b0' },
+  { at: 20, name: 'MULTIPLICAR',    sym: '×', color: '#e7c86a' },
+  { at: 30, name: 'DIVISIÓN',       sym: '÷', color: '#b0a0d8' },
+]
+const worldOf = (i) => WORLDS[Math.min(WORLDS.length - 1, Math.floor(i / 10))]
+const zoneColor = (i) => worldOf(i).color
 const CHALK_COLORS = ['#7fdfff', '#ff79b8', '#ffd23f', '#b98cff', '#7bed9f', '#f4f1e8']
 const DOODLE_TYPES = ['star', 'house', 'tree', 'planet', 'book', 'spark', 'heart', 'triangle', 'bulb']
 
@@ -145,7 +151,7 @@ const PROGRESS_KEY = 'math_progress'
 // niveles. Al cargar, si la versión guardada no coincide, se borra el progreso una
 // sola vez → TODOS los que ya jugaron empiezan de cero en su próxima visita (no hay
 // que tocar nada en su dispositivo). Ver DISEÑO_PROGRESION.md.
-const PROGRESS_VERSION = '5'
+const PROGRESS_VERSION = '6'
 const PROGRESS_VERSION_KEY = 'math_progress_version'
 try {
   if (localStorage.getItem(PROGRESS_VERSION_KEY) !== PROGRESS_VERSION) {
@@ -286,6 +292,7 @@ export default function App() {
 
   const [timeLeft, setTimeLeft] = useState(120)
   const [mode, setMode] = useState({ relax: false })   // modo de juego (relax = sin reloj)
+  const [accum, setAccum] = useState(null)             // modo acumulativo: { total, start, goal } | null
   const [target, setTarget] = useState({ level: 1, name: '', list: [10], flash: false })
   const [cuentas, setCuentas] = useState({ left: 0, quota: 0 })   // cuentas que faltan
   const [cuentasPop, setCuentasPop] = useState(0)                 // contador para reanimar el decremento
@@ -295,6 +302,8 @@ export default function App() {
   const [startPopup, setStartPopup] = useState(null)              // índice del nivel a arrancar (pop-up)
   const [winScreen, setWinScreen] = useState(null)                // {index, stars} pantalla de victoria
   const [devUnlocked, setDevUnlocked] = useState(() => new Set()) // MODO TEST (secreto): niveles abiertos a mano
+  const [dailyOpen, setDailyOpen] = useState(false)               // pop-up del regalo diario
+  const [hintPool, setHintPoolState] = useState(() => getHintPool()) // pistas globales (para mostrar en el reward)
   const winTimer = useRef(null)
   const startPopupTimer = useRef(null)
   const devTap = useRef({ i: -1, n: 0, t: null })                 // contador de toques para el desbloqueo de test
@@ -334,6 +343,7 @@ export default function App() {
       const hooks = {
         setTime: setTimeLeft, setInventory, setHints,
         setMode: (m) => setMode(m),
+        setAccum: (a) => setAccum(a),
         coach: (steps) => setCoach(steps),
         onHintUsed: (index) => trackEvent('hint', index),
         onAddMinute: (index) => trackEvent('continue', index),
@@ -398,8 +408,9 @@ export default function App() {
   // scrollear al fondo (nivel 1) SOLO al entrar al mapa; no en cada render
   // (antes el ref inline lo reseteaba al abrir el pop-up de "Jugar")
   useEffect(() => {
-    if (screen === 'map' && mapScrollRef.current) {
-      mapScrollRef.current.scrollTop = mapScrollRef.current.scrollHeight
+    if (screen === 'map') {
+      setHintPoolState(getHintPool())   // refrescar el contador de pistas del mapa
+      if (mapScrollRef.current) mapScrollRef.current.scrollTop = mapScrollRef.current.scrollHeight
     }
   }, [screen])
 
@@ -421,6 +432,16 @@ export default function App() {
     } else {
       d.t = setTimeout(() => { d.n = 0; d.i = -1 }, 700)
     }
+  }
+  // ---- REWARD DIARIO: da pistas 1 vez por día. Celebratorio, NO coercitivo (sin castigo
+  // por faltar). Ver DISEÑO §7.6 / PLAN_SESION_AUTONOMA D4. ----
+  const DAILY_HINTS = 3
+  const dayKey = () => { try { return 'math_daily_' + new Date().toISOString().slice(0, 10) } catch { return 'math_daily_x' } }
+  const dailyClaimed = () => { try { return !!localStorage.getItem(dayKey()) } catch { return false } }
+  const claimDaily = () => {
+    if (dailyClaimed()) return
+    try { localStorage.setItem(dayKey(), '1') } catch { /* sin localStorage */ }
+    setHintPoolState(setHintPool(getHintPool() + DAILY_HINTS))   // repone (tope HINTS_MAX)
   }
   // fin de la pantalla de victoria: al mapa (se deja ver un momento) y RECIÉN
   // después el pop-up de inicio del siguiente nivel — no aparecen pegados.
@@ -481,19 +502,29 @@ export default function App() {
             : <div className={'time-big' + (tsec <= 15 ? ' low' : '')}>{timeStr}</div>}
         </div>
 
-        {/* Objetivo + cuentas restantes JUNTOS: "Formá [10]" y al lado los palitos que se
-            van tachando (como el contador de Candy Crush pegado al objetivo). */}
+        {/* Objetivo. En modo ACUMULATIVO: barra de total hacia la meta. Si no: "Formá [N]" +
+            los palitos que se van tachando (contador pegado al objetivo, tipo Candy Crush). */}
         <div className={'obj-card' + (coach?.[0]?.highlight === 'target' ? ' coach-hl' : '')}>
-          <div className="obj-top">
-            <span className="obj-label">Formá</span>
-            {(target.list || []).map((t, i) => (
-              <React.Fragment key={t}>
-                {i > 0 && <span className="tor">o</span>}
-                <span data-val={t} className="tchip">{t}</span>
-              </React.Fragment>
-            ))}
-          </div>
-          <Tally quota={cuentas.quota} left={cuentas.left} hl={coach?.[0]?.highlight === 'tally'} />
+          {accum ? (
+            <div className="accum">
+              <span className="obj-label">{accum.goal >= accum.start ? 'Llegá a' : 'Bajá a'} {accum.goal}</span>
+              <div className="accum-bar">
+                <div className="accum-fill" style={{ width: Math.max(0, Math.min(100, ((accum.total - accum.start) / (accum.goal - accum.start || 1)) * 100)) + '%' }} />
+                <span className="accum-num">{accum.total}</span>
+              </div>
+            </div>
+          ) : (<>
+            <div className="obj-top">
+              <span className="obj-label">Formá</span>
+              {(target.list || []).map((t, i) => (
+                <React.Fragment key={t}>
+                  {i > 0 && <span className="tor">o</span>}
+                  <span data-val={t} className="tchip">{t}</span>
+                </React.Fragment>
+              ))}
+            </div>
+            <Tally quota={cuentas.quota} left={cuentas.left} hl={coach?.[0]?.highlight === 'tally'} />
+          </>)}
         </div>
 
         <div className="board-area">
@@ -535,6 +566,13 @@ export default function App() {
       {/* ---------- mapa de niveles ---------- */}
       {screen === 'map' && (
         <div className="screen map" ref={mapScrollRef}>
+          {/* barra de opciones del mapa (fija): pistas + regalo diario */}
+          <div className="map-top">
+            <span className="map-hints">💡 {hintPool}</span>
+            <button className="daily-btn" onClick={() => setDailyOpen(true)} aria-label="Regalo del día">
+              🎁{!dailyClaimed() && <span className="daily-dot" />}
+            </button>
+          </div>
           {/* filtro "tiza" (trazo dibujado a mano) para doodles y mascota */}
           <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
             <defs>
@@ -561,6 +599,16 @@ export default function App() {
                 </span>
               ))}
             </div>
+            {/* carteles de SECTOR (un mundo cada 10 niveles): símbolo grande + nombre */}
+            {WORLDS.map((w) => {
+              const p = mapGeo.pts[w.at]
+              return p ? (
+                <div key={w.at} className="sector" style={{ top: (p.y - 52) + 'px', '--sc': w.color }}>
+                  <span className="sector-sym">{w.sym}</span>
+                  <span className="sector-name">{w.name}</span>
+                </div>
+              ) : null
+            })}
             {/* mascota de tiza junto al nivel actual */}
             {mapGeo.pts[currentLevel] && (() => {
               const cp = mapGeo.pts[currentLevel]
@@ -581,7 +629,7 @@ export default function App() {
               return (
                 <button key={i}
                   className={'node' + (unlocked ? '' : ' locked') + (i === currentLevel ? ' current' : '') + (done ? ' done' : '')}
-                  style={{ top: p.y + 'px', left: (p.x / MAP_W * 100) + '%', '--nc': zoneColor(lv.size) }}
+                  style={{ top: p.y + 'px', left: (p.x / MAP_W * 100) + '%', '--nc': zoneColor(i) }}
                   onClick={() => handleNode(i)}>
                   {i === currentLevel && <span className="node-here">¡Acá!</span>}
                   {unlocked && i === currentLevel && <span className="node-name">{lv.name}</span>}
@@ -656,6 +704,21 @@ export default function App() {
             <div className="start-name">Nivel {target.level}</div>
             <button className="start-play" onClick={() => setSettingsOpen(false)}>Seguir jugando</button>
             <button className="leave-btn" onClick={() => { setSettingsOpen(false); setCoach(null); setResult(null); setScreen('map') }}>Abandonar nivel</button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- pop-up REGALO DIARIO ---------- */}
+      {dailyOpen && (
+        <div className="overlay" onClick={() => setDailyOpen(false)}>
+          <div className="card daily-card" onClick={(e) => e.stopPropagation()}>
+            <button className="card-x" aria-label="Cerrar" onClick={() => setDailyOpen(false)}>✕</button>
+            <div className="daily-emoji">🎁</div>
+            <div className="start-lvl">Regalo del día</div>
+            <div className="daily-hints">Tenés <b>{hintPool}</b> / {HINTS_MAX} pistas 💡</div>
+            {dailyClaimed()
+              ? <div className="daily-done">¡Ya lo reclamaste hoy! Volvé mañana 😊</div>
+              : <button className="start-play" onClick={claimDaily}>Reclamar +{DAILY_HINTS} pistas 💡</button>}
           </div>
         </div>
       )}

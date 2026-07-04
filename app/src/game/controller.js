@@ -22,11 +22,25 @@ const BOOSTER_DEFS = [
 const START_TIME = 120   // 2 minutos base; cada cuenta suma tiempo
 const TIME_PER_CUENTA = 5 // segundos que otorga cada cuenta formada
 const MAX_TRIES = 10     // intentos: cada movimiento que NO forma cuenta resta 1
-const MAX_HINTS = 3      // pistas manuales permitidas por partida
+const MAX_HINTS_POOL = 10 // tope del pool GLOBAL de pistas (se acumulan entre niveles)
+const START_HINTS = 5     // pistas con las que arranca un jugador nuevo
+const HINTS_KEY = 'math_hints'
 const MAX_CONTINUES = 2  // veces que se puede "seguir con +1 min" al perder
 const CONTINUE_TIME = 60 // segundos que da cada "+1 min"
 const NEAR_MOVES = 3     // cuentas fáciles que se siembran (visibles) alrededor de donde jugás
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// ---- Pool GLOBAL de pistas (persiste entre niveles; tope MAX_HINTS_POOL) ----
+export const HINTS_MAX = MAX_HINTS_POOL
+export function getHintPool() {
+  try { const v = parseInt(localStorage.getItem(HINTS_KEY), 10); return Number.isFinite(v) ? Math.max(0, Math.min(MAX_HINTS_POOL, v)) : START_HINTS }
+  catch { return START_HINTS }
+}
+export function setHintPool(n) {
+  n = Math.max(0, Math.min(MAX_HINTS_POOL, n))
+  try { localStorage.setItem(HINTS_KEY, String(n)) } catch { /* sin localStorage */ }
+  return n
+}
 
 export class Controller {
   constructor(board, hooks) {
@@ -53,12 +67,17 @@ export class Controller {
       : (Array.isArray(this.level.target) ? [...this.level.target] : [this.level.target])
     this.relax = !!this.level.relax        // twist: sin reloj (se gana por quota, estrellas por precisión)
     this.switched = false                  // twist targetTo: ¿ya cambió el objetivo?
+    // MODO ACUMULATIVO: en vez de quota, formás cualquiera de los objetivos y su VALOR
+    // suma/resta a un total; ganás al alcanzar la meta. { start, goal }.
+    this.accum = this.level.accum || null
+    this.accumTotal = this.accum ? this.accum.start : 0
+    this.accumDir = this.accum ? (this.accum.goal >= this.accum.start ? 1 : -1) : 0
     this.ended = false
     this.busy = false
     this.started = false
     this.left = this.level.quota ?? 6      // cuentas que faltan completar
     this.tries = this.level.tries ?? MAX_TRIES   // intentos restantes
-    this.hintsLeft = this.level.hints ?? MAX_HINTS  // pistas manuales que quedan
+    this.hintsLeft = getHintPool()         // pistas del POOL GLOBAL (persiste entre niveles)
     this.continues = 0                     // veces que ya usó "+1 min"
     this.coachedFirstCuenta = false        // ya se mostró el coach de "cuentas restantes" (nivel 2)
     this.coachedTutorialFirst = false      // ya se mostró el 2do paso del tutorial (nivel 1)
@@ -431,7 +450,8 @@ export class Controller {
       const bonus = deliberate ? TIME_PER_CUENTA * cuentas : 0
       const dec = (!deliberate && this.level.comboFever) ? cuentas * 2 : cuentas
       if (cuentas > 0) {
-        this._decCuentas(dec)
+        if (this.accum) this._addAccum(tg.sum)      // acumulativo: suma/resta el VALOR formado
+        else this._decCuentas(dec)                  // normal: descuenta cuentas de la quota
         if (deliberate) this._addTime(bonus)
         else this.hooks.toast?.(this.level.comboFever
           ? '¡Combo DOBLE! +' + dec + ' cuentas 🔥'
@@ -474,6 +494,14 @@ export class Controller {
   _decCuentas(n) {
     this.left = Math.max(0, this.left - n)
     this.hooks.setCuentas?.({ left: this.left, quota: this.level.quota ?? 6, dec: true })
+  }
+
+  // MODO ACUMULATIVO: suma (o resta) el valor formado al total; gana al alcanzar la meta.
+  _addAccum(value) {
+    this.accumTotal += this.accumDir * value
+    this.hooks.setAccum?.({ total: this.accumTotal, start: this.accum.start, goal: this.accum.goal })
+    const reached = this.accumDir > 0 ? this.accumTotal >= this.accum.goal : this.accumTotal <= this.accum.goal
+    if (reached) this.left = 0   // dispara la victoria por los checks existentes de left<=0
   }
 
   // suma segundos al reloj (extiende el deadline) con animación "+N"
@@ -612,7 +640,7 @@ export class Controller {
     })
     this.board.hint(h.a, h.b, line)
     if (manual) {
-      this.hintsLeft = Math.max(0, this.hintsLeft - 1)
+      this.hintsLeft = setHintPool(this.hintsLeft - 1)   // descuenta del POOL GLOBAL (persiste)
       this.hooks.setHints?.(this.hintsLeft)
       this.hooks.onHintUsed?.(this.levelIndex)      // métrica
     }
@@ -638,7 +666,8 @@ export class Controller {
     })
   }
   _pushHud() {
-    this.hooks.setMode?.({ relax: this.relax })
+    this.hooks.setMode?.({ relax: this.relax, accum: !!this.accum })
+    this.hooks.setAccum?.(this.accum ? { total: this.accumTotal, start: this.accum.start, goal: this.accum.goal } : null)
     this.hooks.setTime(this.timeLeft)
     this.hooks.setCuentas?.({ left: this.left, quota: this.level.quota ?? 6, dec: false })
     this.hooks.setTries?.({ left: this.tries, dec: false })

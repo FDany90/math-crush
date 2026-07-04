@@ -116,7 +116,7 @@ export function findEquationCells(grid, maxDigits = Infinity) {
 // Busca segmentos que den CUALQUIERA de los objetivos activos.
 // Devuelve el nº de segmentos encontrados en la línea (para contar cuentas por segmento,
 // no por valor distinto: formar el objetivo 2 veces en un movimiento = 2 cuentas).
-function scanLineMulti(cells, targetSet, outCells, outHit, maxDigits, maxOps = 1) {
+function scanLineMulti(cells, targetSet, outCells, outHit, maxDigits, maxOps = 1, acc = null) {
   let start = 0, segs = 0;
   while (start < cells.length) {
     let bestEnd = -1, bestVal = null;
@@ -131,6 +131,7 @@ function scanLineMulti(cells, targetSet, outCells, outHit, maxDigits, maxOps = 1
     if (bestEnd !== -1) {
       for (let k = start; k < bestEnd; k++) outCells.add(cells[k].r + "," + cells[k].c);
       outHit.add(bestVal);
+      if (acc) acc.sum += bestVal;   // suma del VALOR de cada segmento (modo acumulativo)
       segs++;
       start = bestEnd;
     } else start++;
@@ -141,16 +142,17 @@ export function findTargetCellsMulti(grid, targets, maxDigits = Infinity, maxOps
   const [ROWS, COLS] = dimsOf(grid);
   const targetSet = new Set(targets);
   const cells = new Set(), hit = new Set();
+  const acc = { sum: 0 };
   let segs = 0;   // cantidad de cuentas formadas (por segmento)
   for (let r = 0; r < ROWS; r++) {
     const line = []; for (let c = 0; c < COLS; c++) line.push({ r, c, ch: grid[r][c] });
-    segs += scanLineMulti(line, targetSet, cells, hit, maxDigits, maxOps);
+    segs += scanLineMulti(line, targetSet, cells, hit, maxDigits, maxOps, acc);
   }
   for (let c = 0; c < COLS; c++) {
     const line = []; for (let r = 0; r < ROWS; r++) line.push({ r, c, ch: grid[r][c] });
-    segs += scanLineMulti(line, targetSet, cells, hit, maxDigits, maxOps);
+    segs += scanLineMulti(line, targetSet, cells, hit, maxDigits, maxOps, acc);
   }
-  return { cells, hit, segs };
+  return { cells, hit, segs, sum: acc.sum };   // sum = valor total formado (para acumulativo)
 }
 export function findMatchesMulti(grid, targets, maxDigits = Infinity, maxOps = 1) {
   return new Set([...findEquationCells(grid, maxDigits), ...findTargetCellsMulti(grid, targets, maxDigits, maxOps).cells]);

@@ -141,6 +141,18 @@ function Mascota() {
 }
 
 const PROGRESS_KEY = 'math_progress'
+// Reset global de progreso: subí PROGRESS_VERSION cada vez que reestructures los
+// niveles. Al cargar, si la versión guardada no coincide, se borra el progreso una
+// sola vez → TODOS los que ya jugaron empiezan de cero en su próxima visita (no hay
+// que tocar nada en su dispositivo). Ver DISEÑO_PROGRESION.md.
+const PROGRESS_VERSION = '2'
+const PROGRESS_VERSION_KEY = 'math_progress_version'
+try {
+  if (localStorage.getItem(PROGRESS_VERSION_KEY) !== PROGRESS_VERSION) {
+    localStorage.removeItem(PROGRESS_KEY)
+    localStorage.setItem(PROGRESS_VERSION_KEY, PROGRESS_VERSION)
+  }
+} catch { /* sin localStorage: no hay progreso que resetear */ }
 function loadProgress() {
   try { return JSON.parse(localStorage.getItem(PROGRESS_KEY)) || { stars: {} } }
   catch { return { stars: {} } }

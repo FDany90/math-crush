@@ -167,7 +167,10 @@ function loadProgress() {
 // Descripción corta del nivel para el pop-up de inicio (estilo Candy Crush)
 function levelBrief(lv) {
   if (lv.tutorial) return 'Arrastrá fichas y formá el número de arriba 👆'
-  return `Completá ${lv.quota ?? 6} cuentas antes de que se acabe el tiempo`
+  if (lv.accum) return 'Formá los resultados y llená la barra hasta la meta'
+  return Array.isArray(lv.target)
+    ? 'Formá cualquiera de los resultados y llená la barra'
+    : 'Formá el resultado una y otra vez para llenar la barra'
 }
 
 // ---------- geometría del mapa (camino serpenteante) ----------
@@ -181,32 +184,48 @@ function mapGeometry(n) {
     const x = MAP_W / 2 + 80 * Math.sin(i * 0.8)       // serpentea
     pts.push({ x, y })
   }
+  // límites entre mundos (cada bloque de 10 niveles): ahí el camino se CORTA
+  const bset = new Set(WORLDS.map((w) => w.at).filter((a) => a > 0 && a < n))
   let d = pts.length ? `M ${pts[0].x} ${pts[0].y}` : ''
   for (let i = 1; i < pts.length; i++) {
     const p = pts[i - 1], c = pts[i], my = (p.y + c.y) / 2
-    d += ` C ${p.x} ${my}, ${c.x} ${my}, ${c.x} ${c.y}`   // curva suave
+    if (bset.has(i)) { d += ` M ${c.x} ${c.y}`; continue }  // salta el tramo → hueco de mundo
+    d += ` C ${p.x} ${my}, ${c.x} ${my}, ${c.x} ${c.y}`     // curva suave
   }
-  return { pts, H, d }
+  // un puente cruza cada hueco (del color del mundo previo al del siguiente)
+  const bridges = [...bset].map((b) => {
+    const a = pts[b - 1], c = pts[b]
+    return { key: b, x: (a.x + c.x) / 2, y: (a.y + c.y) / 2, from: zoneColor(b - 1), to: zoneColor(b) }
+  })
+  return { pts, H, d, bridges }
 }
 
-// Cuentas restantes como marcas de tiza (tally), agrupadas de a 5 (4 + diagonal).
-// Las completadas se "borran" (se atenúan con transición).
-function Tally({ quota, left, hl }) {
-  const done = Math.max(0, quota - left)
-  const groups = []
-  for (let i = 0; i < quota; i += 5) groups.push(Math.min(5, quota - i))
-  let idx = 0
+// Puente de tiza que cruza el hueco entre dos mundos (rieles arqueados + tablones).
+function MapBridge({ from, to }) {
+  const planks = [18, 32, 46, 60, 74, 88, 102]
   return (
-    <div className={'tally' + (hl ? ' coach-hl' : '')} role="img" aria-label={`${left} cuentas restantes`}>
-      {groups.map((n, gi) => (
-        <span className="tally-group" key={gi}>
-          {Array.from({ length: n }).map((_, k) => {
-            const isDone = idx++ < done
-            return <i key={k} className={'mark' + (k === 4 ? ' diag' : '') + (isDone ? ' done' : '')} />
+    <svg className="bridge-svg" viewBox="0 0 120 62" aria-hidden="true">
+      <defs>
+        <linearGradient id={`bg-${from}-${to}`} x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor={from} />
+          <stop offset="1" stopColor={to} />
+        </linearGradient>
+      </defs>
+      {(() => {
+        const g = `url(#bg-${from}-${to})`
+        const P = { fill: 'none', stroke: g, strokeWidth: 3.4, strokeLinecap: 'round' }
+        return (<>
+          <path {...P} d="M10 22 Q60 10 110 22" />
+          <path {...P} d="M10 44 Q60 56 110 44" />
+          <line {...P} x1="10" y1="16" x2="10" y2="50" />
+          <line {...P} x1="110" y1="16" x2="110" y2="50" />
+          {planks.map((x) => {
+            const t = (x - 10) / 100, sag = Math.sin(t * Math.PI)
+            return <line key={x} {...P} strokeWidth="2.6" x1={x} y1={22 - sag * 12} x2={x} y2={44 + sag * 12} />
           })}
-        </span>
-      ))}
-    </div>
+        </>)
+      })()}
+    </svg>
   )
 }
 
@@ -227,12 +246,15 @@ export default function App() {
 
   // Efecto "collect": las fichas consumidas vuelan al chip del objetivo y, al llegar,
   // el chip se infla (los absorbe). Tokens en DOM porque el chip vive fuera del canvas.
-  const flyTokens = useCallback((cells, rows, cols, value) => {
+  const flyTokens = useCallback((cells, rows, cols, value, bar) => {
+    // El LLENADO de la barra (números + progreso) se aplica cuando las fichas LLEGAN
+    // (absorción), no antes, para que coincidan. `bar` = nuevo estado de la barra.
+    const applyBar = bar ? () => { if (bar.goal) setGoal(bar.goal); if (bar.accum) setAccum(bar.accum) } : null
     const canvas = mountRef.current?.querySelector('canvas')
     const overlay = overlayRef.current
-    if (!canvas || !overlay || !cells?.length) return
+    if (!canvas || !overlay || !cells?.length) { applyBar?.(); return }
     const cr = canvas.getBoundingClientRect()
-    const chipSel = value != null ? `.tchip[data-val="${value}"]` : null
+    const chipSel = value != null ? `[data-val="${value}"]` : null
     const chip = (chipSel && document.querySelector(chipSel)) || document.querySelector('.tchip')
     const chipRect = chip?.getBoundingClientRect()
     const tx = chipRect ? chipRect.left + chipRect.width / 2 : cr.left + cr.width / 2
@@ -264,6 +286,8 @@ export default function App() {
         ], { duration: 380, easing: 'ease-out' })
       }
     }
+    // las fichas tardan ~340ms en llegar: llenar la barra justo cuando aterrizan (absorción)
+    if (applyBar) setTimeout(applyBar, 320)
   }, [])
 
   // "+Ns" flotando sobre el reloj cuando una cuenta suma tiempo
@@ -294,8 +318,7 @@ export default function App() {
   const [mode, setMode] = useState({ relax: false })   // modo de juego (relax = sin reloj)
   const [accum, setAccum] = useState(null)             // modo acumulativo: { total, start, goal } | null
   const [target, setTarget] = useState({ level: 1, name: '', list: [10], flash: false })
-  const [cuentas, setCuentas] = useState({ left: 0, quota: 0 })   // cuentas que faltan
-  const [cuentasPop, setCuentasPop] = useState(0)                 // contador para reanimar el decremento
+  const [goal, setGoal] = useState({ need: 0, done: 0 })   // barra de objetivo: progreso/total
   const [tries, setTries] = useState(0)                           // intentos restantes
   const [triesPop, setTriesPop] = useState(0)
   const [hints, setHints] = useState(0)                           // pistas manuales que quedan
@@ -347,10 +370,7 @@ export default function App() {
         coach: (steps) => setCoach(steps),
         onHintUsed: (index) => trackEvent('hint', index),
         onAddMinute: (index) => trackEvent('continue', index),
-        setCuentas: ({ left, quota, dec }) => {
-          setCuentas({ left, quota })
-          if (dec) setCuentasPop((p) => p + 1)
-        },
+        setGoal: (g) => setGoal(g),
         setTries: ({ left, dec }) => {
           setTries(left)
           if (dec) setTriesPop((p) => p + 1)
@@ -361,7 +381,7 @@ export default function App() {
           // monta un nodo nuevo y ahí sí corre chipIn. Sin hacks manuales de animación.
           setTarget(t)
         },
-        onCuenta: ({ cells, rows, cols, value }) => flyTokens(cells, rows, cols, value),
+        onCuenta: ({ cells, rows, cols, value, bar }) => flyTokens(cells, rows, cols, value, bar),
         addTime: (sec) => showTimeBonus(sec),
         setConfig: () => {},
         setOverlay: (o) => { if (!o.show) setResult(null) },
@@ -492,14 +512,12 @@ export default function App() {
     <div className="app">
       {/* ---------- pantalla de juego (siempre montada para conservar el canvas Pixi) ---------- */}
       <div className="game" style={{ display: screen === 'game' ? 'flex' : 'none' }}>
-        {/* Fila superior: intentos · tiempo */}
+        {/* Fila superior: intentos · (tiempo sólo si el nivel tiene reloj) */}
         <div className="top-row">
           <div className="tries-big">
             <span key={triesPop} className={'tries-num' + (triesPop > 0 ? ' pop' : '') + (tries <= 3 ? ' low' : '')}>{tries}</span>
           </div>
-          {mode.relax
-            ? <div className="time-big relax">😌 Relax</div>
-            : <div className={'time-big' + (tsec <= 15 ? ' low' : '')}>{timeStr}</div>}
+          {mode.timed && <div className={'time-big' + (tsec <= 15 ? ' low' : '')}>{timeStr}</div>}
         </div>
 
         {/* Objetivo. En modo ACUMULATIVO: barra de total hacia la meta. Si no: "Formá [N]" +
@@ -507,24 +525,43 @@ export default function App() {
         <div className={'obj-card' + (coach?.[0]?.highlight === 'target' ? ' coach-hl' : '')}>
           {accum ? (
             <div className="accum">
-              <span className="obj-label">{accum.goal >= accum.start ? 'Llegá a' : 'Bajá a'} {accum.goal}</span>
+              {/* qué cuentas valen (set fijo) → se muestran para que la regla sea clara */}
+              <div className="obj-top accum-targets">
+                <span className="obj-label sm">Formá</span>
+                {(target.list || []).map((t, i) => (
+                  <React.Fragment key={t}>
+                    {i > 0 && <span className="tor">o</span>}
+                    <span data-val={t} className="tchip">{t}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+              <span className="accum-hint">
+                {accum.goal >= accum.start ? 'suman al total' : 'restan del total'} → {accum.goal >= accum.start ? 'llegá a' : 'bajá a'} {accum.goal}
+              </span>
               <div className="accum-bar">
                 <div className="accum-fill" style={{ width: Math.max(0, Math.min(100, ((accum.total - accum.start) / (accum.goal - accum.start || 1)) * 100)) + '%' }} />
                 <span className="accum-num">{accum.total}</span>
               </div>
             </div>
-          ) : (<>
-            <div className="obj-top">
-              <span className="obj-label">Formá</span>
-              {(target.list || []).map((t, i) => (
-                <React.Fragment key={t}>
-                  {i > 0 && <span className="tor">o</span>}
-                  <span data-val={t} className="tchip">{t}</span>
-                </React.Fragment>
-              ))}
+          ) : (
+            /* BARRA de objetivo (igual que el acumulativo): "Formá 4 (o 8)" + una sola barra
+               que se llena de verde. Cualquier objetivo cuenta al mismo progreso (ej 13/50). */
+            <div className={'goalbars' + (coach?.[0]?.highlight === 'glass' ? ' coach-hl' : '')}>
+              <div className="obj-top accum-targets">
+                <span className="obj-label sm">Formá</span>
+                {(target.list || []).map((t, i) => (
+                  <React.Fragment key={t}>
+                    {i > 0 && <span className="tor">o</span>}
+                    <span data-val={t} className="tchip">{t}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+              <div className="accum-bar">
+                <div className="accum-fill" style={{ width: (goal.need ? Math.min(100, Math.round((100 * goal.done) / goal.need)) : 0) + '%' }} />
+                <span className="accum-num">{goal.done}/{goal.need}</span>
+              </div>
             </div>
-            <Tally quota={cuentas.quota} left={cuentas.left} hl={coach?.[0]?.highlight === 'tally'} />
-          </>)}
+          )}
         </div>
 
         <div className="board-area">
@@ -599,6 +636,13 @@ export default function App() {
                 </span>
               ))}
             </div>
+            {/* puentes: cruzan el hueco del camino al cambiar de mundo (cada 10 niveles) */}
+            {mapGeo.bridges.map((b) => (
+              <div key={b.key} className="map-bridge"
+                style={{ top: b.y + 'px', left: (b.x / MAP_W * 100) + '%' }} aria-hidden="true">
+                <MapBridge from={b.from} to={b.to} />
+              </div>
+            ))}
             {/* carteles de SECTOR (un mundo cada 10 niveles): símbolo grande + nombre */}
             {WORLDS.map((w) => {
               const p = mapGeo.pts[w.at]

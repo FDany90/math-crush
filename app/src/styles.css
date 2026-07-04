@@ -91,16 +91,18 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 /* modo ACUMULATIVO: barra de total hacia la meta */
 .accum { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 100%; }
 .accum .obj-label { text-align: center; font-size: 20px; }
+.accum-targets { justify-content: center; gap: 8px; }
+.accum-targets .obj-label.sm { font-size: 17px; }
+.accum-hint { text-align: center; font-family: var(--font-chalk); font-size: 14px; color: var(--chalk); opacity: .8; margin-top: -2px; }
 .accum-bar { position: relative; height: 32px; background: #00000055; border-radius: 16px; overflow: hidden; border: 2px solid #ffffff22; }
 .accum-fill { position: absolute; top: 0; left: 0; bottom: 0; background: linear-gradient(90deg, #7bed9f, #2ed573); border-radius: 16px; box-shadow: 0 0 12px #2ed57388; transition: width .4s cubic-bezier(.34,1.2,.64,1); }
 .accum-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-tiza); font-size: 22px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px #000a; }
 
-.tally { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; min-height: 38px; }
-.tally-group { position: relative; display: inline-flex; gap: 7px; padding: 4px 6px; }
-.tally .mark { width: 4px; height: 32px; background: var(--chalk); border-radius: 2px; transform: rotate(-6deg); box-shadow: 0 0 6px #ffffff66; transition: opacity .45s ease, box-shadow .45s ease; }
-/* la 5ª marca es la diagonal que TACHA las 4 anteriores (grupo de 5) */
-.tally .mark.diag { position: absolute; left: -5px; right: -5px; top: 50%; width: auto; height: 4.5px; transform: translateY(-50%) rotate(-26deg); }
-.tally .mark.done { opacity: .16; box-shadow: none; }
+/* BARRA de objetivo (modo normal): mismo lenguaje visual que el acumulativo. "Formá N (o M)"
+   + una sola barra que se llena de verde con el progreso (ej 13/50). */
+.goalbars { flex: 1; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.goalbars .accum-targets { justify-content: center; }
+.goalbars .accum-bar { height: 34px; }
 /* El chip PULSA (escala + brillo/glow dorado) al ABSORBER cada ficha: se anima por WAAPI
    en flyTokens (App.jsx), NO por clase CSS, para no reiniciar chipIn al re-renderizar.
    Sin estado verde persistente: el chip queda dorado y solo titila mientras absorbe. */
@@ -214,6 +216,11 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .road-under { fill: none; stroke: #0d130f66; stroke-width: 34; stroke-linecap: round; stroke-linejoin: round; }
 .road-base  { fill: none; stroke: #f4f1e8; stroke-width: 20; stroke-linecap: round; stroke-linejoin: round; opacity: .95; }
 .road-dash  { fill: none; stroke: #ff79b8; stroke-width: 20; stroke-linecap: butt; stroke-dasharray: 11 13; opacity: .5; }
+
+/* puente de tiza que cruza el hueco al cambiar de mundo (cada 10 niveles) */
+.map-bridge { position: absolute; z-index: 2; transform: translate(-50%, -50%); pointer-events: none; }
+.map-bridge .bridge-svg { width: 116px; height: 60px; display: block; filter: drop-shadow(0 2px 4px #0008) drop-shadow(0 0 4px #ffffff44); animation: bridgeSway 3.2s ease-in-out infinite alternate; }
+@keyframes bridgeSway { from { transform: rotate(-1.3deg); } to { transform: rotate(1.3deg); } }
 
 /* garabatos SVG de tiza flotando a los costados */
 .map-doodles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }

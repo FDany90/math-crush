@@ -28,6 +28,9 @@ const HINTS_KEY = 'math_hints'
 const MAX_CONTINUES = 2  // veces que se puede "seguir con +1 min" al perder
 const CONTINUE_TIME = 60 // segundos que da cada "+1 min"
 const NEAR_MOVES = 3     // cuentas fáciles que se siembran (visibles) alrededor de donde jugás
+const GOAL_NORMAL = 1000 // meta de la barra en niveles normales: sumando el VALOR formado
+                         // (contás de N en N) hasta 1000. SIN reloj (se pierde sólo por intentos).
+                         // Tuneable por nivel con el campo `goal`.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // ---- Pool GLOBAL de pistas (persiste entre niveles; tope MAX_HINTS_POOL) ----
@@ -66,6 +69,7 @@ export class Controller {
     this.fixedTargets = this.level.target == null ? null
       : (Array.isArray(this.level.target) ? [...this.level.target] : [this.level.target])
     this.relax = !!this.level.relax        // twist: sin reloj (se gana por quota, estrellas por precisión)
+    this.timed = this.level.timed ?? false // reloj: por defecto SIN tiempo (se gana llenando la barra)
     this.switched = false                  // twist targetTo: ¿ya cambió el objetivo?
     // MODO ACUMULATIVO: en vez de quota, formás cualquiera de los objetivos y su VALOR
     // suma/resta a un total; ganás al alcanzar la meta. { start, goal }.
@@ -75,7 +79,13 @@ export class Controller {
     this.ended = false
     this.busy = false
     this.started = false
-    this.left = this.level.quota ?? 6      // cuentas que faltan completar
+    // BARRA de objetivo: en modo normal hay UNA sola barra que suma el VALOR del resultado
+    // formado (contás "de N en N", ej sumar 5 → 5,10,15…) hasta GOAL_NORMAL (1000). Cualquier
+    // objetivo (en el doble) cuenta al mismo total. Override por nivel con `goal`.
+    // El acumulativo (hitos 10/20/30/40) tiene su propia barra (start→goal).
+    this.goalNeed = this.accum ? 0 : (this.level.goal ?? GOAL_NORMAL)
+    this.goalDone = 0
+    this.left = this.accum ? (this.level.quota ?? 6) : this.goalNeed   // lo que falta para llenar
     this.tries = this.level.tries ?? MAX_TRIES   // intentos restantes
     this.hintsLeft = getHintPool()         // pistas del POOL GLOBAL (persiste entre niveles)
     this.continues = 0                     // veces que ya usó "+1 min"
@@ -119,7 +129,7 @@ export class Controller {
     if (this.started || this.ended) return
     this.started = true
     this.board.hideHandGuide()              // el jugador ya tomó el control: fuera la manito
-    if (this.relax) return                  // modo relax: sin reloj (se gana solo por quota)
+    if (this.relax || !this.timed) return   // sin reloj (por defecto): se gana llenando la barra
     this.deadline = Date.now() + START_TIME * 1000
     this.timerOn = true
     this._tick()
@@ -208,9 +218,12 @@ export class Controller {
     //    objetivos evita que al reforzar uno quede formado otro.
     const MIN_MOVES = this.level.minMoves ?? (this.level.size <= 5 ? 3 : this.level.size - 1)
     const eachMin = this.level.minMovesEach ?? 2
+    // Garantía POR OBJETIVO: cada objetivo tiene al menos `eachMin` jugadas propias, así el
+    // más fácil no acapara el tablero. Aplica al doble y al acumulativo (set chico 5,6,8,10).
+    const perTarget = this.targets.length > 1
     for (let pass = 0; pass < 4; pass++) {
       let ok = true
-      if (this.targets.length > 1) {
+      if (perTarget) {
         for (const t of this.targets) {
           if (countTargetMoves(grid, [t], this.md, this.mo, eachMin) < eachMin) {
             changed.push(...addTargetMovesSubtle(grid, this.gen, [t], this.md, this.mo, eachMin, this.targets))
@@ -227,7 +240,7 @@ export class Controller {
     // Último recurso: si algún objetivo sigue por debajo del mínimo (el refuerzo sutil solo
     // cambia dígitos y a veces no alcanza porque los operadores quedaron lejos), PLANTAR
     // jugadas para ESE objetivo (planta también el operador). En doble se planta por objetivo.
-    for (const t of this.targets) {
+    for (const t of (perTarget ? this.targets : [])) {
       const onlyT = this.targets.length > 1 ? t : null
       let g = 0
       while (countTargetMoves(grid, [t], this.md, this.mo, eachMin) < eachMin && g++ < 4) {
@@ -385,13 +398,13 @@ export class Controller {
     // Tutorial (nivel 1): 2do paso, recién DESPUÉS del primer acierto (no todo junto al arrancar).
     if (this.tutorial && consumed.size > 0 && !this.coachedTutorialFirst) {
       this.coachedTutorialFirst = true
-      this._coach([{ text: '¡Así se hace! Repetí hasta completar todas las cuentas.', highlight: 'tally' }])
+      this._coach([{ text: '¡Así se hace! Llená la barra formando el resultado una y otra vez.', highlight: 'glass' }])
       return   // coachDismissed() retoma la manito automática al cerrar el mensaje
     }
     // Nivel 2: al resolver la PRIMERA cuenta, frenar el reloj y señalar cuántas faltan.
     if (this.levelIndex === 1 && consumed.size > 0 && !this.coachedFirstCuenta && this.left > 0) {
       this.coachedFirstCuenta = true
-      this._coach([{ text: '¡Bien! Te quedan ' + this.left + ' cuentas por hacer. Completá todas antes de que se acabe el tiempo.', highlight: 'tally' }])
+      this._coach([{ text: '¡Bien! Seguí formando el resultado para llenar la barra antes de que se acabe el tiempo.', highlight: 'glass' }])
       return
     }
     this._startAutoHint()
@@ -443,17 +456,17 @@ export class Controller {
       const deliberate = combo === 1                        // combo 1 = jugada del jugador; 2+ = cascada por piezas nuevas
       tg.hit.forEach((v) => consumed.add(v))
       if (tg.hit.size) this.hooks.targetHit?.([...tg.hit])   // avisar qué objetivo se logró
-      // TODA cuenta suma al PROGRESO (descuenta del objetivo), sea jugada del jugador o
-      // combo por piezas nuevas. Los combos YA NO dan tiempo: solo la jugada del jugador
-      // extiende el reloj. Los combos "pagan" en progreso hacia pasar el nivel, no en tiempo.
-      // En el nivel "Fiebre de combos" (comboFever) los combos cuentan DOBLE al objetivo.
-      const bonus = deliberate ? TIME_PER_CUENTA * cuentas : 0
+      // TODA cuenta suma al PROGRESO (la barra sube por el VALOR formado), sea jugada del
+      // jugador o combo. Ya NO se suma tiempo por cuenta (el reloj sólo cuenta hacia atrás).
+      // En "Fiebre de combos" (comboFever) el combo suma DOBLE valor.
+      const barAdd = (!deliberate && this.level.comboFever) ? tg.sum * 2 : tg.sum
       const dec = (!deliberate && this.level.comboFever) ? cuentas * 2 : cuentas
       if (cuentas > 0) {
+        // Se actualiza el total INTERNO (para la victoria); el llenado VISIBLE de la barra
+        // se sincroniza con la absorción de las fichas (ver onCuenta → bar, más abajo).
         if (this.accum) this._addAccum(tg.sum)      // acumulativo: suma/resta el VALOR formado
-        else this._decCuentas(dec)                  // normal: descuenta cuentas de la quota
-        if (deliberate) this._addTime(bonus)
-        else this.hooks.toast?.(this.level.comboFever
+        else this._addGoal(barAdd)                  // barra normal: suma el VALOR formado
+        if (!deliberate) this.hooks.toast?.(this.level.comboFever
           ? '¡Combo DOBLE! +' + dec + ' cuentas 🔥'
           : '¡Combo! +' + cuentas + ' cuenta' + (cuentas > 1 ? 's' : '') + ' 🔥')
       }
@@ -464,13 +477,15 @@ export class Controller {
       const ctr = this.board.cellsCenter(cells)
 
       await this.board.highlight(cells)   // resaltar la combinación antes de explotar
-      this.board.popup(ctr.x, ctr.y, combo > 1
-        ? '¡combo x' + combo + '!  +' + dec
-        : '+' + bonus + 's')
-      // TODA cuenta vuela al chip del objetivo (jugada del jugador o combo)
+      this.board.popup(ctr.x, ctr.y, combo > 1 ? '¡combo x' + combo + '! +' + barAdd : '+' + tg.sum)
+      // TODA cuenta vuela a la barra; el LLENADO (números + barra) se aplica al llegar las
+      // fichas (absorción), pasando el nuevo estado en `bar` para que la UI lo sincronice.
       if (cuentas > 0) this.hooks.onCuenta?.({
         cells: cells.map(({ r, c }) => ({ r, c, ch: grid[r]?.[c] })),
         rows: this.board.rows, cols: this.board.cols, value: [...tg.hit][0],
+        bar: this.accum
+          ? { accum: { total: this.accumTotal, start: this.accum.start, goal: this.accum.goal } }
+          : { goal: { need: this.goalNeed, done: this.goalDone } },
       })
       await this.board.clear(cells)
       await this.board.collapse(this.gen.randTile)
@@ -490,16 +505,18 @@ export class Controller {
     return consumed
   }
 
-  // descuenta cuentas de la meta del nivel y avisa a la UI (con animación)
-  _decCuentas(n) {
-    this.left = Math.max(0, this.left - n)
-    this.hooks.setCuentas?.({ left: this.left, quota: this.level.quota ?? 6, dec: true })
+  // BARRA de objetivo: suma el VALOR formado al progreso (cap a goalNeed). `v` ya trae el
+  // x2 de comboFever. `left` = lo que falta. El llenado VISIBLE lo dispara onCuenta al
+  // llegar las fichas (para que coincida con la absorción), no acá.
+  _addGoal(v) {
+    this.goalDone = Math.min(this.goalNeed, this.goalDone + v)
+    this.left = Math.max(0, this.goalNeed - this.goalDone)
   }
 
   // MODO ACUMULATIVO: suma (o resta) el valor formado al total; gana al alcanzar la meta.
+  // El movimiento VISIBLE de la barra lo dispara onCuenta al llegar las fichas (absorción).
   _addAccum(value) {
     this.accumTotal += this.accumDir * value
-    this.hooks.setAccum?.({ total: this.accumTotal, start: this.accum.start, goal: this.accum.goal })
     const reached = this.accumDir > 0 ? this.accumTotal >= this.accum.goal : this.accumTotal <= this.accum.goal
     if (reached) this.left = 0   // dispara la victoria por los checks existentes de left<=0
   }
@@ -579,10 +596,11 @@ export class Controller {
     this.board.hideHandGuide()
     this._clearAutoHint()
     if (this.timerId) clearTimeout(this.timerId)
-    // Modo relax: no hay reloj, así que las estrellas premian la PRECISIÓN (cuántos
-    // movimientos fallados = intentos gastados). 3★ sin fallar, 2★ hasta 3, 1★ completar.
+    // Sin reloj (por defecto o relax): las estrellas premian la PRECISIÓN (movimientos
+    // fallados = intentos gastados). 3★ sin fallar, 2★ hasta 3, 1★ completar. Con reloj:
+    // por velocidad (timeLeft).
     const maxTries = this.level.tries ?? MAX_TRIES
-    const stars = this.relax
+    const stars = (!this.timed || this.relax)
       ? (completed ? (this.tries >= maxTries ? 3 : this.tries >= maxTries - 3 ? 2 : 1) : 0)
       : starsFor(this.level, { completed, timeLeft: this.timeLeft, totalTime: START_TIME })
     this._pushInventory()
@@ -666,10 +684,10 @@ export class Controller {
     })
   }
   _pushHud() {
-    this.hooks.setMode?.({ relax: this.relax, accum: !!this.accum })
+    this.hooks.setMode?.({ relax: this.relax, accum: !!this.accum, timed: this.timed })
     this.hooks.setAccum?.(this.accum ? { total: this.accumTotal, start: this.accum.start, goal: this.accum.goal } : null)
     this.hooks.setTime(this.timeLeft)
-    this.hooks.setCuentas?.({ left: this.left, quota: this.level.quota ?? 6, dec: false })
+    this.hooks.setGoal?.({ need: this.goalNeed, done: this.goalDone })
     this.hooks.setTries?.({ left: this.tries, dec: false })
     this.hooks.setHints?.(this.hintsLeft)
   }

@@ -131,7 +131,10 @@ function scanLineMulti(cells, targetSet, outCells, outHit, maxDigits, maxOps = 1
     if (bestEnd !== -1) {
       for (let k = start; k < bestEnd; k++) outCells.add(cells[k].r + "," + cells[k].c);
       outHit.add(bestVal);
-      if (acc) acc.sum += bestVal;   // suma del VALOR de cada segmento (modo acumulativo)
+      if (acc) {
+        acc.sum += bestVal;                             // suma del VALOR (modo acumulativo)
+        acc.byVal[bestVal] = (acc.byVal[bestVal] || 0) + 1;   // segmentos POR objetivo (vasos)
+      }
       segs++;
       start = bestEnd;
     } else start++;
@@ -142,7 +145,7 @@ export function findTargetCellsMulti(grid, targets, maxDigits = Infinity, maxOps
   const [ROWS, COLS] = dimsOf(grid);
   const targetSet = new Set(targets);
   const cells = new Set(), hit = new Set();
-  const acc = { sum: 0 };
+  const acc = { sum: 0, byVal: {} };
   let segs = 0;   // cantidad de cuentas formadas (por segmento)
   for (let r = 0; r < ROWS; r++) {
     const line = []; for (let c = 0; c < COLS; c++) line.push({ r, c, ch: grid[r][c] });
@@ -152,7 +155,7 @@ export function findTargetCellsMulti(grid, targets, maxDigits = Infinity, maxOps
     const line = []; for (let r = 0; r < ROWS; r++) line.push({ r, c, ch: grid[r][c] });
     segs += scanLineMulti(line, targetSet, cells, hit, maxDigits, maxOps, acc);
   }
-  return { cells, hit, segs, sum: acc.sum };   // sum = valor total formado (para acumulativo)
+  return { cells, hit, segs, sum: acc.sum, byVal: acc.byVal };   // sum/byVal para acumulativo y vasos
 }
 export function findMatchesMulti(grid, targets, maxDigits = Infinity, maxOps = 1) {
   return new Set([...findEquationCells(grid, maxDigits), ...findTargetCellsMulti(grid, targets, maxDigits, maxOps).cells]);

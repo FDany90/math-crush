@@ -682,3 +682,83 @@ no se asume.
 - Game Developer — diseño ético (ex-UX lead de Fortnite): <https://www.gamedeveloper.com/design/former-i-fortnite-i-ux-lead-digs-into-ethical-game-design>
 - Level progression & pacing en puzzles: <https://medium.com/@mdelally/level-progression-and-pacing-in-puzzle-games-eb9e6a97e571>
 - The player's progress (mobile puzzle): <https://www.gamedeveloper.com/design/the-player-s-progress-designing-levels-for-mobile-puzzle-games>
+
+---
+
+## 13. Idea: niveles hito (cada 10) = BATALLA DE JEFE (HP) — a implementar
+
+**Origen:** al unificar los niveles normales a "llená la barra a 1000 sin reloj", los niveles
+acumulativos (10/20/30/40) quedaron demasiado parecidos al resto (misma barra que sube). Hacía
+falta diferenciar el hito de fin de mundo. Idea del usuario (2026-07-04): reencuadrar el hito
+como una **batalla contra números-enemigo con HP**.
+
+### Concepto
+- Cada objetivo del nivel es un **enemigo con HP** (una barra de vida que arranca LLENA).
+- Formar una cuenta = **ATACAR**: el efecto de absorción de fichas (que ya existe y ya está
+  sincronizado con el llenado de la barra) pasa a leerse como un golpe que **baja el HP**.
+- Cuando un enemigo llega a **0 HP se derrota**: explota / desaparece con juice.
+- Un hito tiene varios enemigos (los 4 resultados del set acumulativo). Se puede **atacar a
+  todos a la vez** (cualquier resultado formado golpea a su número) o enfocarse en uno.
+- Se **derrota a los 4 → se pasa el nivel** (clímax de fin de mundo, "jefe del Mundo Suma").
+
+### Por qué encaja (no es sólo estética)
+- **Mismo motor, otra piel.** HP = la barra; ataque = absorción; "derrotado" = meta alcanzada.
+  Bajo riesgo de implementación. La dirección "baja de lleno a 0" ya coincide con cómo restan
+  los mundos Resta/División.
+- **Feedback de competencia con personalidad** (SDT, §1): darle carita/reacción a un número que
+  recibe golpes y explota es feedback informacional motivador, sin recompensas extrínsecas.
+- **Diferencia el hito** con un molde narrativo ("derrotá al jefe") en vez de "una barra más
+  larga". Justifica HP alto (500/1000) porque es *un jefe*, no un nivel más.
+- **Justifica el set múltiple** que esos niveles ya tienen (varios resultados = varios enemigos).
+
+### Decisiones (RESUELTAS 2026-07-04)
+- **Daño = VALOR formado.** Cada golpe resta al HP el valor del resultado (de N en N). Coherente
+  con la barra normal y reusa lo hecho.
+- **HP = objetivo × 10.** Cada enemigo N arranca con HP = N·10 y cada golpe le hace N de daño →
+  **siempre 10 golpes para derrotar a cualquier enemigo**, sin importar el número. (Enemigo 5:
+  HP 50, golpe 5 → 10 hits. Enemigo 10: HP 100, golpe 10 → 10 hits.) Ritmo parejo entre enemigos.
+- **HP por enemigo (barra propia).** Cada número tiene su HP; se ven todos. Derrotás a los N → pasás.
+- **Dirección: baja (lleno → 0).** La barra de HP arranca **amarilla llena** (como el chip actual)
+  y baja; al llegar a 0 el enemigo queda **apagado/gris** (derrotado) + pop.
+- **Targeteo: cada resultado golpea a SU número.** Sin seleccionar blanco. Formar 5 daña al 5.
+- **Línea roja temática (§8): estilo "pop"/monstruitos simpáticos** (P&D). **Nada de sangre ni
+  armas.** El número rebota / se marea / hace pop al ser derrotado. Feedback alegre, no violento.
+- **Reloj:** coherente con el resto = sin reloj (se pierde sólo por intentos). [pendiente confirmar]
+
+### ⚠️ Tensión de balance a resolver
+Con estos números, un jefe = N enemigos × 10 golpes (ej. [5,6,8,10] = 40 cuentas). Pero los
+niveles NORMALES quedaron en meta 1000 por VALOR → en objetivo chico (sumar 5) son ~200 cuentas.
+O sea: hoy el jefe sería MÁS CORTO que un nivel normal. Hay que decidir si (a) se acortan los
+normales, (b) el jefe tiene más enemigos/HP, o (c) está bien que el jefe sea intenso pero corto.
+
+### Visión ampliada — JEFE REAL = signo de operación personificado (idea 2026-07-04, a futuro)
+Evolución del concepto (a hacer DESPUÉS de la versión base de arriba):
+- **Dos capas de batalla:**
+  1. **Mini-batallas** en algunos niveles NORMALES: enemigos-número chicos con HP (la versión
+     base de §13), como antesala/tutorial de la mecánica de combate ("teach→test→twist").
+  2. **Jefe REAL** en el nivel 10 de cada mundo: **el SIGNO de la operación personificado** —
+     un "+" (Mundo Suma), "−", "×", "÷" con **cara, brazos y animación**, tipo mascota-villano.
+- **El jefe recibe varios ataques de varias cuentas** según el momento (fases): distintos
+  resultados le pegan; puede tener fases/partes.
+- **El jefe TE ATACA modificando el tablero y estorbándote:** mezcla fichas, bloquea celdas,
+  mete "basura", cambia el objetivo un rato, etc. Acá está el oro de la idea: **la dificultad
+  del hito viene del TABLERO** (ataques del jefe), no de una barra más larga. Convierte el hito
+  en un duelo real.
+
+**Por qué es fuerte:** antagonista temático memorable por mundo (el propio signo), personalidad
+sin violencia (villano simpático, estilo pop), y dificultad genuina desde el tablero — justo
+donde el research dice que debe venir el desafío (competencia, no grind).
+
+**A cuidar (define si es divertido o molesto):**
+- Ataques **justos**: telegrafiados, reversibles, que NUNCA te dejen sin jugada posible.
+- **Costo de arte/animación**: 4 personajes-signo con estados (idle, ataca, recibe golpe,
+  derrotado). Es el ítem más pesado del proyecto.
+- **Balance del duelo**: HP del jefe, frecuencia/intensidad de ataques, cómo los contrarrestás.
+- Empezar por la **versión base** (números-enemigo con HP, sin ataques) y recién después sumar
+  el jefe animado con ataques al tablero.
+
+### Estado
+Diseño base cerrado, **no implementado aún**. Reemplazaría la mecánica `accum` de los niveles
+10/20/30/40 (hoy: barra `{start,goal}`). Montado sobre el motor de barra/absorción ya sincronizado
+(ver [[equa-crush-project]]). Modelo base: `boss: true` + `target: [set]`; HP[n]=n·10; daño=valor;
+win al derrotar a todos. El **jefe-signo animado con ataques al tablero** es la fase 2 (a futuro).

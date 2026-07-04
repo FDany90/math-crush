@@ -145,7 +145,7 @@ const PROGRESS_KEY = 'math_progress'
 // niveles. Al cargar, si la versión guardada no coincide, se borra el progreso una
 // sola vez → TODOS los que ya jugaron empiezan de cero en su próxima visita (no hay
 // que tocar nada en su dispositivo). Ver DISEÑO_PROGRESION.md.
-const PROGRESS_VERSION = '2'
+const PROGRESS_VERSION = '5'
 const PROGRESS_VERSION_KEY = 'math_progress_version'
 try {
   if (localStorage.getItem(PROGRESS_VERSION_KEY) !== PROGRESS_VERSION) {
@@ -217,7 +217,6 @@ export default function App() {
   const ctrlRef = useRef(null)
   const initedRef = useRef(false)
   const overlayRef = useRef(null)
-  const lastListRef = useRef('')
   const mapScrollRef = useRef(null)
 
   // Efecto "collect": las fichas consumidas vuelan al chip del objetivo y, al llegar,
@@ -248,8 +247,15 @@ export default function App() {
       ], { duration: 340 + Math.random() * 120, easing: 'cubic-bezier(.55,0,.3,1)', fill: 'forwards' })
       anim.onfinish = () => {
         el.remove()
-        // el chip se infla al recibir la ficha (grow sincronizado con la absorción)
-        if (chip) { chip.classList.remove('absorb'); void chip.offsetWidth; chip.classList.add('absorb') }
+        // El chip PULSA (escala + brillo/glow dorado) al recibir cada ficha: como llegan
+        // varias en fila, da un titileo intermitente que dura solo mientras absorbe.
+        // Se anima por WAAPI (no por clase CSS): tocar la propiedad `animation` del chip
+        // haría que React, al re-renderizar y limpiar la clase, reinicie chipIn.
+        if (chip) chip.animate([
+          { transform: 'scale(1)', filter: 'brightness(1) drop-shadow(0 0 0 #ffe07a00)' },
+          { transform: 'scale(1.34)', filter: 'brightness(1.6) drop-shadow(0 0 16px #ffe07a)', offset: 0.4 },
+          { transform: 'scale(1)', filter: 'brightness(1) drop-shadow(0 0 0 #ffe07a00)' },
+        ], { duration: 380, easing: 'ease-out' })
       }
     }
   }, [])
@@ -279,8 +285,8 @@ export default function App() {
   const [curIdx, setCurIdx] = useState(0)
 
   const [timeLeft, setTimeLeft] = useState(120)
+  const [mode, setMode] = useState({ relax: false })   // modo de juego (relax = sin reloj)
   const [target, setTarget] = useState({ level: 1, name: '', list: [10], flash: false })
-  const [achieved, setAchieved] = useState([])
   const [cuentas, setCuentas] = useState({ left: 0, quota: 0 })   // cuentas que faltan
   const [cuentasPop, setCuentasPop] = useState(0)                 // contador para reanimar el decremento
   const [tries, setTries] = useState(0)                           // intentos restantes
@@ -288,8 +294,10 @@ export default function App() {
   const [hints, setHints] = useState(0)                           // pistas manuales que quedan
   const [startPopup, setStartPopup] = useState(null)              // índice del nivel a arrancar (pop-up)
   const [winScreen, setWinScreen] = useState(null)                // {index, stars} pantalla de victoria
+  const [devUnlocked, setDevUnlocked] = useState(() => new Set()) // MODO TEST (secreto): niveles abiertos a mano
   const winTimer = useRef(null)
   const startPopupTimer = useRef(null)
+  const devTap = useRef({ i: -1, n: 0, t: null })                 // contador de toques para el desbloqueo de test
   const [settingsOpen, setSettingsOpen] = useState(false)         // pop-up de ajustes en el juego
   const [nickOpen, setNickOpen] = useState(false)                 // pop-up "Ingresá tu Nick" (nivel 3)
   const [nickInput, setNickInput] = useState('')
@@ -325,6 +333,7 @@ export default function App() {
 
       const hooks = {
         setTime: setTimeLeft, setInventory, setHints,
+        setMode: (m) => setMode(m),
         coach: (steps) => setCoach(steps),
         onHintUsed: (index) => trackEvent('hint', index),
         onAddMinute: (index) => trackEvent('continue', index),
@@ -337,19 +346,11 @@ export default function App() {
           if (dec) setTriesPop((p) => p + 1)
         },
         setTarget: (t) => {
-          // animar el cambio: los chips actuales salen (achican) y entran los nuevos
-          const key = (t.list || []).join('-')
-          const el = document.querySelector('.obj-top')
-          if (lastListRef.current && lastListRef.current !== key && el) {
-            lastListRef.current = key
-            el.classList.add('leaving')
-            setTimeout(() => { setTarget(t); setAchieved([]) }, 150)
-            return
-          }
-          lastListRef.current = key
-          setTarget(t); setAchieved([])
+          // Cada chip se keyea por su VALOR (ver render): si el objetivo no cambia,
+          // React conserva el mismo nodo y NO reanima; si cambia (ej. switch 10→6),
+          // monta un nodo nuevo y ahí sí corre chipIn. Sin hacks manuales de animación.
+          setTarget(t)
         },
-        targetHit: (vals) => setAchieved(vals),
         onCuenta: ({ cells, rows, cols, value }) => flyTokens(cells, rows, cols, value),
         addTime: (sec) => showTimeBonus(sec),
         setConfig: () => {},
@@ -402,9 +403,25 @@ export default function App() {
     }
   }, [screen])
 
-  const isUnlocked = (i) => i === 0 || (progress.stars[i - 1] || 0) >= 1
+  const isUnlocked = (i) => i === 0 || devUnlocked.has(i) || (progress.stars[i - 1] || 0) >= 1
   // tocar un nodo del mapa abre el pop-up de inicio del nivel (estilo Candy Crush)
   const openStart = (i) => { clearTimeout(startPopupTimer.current); if (isUnlocked(i)) setStartPopup(i) }
+  // MODO TEST (secreto, solo para desarrollo): TRIPLE clic en un nivel BLOQUEADO lo abre igual.
+  // No persiste (se pierde al recargar) → ningún jugador real lo activa sin querer.
+  const handleNode = (i) => {
+    if (isUnlocked(i)) { openStart(i); return }
+    const d = devTap.current
+    if (d.i !== i) { d.i = i; d.n = 0 }
+    d.n += 1
+    clearTimeout(d.t)
+    if (d.n >= 3) {
+      d.n = 0; d.i = -1
+      setDevUnlocked((s) => new Set(s).add(i))
+      setStartPopup(i)
+    } else {
+      d.t = setTimeout(() => { d.n = 0; d.i = -1 }, 700)
+    }
+  }
   // fin de la pantalla de victoria: al mapa (se deja ver un momento) y RECIÉN
   // después el pop-up de inicio del siguiente nivel — no aparecen pegados.
   const advanceFromWin = useCallback((index) => {
@@ -444,39 +461,48 @@ export default function App() {
       if (!(progress.stars[i] >= 1)) return i
     }
     return last
-  }, [progress])
+  }, [progress, devUnlocked])
   const tsec = Math.ceil(timeLeft)
   const timeStr = Math.floor(tsec / 60) + ':' + String(tsec % 60).padStart(2, '0')
+  // ¿el orden importa en este nivel? (resta/división NO son conmutativas → mostrar flechas)
+  const dirMatters = (LEVELS[curIdx]?.ops || []).some((o) => o === '−' || o === '÷')
 
   return (
     <div className="app">
       {/* ---------- pantalla de juego (siempre montada para conservar el canvas Pixi) ---------- */}
       <div className="game" style={{ display: screen === 'game' ? 'flex' : 'none' }}>
-        {/* Fila superior: intentos · tiempo · tally (cuentas restantes) */}
+        {/* Fila superior: intentos · tiempo */}
         <div className="top-row">
           <div className="tries-big">
             <span key={triesPop} className={'tries-num' + (triesPop > 0 ? ' pop' : '') + (tries <= 3 ? ' low' : '')}>{tries}</span>
           </div>
-          <div className={'time-big' + (tsec <= 15 ? ' low' : '')}>{timeStr}</div>
-          <Tally quota={cuentas.quota} left={cuentas.left} hl={coach?.[0]?.highlight === 'tally'} />
+          {mode.relax
+            ? <div className="time-big relax">😌 Relax</div>
+            : <div className={'time-big' + (tsec <= 15 ? ' low' : '')}>{timeStr}</div>}
         </div>
 
-        {/* Objetivo: qué formar (ancho completo, entran los de 2 dígitos) */}
+        {/* Objetivo + cuentas restantes JUNTOS: "Formá [10]" y al lado los palitos que se
+            van tachando (como el contador de Candy Crush pegado al objetivo). */}
         <div className={'obj-card' + (coach?.[0]?.highlight === 'target' ? ' coach-hl' : '')}>
-          <div className="obj-top" key={(target.list || []).join('-')}>
+          <div className="obj-top">
             <span className="obj-label">Formá</span>
             {(target.list || []).map((t, i) => (
-              <React.Fragment key={i}>
+              <React.Fragment key={t}>
                 {i > 0 && <span className="tor">o</span>}
-                <span data-val={t} className={'tchip' + (achieved.includes(t) ? ' achieved' : '')}>{t}</span>
+                <span data-val={t} className="tchip">{t}</span>
               </React.Fragment>
             ))}
           </div>
+          <Tally quota={cuentas.quota} left={cuentas.left} hl={coach?.[0]?.highlight === 'tally'} />
         </div>
 
         <div className="board-area">
-          <div className="arrow-h start" /><div className="arrow-h mid" /><div className="arrow-h end" />
-          <div className="arrow-v start" /><div className="arrow-v mid" /><div className="arrow-v end" />
+          {/* Flechas de dirección SOLO en operaciones donde el orden importa (resta/división).
+              En suma y multiplicación da igual el orden (conmutativas) → no se muestran. */}
+          {dirMatters && (<>
+            <div className="arrow-h start" /><div className="arrow-h mid" /><div className="arrow-h end" />
+            <div className="arrow-v start" /><div className="arrow-v mid" /><div className="arrow-v end" />
+          </>)}
           <div className="board-wrap" ref={mountRef} />
         </div>
 
@@ -556,7 +582,7 @@ export default function App() {
                 <button key={i}
                   className={'node' + (unlocked ? '' : ' locked') + (i === currentLevel ? ' current' : '') + (done ? ' done' : '')}
                   style={{ top: p.y + 'px', left: (p.x / MAP_W * 100) + '%', '--nc': zoneColor(lv.size) }}
-                  onClick={() => openStart(i)}>
+                  onClick={() => handleNode(i)}>
                   {i === currentLevel && <span className="node-here">¡Acá!</span>}
                   {unlocked && i === currentLevel && <span className="node-name">{lv.name}</span>}
                   <span className="node-num">{unlocked ? i + 1 : '🔒'}</span>

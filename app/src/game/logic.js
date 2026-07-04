@@ -339,10 +339,11 @@ export function pickTargets(grid, level, keep = [], count = 3) {
 export const adjacent = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.c - b.c) === 1;
 
 // --------- tableros "sesgados al objetivo" (nivel con target fijo) ---------
-// Tríos [a, op, b] de UNA cifra tales que a op b == level.target. Sirven para
+// Tríos [a, op, b] de UNA cifra tales que a op b == alguno de los objetivos.
+// level.target puede ser un número o un array (twist "doble objetivo"). Sirven para
 // ponderar el bag de fichas (que caiga mayormente lo que forma el objetivo).
 export function targetTriples(level) {
-  const T = level.target;
+  const targets = new Set((Array.isArray(level.target) ? level.target : [level.target]).map(Number));
   const digs = level.digits.map(Number);
   const out = [];
   for (const op of level.ops) {
@@ -352,7 +353,7 @@ export function targetTriples(level) {
       else if (op === '−') v = a - b;
       else if (op === '×') v = a * b;
       else v = (b !== 0 && a % b === 0) ? a / b : NaN;   // ÷ entero
-      if (v === T) out.push([String(a), op, String(b)]);
+      if (targets.has(v)) out.push([String(a), op, String(b)]);
     }
   }
   return out;
@@ -382,7 +383,9 @@ export function countTargetMoves(grid, targets, maxDigits = Infinity, maxOps = 1
 // Agrega movimientos "de a poco": cambia UNA pieza (un dígito) por vez, lo menos
 // brusco posible y de ABAJO hacia arriba (el fondo es lo que se queda sin juego),
 // hasta llegar a `want` movimientos. Evita dejar el objetivo ya formado. Devuelve celdas.
-export function addTargetMovesSubtle(grid, gen, targets, maxDigits = Infinity, maxOps = 1, want = 3) {
+// `avoid` = objetivos a NO dejar formados (default = targets). En objetivo doble se pasan
+// TODOS los objetivos aunque se refuercen las jugadas de uno solo, para no formar el otro.
+export function addTargetMovesSubtle(grid, gen, targets, maxDigits = Infinity, maxOps = 1, want = 3, avoid = targets) {
   const [R, C] = dimsOf(grid);
   const cands = gen.hot && gen.hot.length ? gen.hot : (gen.triples || []).flatMap(([a, , b]) => [a, b]);
   const changed = [];
@@ -397,7 +400,7 @@ export function addTargetMovesSubtle(grid, gen, targets, maxDigits = Infinity, m
         for (const v of cands) {
           if (v === orig) continue;
           grid[r][c] = v;
-          const formed = findTargetCellsMulti(grid, targets, maxDigits, maxOps).cells.size;
+          const formed = findTargetCellsMulti(grid, avoid, maxDigits, maxOps).cells.size;
           const moves = formed ? -1 : countTargetMoves(grid, targets, maxDigits, maxOps, want + 1);
           grid[r][c] = orig;
           if (moves > cur) { best = { r, c, v, moves }; break; }
@@ -423,8 +426,9 @@ function evalOp(aCh, op, bCh) {
 // Si el tablero quedó SIN jugadas al objetivo, "planta" una a un movimiento: en una
 // fila deja a-op-filler y justo debajo del filler pone b, así un swap vertical forma
 // a op b == target. filler se elige para NO dejar la fila ya formada. Devuelve celdas.
-export function plantTargetMove(grid, gen) {
-  const triples = gen.triples || [];
+export function plantTargetMove(grid, gen, onlyTarget = null) {
+  let triples = gen.triples || [];
+  if (onlyTarget != null) triples = triples.filter(([a, op, b]) => evalOp(a, op, b) === onlyTarget);
   const [R, C] = dimsOf(grid);
   if (!triples.length || R < 2 || C < 3) return [];
   const [a, op, b] = triples[Math.floor(Math.random() * triples.length)];
@@ -436,6 +440,79 @@ export function plantTargetMove(grid, gen) {
   while (guard < 30 && (filler === b || evalOp(a, op, filler) === T));
   grid[r][c] = a; grid[r][c + 1] = op; grid[r][c + 2] = filler; grid[r + 1][c + 2] = b;
   return [[r, c], [r, c + 1], [r, c + 2], [r + 1, c + 2]];
+}
+
+// ¿Colocar el valor actual en (r,c) habilita un swap adyacente (usando esa celda) que
+// forme algún objetivo? (para sembrar jugadas: la celda tocada es parte de la jugada).
+function cellEnablesMove(grid, r, c, targetSet, maxDigits, maxOps) {
+  const [R, C] = dimsOf(grid);
+  for (const [r2, c2] of [[r, c + 1], [r, c - 1], [r + 1, c], [r - 1, c]]) {
+    if (r2 < 0 || c2 < 0 || r2 >= R || c2 >= C) continue;
+    const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
+    const ok = lineHasMatch(getRow(grid, r), targetSet, maxDigits, maxOps)
+      || lineHasMatch(getCol(grid, c), targetSet, maxDigits, maxOps)
+      || lineHasMatch(getRow(grid, r2), targetSet, maxDigits, maxOps)
+      || lineHasMatch(getCol(grid, c2), targetSet, maxDigits, maxOps);
+    grid[r2][c2] = grid[r][c]; grid[r][c] = t;
+    if (ok) return true;
+  }
+  return false;
+}
+
+// Siembra "cuentas fáciles" (jugadas a un movimiento) CERCA de las columnas `cols` —donde
+// el jugador acaba de jugar—. Cambia dígitos (num→num) dentro de esas columnas hasta que
+// haya `want` swaps que formen el objetivo tocando esa banda. No deja cuentas ya formadas.
+// Devuelve las celdas transformadas (el controller las anima EXPLÍCITAMENTE con un pop, para
+// que el jugador vea que hacer una cuenta acomoda los vecinos y facilita las siguientes).
+export function seedTargetMovesNear(grid, gen, targets, cols, maxDigits = Infinity, maxOps = 1, want = 3) {
+  const [R, C] = dimsOf(grid);
+  const colSet = new Set(cols.filter((c) => c >= 0 && c < C));
+  if (!colSet.size) return [];
+  const set = new Set(targets);
+  const cands = gen.hot && gen.hot.length ? gen.hot : (gen.triples || []).flatMap(([a, , b]) => [a, b]);
+  const changed = [];
+  // cuántas jugadas al objetivo TOCAN la banda (corta al llegar a `want`)
+  const localMoves = () => {
+    let n = 0;
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+      for (const [r2, c2] of [[r, c + 1], [r + 1, c]]) {
+        if (r2 >= R || c2 >= C) continue;
+        if (!colSet.has(c) && !colSet.has(c2)) continue;
+        const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
+        const ok = lineHasMatch(getRow(grid, r), set, maxDigits, maxOps)
+          || lineHasMatch(getCol(grid, c), set, maxDigits, maxOps)
+          || (r2 !== r && lineHasMatch(getRow(grid, r2), set, maxDigits, maxOps))
+          || (c2 !== c && lineHasMatch(getCol(grid, c2), set, maxDigits, maxOps));
+        grid[r2][c2] = grid[r][c]; grid[r][c] = t;
+        if (ok && ++n >= want) return n;
+      }
+    }
+    return n;
+  };
+  let guard = 0;
+  while (localMoves() < want && guard++ < want + 8) {
+    let best = null;
+    for (let r = 0; r < R && !best; r++) {          // de arriba (fichas nuevas) hacia abajo
+      for (const c of colSet) {
+        if (isSpecial(grid[r][c])) continue;         // tocamos dígitos
+        const orig = grid[r][c];
+        for (const v of cands) {
+          if (v === orig) continue;
+          grid[r][c] = v;
+          const forms = lineHasMatch(getRow(grid, r), set, maxDigits, maxOps)
+            || lineHasMatch(getCol(grid, c), set, maxDigits, maxOps);   // no dejar formada
+          const enables = !forms && cellEnablesMove(grid, r, c, set, maxDigits, maxOps);
+          grid[r][c] = orig;
+          if (enables) { best = { r, c, v }; break; }
+        }
+        if (best) break;
+      }
+    }
+    if (!best) break;
+    grid[best.r][best.c] = best.v;
+    changed.push([best.r, best.c]);
+  }
+  return changed;
 }
 
 // Rompe los objetivos YA formados en el tablero (cambia un dígito por segmento)

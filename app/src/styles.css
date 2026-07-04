@@ -6,8 +6,8 @@
 
 :root {
   /* ---- Tema "Pizarrón de colores" (validado con ui-ux-pro-max) ---- */
-  --bg: #1f2a26;          /* slate verde pizarra */
-  --bg-top: #2b3a31;      /* arriba, un poco más claro */
+  --bg: #24402f;          /* verde pizarrón oscuro (fondo de todo el juego) */
+  --bg-top: #2e5140;      /* arriba, un poco más claro (vignette de pizarrón) */
   --panel: #2a3a32;       /* paneles (tiza sobre madera) */
   --wood: #b07a43;        /* marco de madera */
   --wood-dark: #8a5a2b;
@@ -59,11 +59,9 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .tlabel { font-family: var(--font-chalk); font-size: 22px; font-weight: 400; color: var(--chalk); opacity: .9; }
 .tchip { font-family: var(--font-tiza); font-size: 37px; font-weight: 700; color: #5a4500; background: linear-gradient(160deg, var(--eq2), var(--eq)); padding: 6px 18px; border-radius: 22px; box-shadow: 0 4px 0 rgba(0,0,0,.3), 0 0 16px #ffd23f55; min-width: 58px; text-align: center; animation: chipIn .3s cubic-bezier(.34, 1.56, .64, 1); }
 .tor { font-family: var(--font-chalk); font-size: 21px; color: var(--chalk-dim); opacity: .85; }
-/* entrada/salida animada al cambiar los objetivos */
+/* entrada animada del chip: solo corre al MONTARse un chip nuevo (objetivo que cambia),
+   no cuando el objetivo se mantiene igual (React conserva el nodo, keyeado por valor). */
 @keyframes chipIn { 0% { transform: scale(.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-.obj-top.leaving .tchip { animation: chipOut .15s ease forwards; }
-.obj-top.leaving .tor { opacity: 0; transition: opacity .12s; }
-@keyframes chipOut { to { transform: scale(.2); opacity: 0; } }
 
 /* ---- HUD: fila superior (intentos · tiempo · tally) + objetivo a ancho completo ---- */
 .top-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; width: min(94vw, 460px); margin: 30px auto 22px; }
@@ -72,6 +70,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .time-big { font-family: var(--font-tiza); font-size: 48px; font-weight: 700; line-height: 1; letter-spacing: 1px; text-align: center; text-shadow: 0 3px 0 #00000040; display: inline-block; }
 .time-big.low { color: var(--red); animation: lowpulse .7s infinite; }
 .time-big.bump { animation: timeBump .35s ease; }
+.time-big.relax { font-size: 26px; color: #7bed9f; letter-spacing: 0; white-space: nowrap; }
 @keyframes timeBump { 0% { transform: scale(1); } 40% { transform: scale(1.18); color: #7bed9f; } 100% { transform: scale(1); } }
 
 .hud2 { display: flex; align-items: center; justify-content: center; gap: 14px; width: min(94vw, 460px); margin-bottom: 6px; }
@@ -83,23 +82,21 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 /* "+Ns" que sube desde el reloj */
 .time-bonus { position: fixed; font-family: var(--font-tiza); font-size: 30px; color: #7bed9f; text-shadow: 0 0 10px #2ed57388; pointer-events: none; transform: translate(-50%,-50%); z-index: 46; }
 
-.obj-card { width: min(94vw, 460px); margin: 0 auto; background: var(--panel); border: 2px solid #ffffff1a; border-radius: 16px; padding: 8px 12px 10px; box-shadow: 0 4px 0 rgba(0,0,0,.3); display: flex; flex-direction: column; align-items: center; gap: 7px; }
-.obj-top { display: flex; align-items: center; justify-content: center; gap: 7px; flex-wrap: wrap; }
+/* Objetivo + cuentas restantes en una MISMA tarjeta: "Formá [N]" a la izquierda, los
+   palitos que se van tachando a la derecha (contador pegado al objetivo, tipo Candy Crush). */
+.obj-card { width: min(94vw, 460px); margin: 0 auto; background: var(--panel); border: 2px solid #ffffff1a; border-radius: 16px; padding: 9px 16px; box-shadow: 0 4px 0 rgba(0,0,0,.3); display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 14px; }
+.obj-top { display: flex; align-items: center; justify-content: flex-start; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
 .obj-label { font-family: var(--font-chalk); font-size: 18px; color: var(--chalk); opacity: .85; }
 
-.tally { display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 40px; }
-.tally-group { position: relative; display: inline-flex; gap: 8px; padding: 4px 6px; }
-.tally .mark { width: 4px; height: 34px; background: var(--chalk); border-radius: 2px; transform: rotate(-6deg); box-shadow: 0 0 6px #ffffff66; transition: opacity .45s ease, box-shadow .45s ease; }
+.tally { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; min-height: 38px; }
+.tally-group { position: relative; display: inline-flex; gap: 7px; padding: 4px 6px; }
+.tally .mark { width: 4px; height: 32px; background: var(--chalk); border-radius: 2px; transform: rotate(-6deg); box-shadow: 0 0 6px #ffffff66; transition: opacity .45s ease, box-shadow .45s ease; }
 /* la 5ª marca es la diagonal que TACHA las 4 anteriores (grupo de 5) */
-.tally .mark.diag { position: absolute; left: -4px; right: -4px; top: 50%; width: auto; height: 4.5px; transform: translateY(-50%) rotate(-26deg); }
+.tally .mark.diag { position: absolute; left: -5px; right: -5px; top: 50%; width: auto; height: 4.5px; transform: translateY(-50%) rotate(-26deg); }
 .tally .mark.done { opacity: .16; box-shadow: none; }
-.tchip.flash { animation: tflash .5s; }
-@keyframes tflash { 0% { transform: scale(1); } 50% { transform: scale(1.18); filter: brightness(1.3); } 100% { transform: scale(1); } }
-.tchip.achieved { position: relative; background: linear-gradient(160deg, #7bed9f, #2ed573); color: #064; box-shadow: 0 0 14px #2ed573; }
-.tchip.achieved::after { content: '✓'; position: absolute; top: -10px; right: -8px; background: #2ed573; color: #fff; font-size: 13px; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,.4); }
-/* el chip se infla al ABSORBER las fichas que llegan volando (sincronizado con el collect) */
-.tchip.absorb { animation: chipAbsorb .4s ease; }
-@keyframes chipAbsorb { 0% { transform: scale(1); } 45% { transform: scale(1.4); filter: brightness(1.35); } 100% { transform: scale(1); } }
+/* El chip PULSA (escala + brillo/glow dorado) al ABSORBER cada ficha: se anima por WAAPI
+   en flyTokens (App.jsx), NO por clase CSS, para no reiniciar chipIn al re-renderizar.
+   Sin estado verde persistente: el chip queda dorado y solo titila mientras absorbe. */
 
 /* capa de tokens voladores (efecto collect hacia el objetivo) */
 .fly-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 45; overflow: hidden; }
@@ -110,19 +107,23 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .gstar { position: absolute; top: -5px; transform: translateX(-50%); font-size: 14px; color: #fff8; }
 
 .board-area { position: relative; width: min(94vw, 460px); margin-top: 44px; }
-.arrow-h { position: absolute; top: -13px; width: 40px; height: 0; border-top: 2px solid #ffffff55; }
-.arrow-h::after { content: ''; position: absolute; right: -1px; top: -4px; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 7px solid #ffffff55; }
+/* Flechas de dirección (solo en resta/división). Doradas y con pulso SECUENCIAL
+   start→mid→end para que se lea el sentido (→ y ↓). No animan transform (los .mid lo
+   usan para centrarse): el "flujo" se logra con el desfasaje del pulso de opacidad/glow. */
+.arrow-h { position: absolute; top: -16px; width: 48px; height: 0; border-top: 3px solid var(--eq); filter: drop-shadow(0 0 5px #ffd23fcc); animation: arrowPulse 1.2s ease-in-out infinite; }
+.arrow-h::after { content: ''; position: absolute; right: -2px; top: -5px; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 10px solid var(--eq); }
 .arrow-h.start { left: 8px; }
-.arrow-h.mid { left: 50%; transform: translateX(-50%); }
-.arrow-h.end { right: 8px; }
-.arrow-v { position: absolute; left: -13px; height: 40px; width: 0; border-left: 2px solid #ffffff55; }
-.arrow-v::after { content: ''; position: absolute; bottom: -1px; left: -4px; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 7px solid #ffffff55; }
+.arrow-h.mid { left: 50%; transform: translateX(-50%); animation-delay: .18s; }
+.arrow-h.end { right: 8px; animation-delay: .36s; }
+.arrow-v { position: absolute; left: -16px; height: 48px; width: 0; border-left: 3px solid var(--eq); filter: drop-shadow(0 0 5px #ffd23fcc); animation: arrowPulse 1.2s ease-in-out infinite; }
+.arrow-v::after { content: ''; position: absolute; bottom: -2px; left: -5px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 10px solid var(--eq); }
 .arrow-v.start { top: 8px; }
-.arrow-v.mid { top: 50%; transform: translateY(-50%); }
-.arrow-v.end { bottom: 8px; }
+.arrow-v.mid { top: 50%; transform: translateY(-50%); animation-delay: .18s; }
+.arrow-v.end { bottom: 8px; animation-delay: .36s; }
+@keyframes arrowPulse { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
 
 /* tablero = pizarrón con marco de madera */
-.board-wrap { width: 100%; aspect-ratio: 1/1; background: #18211d; border-radius: 16px; padding: 10px;
+.board-wrap { width: 100%; aspect-ratio: 1/1; background: #131313; border-radius: 16px; padding: 10px;
   border: 8px solid var(--wood); outline: 2px solid var(--wood-dark);
   box-shadow: 0 8px 0 var(--wood-dark), inset 0 0 0 2px #00000040, inset 0 0 40px #00000055; }
 .board-wrap canvas { width: 100% !important; height: 100% !important; display: block; border-radius: 8px; }
@@ -362,3 +363,15 @@ body.metrics-page, body.metrics-page #root { height: auto; min-height: 100%; }
 .mtx-date { color: var(--chalk-dim); font-size: 12px; }
 .mtx-warn { color: #ff9d90; font-weight: 700; }
 .mtx-hint { font-size: 12px; color: var(--chalk-dim); margin: 10px 2px 0; }
+
+/* Retención */
+.mtx-ret { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 12px; }
+.mtx-retcell { background: #14201b; border-radius: 12px; padding: 12px 8px; text-align: center; }
+.mtx-retval { font-family: var(--font-tiza); font-size: 34px; font-weight: 700; line-height: 1; }
+.mtx-retlabel { font-family: var(--font-display); font-weight: 700; font-size: 15px; margin-top: 6px; }
+.mtx-retsub { font-size: 11px; color: var(--chalk-dim); margin-top: 2px; }
+.mtx-dau { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-top: 8px; }
+.mtx-daucol { position: relative; flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.mtx-daubar { position: relative; width: 100%; background: linear-gradient(180deg, #74c4ff, #3f86e6); border-radius: 5px 5px 0 0; min-height: 2px; transition: height .3s; }
+.mtx-daun { position: absolute; top: -16px; left: 0; right: 0; text-align: center; font-size: 11px; color: var(--chalk-dim); }
+.mtx-daufresh { position: absolute; bottom: 0; left: 0; width: 100%; background: #7bed9f; border-radius: 5px 5px 0 0; opacity: .85; }

@@ -5,7 +5,7 @@
 import {
   newGrid, tidyBoard, ensureMinOperators, findEquationCells, findTargetCellsMulti,
   findMatchesMulti, findHintFallback, pickTargets, adjacent, breakFormedTargets, plantTargetMove,
-  countTargetMoves, addTargetMovesSubtle, destrandOperators,
+  countTargetMoves, addTargetMovesSubtle, destrandOperators, seedTargetMovesNear,
 } from './logic.js'
 import { getLevel, makeGen, randTarget, starsFor, symbolAllowed } from './levels.js'
 
@@ -25,6 +25,7 @@ const MAX_TRIES = 10     // intentos: cada movimiento que NO forma cuenta resta 
 const MAX_HINTS = 3      // pistas manuales permitidas por partida
 const MAX_CONTINUES = 2  // veces que se puede "seguir con +1 min" al perder
 const CONTINUE_TIME = 60 // segundos que da cada "+1 min"
+const NEAR_MOVES = 3     // cuentas fáciles que se siembran (visibles) alrededor de donde jugás
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 export class Controller {
@@ -46,7 +47,12 @@ export class Controller {
     this.gen = makeGen(this.level, this.cfg)
     this.md = this.level.maxDigits
     this.mo = this.level.maxOps ?? 1       // operadores por cuenta (1 = num op num; 2+ para niveles avanzados)
-    this.fixedTarget = this.level.target ?? null   // objetivo fijo (nueva mecánica); null = objetivos rotativos
+    // objetivo fijo (nueva mecánica); null = objetivos rotativos. Se normaliza a array
+    // para soportar el twist "doble objetivo" (target: [5, 10]).
+    this.fixedTargets = this.level.target == null ? null
+      : (Array.isArray(this.level.target) ? [...this.level.target] : [this.level.target])
+    this.relax = !!this.level.relax        // twist: sin reloj (se gana por quota, estrellas por precisión)
+    this.switched = false                  // twist targetTo: ¿ya cambió el objetivo?
     this.ended = false
     this.busy = false
     this.started = false
@@ -80,6 +86,11 @@ export class Controller {
     // Como el reloj arranca recién en el primer movimiento, no consume tiempo.
     if (this.tutorial) {
       this._coach([{ text: 'Arrastrá una ficha hacia su vecina para formar el número de arriba.', highlight: 'target' }])
+    } else if (this.level.ops.some((o) => o === '−' || o === '÷') && !this._alreadyCoached('math_coached_dir')) {
+      // Primera vez en un nivel de resta/división: el ORDEN importa (no da igual como en la
+      // suma). Aclaramos la DIRECCIÓN —no el tamaño—, porque más adelante habrá resultados
+      // negativos donde el número grande NO va primero. Solo cuenta el sentido de las flechas.
+      this._coach([{ text: 'Ojo: acá el ORDEN importa. La cuenta se arma en el sentido de las flechas: → de izquierda a derecha, ↓ de arriba a abajo.' }])
     }
     this._startAutoHint()
   }
@@ -89,6 +100,7 @@ export class Controller {
     if (this.started || this.ended) return
     this.started = true
     this.board.hideHandGuide()              // el jugador ya tomó el control: fuera la manito
+    if (this.relax) return                  // modo relax: sin reloj (se gana solo por quota)
     this.deadline = Date.now() + START_TIME * 1000
     this.timerOn = true
     this._tick()
@@ -122,6 +134,14 @@ export class Controller {
     this.resume()
     this._startAutoHint()
   }
+  // ¿ya se mostró este coach de UNA sola vez (en todo el juego)? Si no, lo marca y devuelve false.
+  _alreadyCoached(key) {
+    try {
+      if (localStorage.getItem(key)) return true
+      localStorage.setItem(key, '1')
+      return false
+    } catch { return true }   // sin localStorage: no molestar
+  }
   _tick() {
     if (!this.timerOn) return
     const ms = this.deadline - Date.now()
@@ -136,7 +156,7 @@ export class Controller {
     this.board.build(newGrid(this.gen, n, n, this.md))
     // objetivo fijo: el tablero se genera sesgado y puede traer objetivos YA formados;
     // los rompemos para que arranque "resuelto" (sin matches).
-    if (this.fixedTarget != null) this._healFixedBoard()
+    if (this.fixedTargets != null) this._healFixedBoard()
   }
 
   // ---------- objetivos inteligentes (hasta 3) ----------
@@ -146,8 +166,11 @@ export class Controller {
   // saca operadores varados, repone con buena distribución, rompe cuentas YA formadas y
   // asegura el mínimo de jugadas al objetivo. Aplica los cambios SIN animación (el
   // controller lo llama durante el temblor de aterrizaje, para esconderlos ahí).
-  _healFixedBoard() {
-    this.targets = [this.fixedTarget]
+  // nearCols (opcional): columnas donde el jugador acaba de jugar. Si se pasan, se SIEMBRAN
+  // cuentas fáciles ahí (mín. NEAR_MOVES) y esas fichas se muestran con un pop VISIBLE; el
+  // resto del mantenimiento (operadores, romper formadas, piso global) va escondido en el temblor.
+  _healFixedBoard(nearCols = null) {
+    this.targets = [...this.fixedTargets]
     const grid = this.board.gridChars()
     const changed = []
     // 1) operadores: sacar los varados + reponer hasta el piso con buena distribución
@@ -157,26 +180,66 @@ export class Controller {
     // 2) romper cuentas YA formadas (el paso 1 pudo dejar un '+' entre dos dígitos que
     //    suman el objetivo). El tablero se entrega resuelto: sólo jugadas a un movimiento.
     changed.push(...breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo))
-    // 3) asegurar el mínimo de jugadas al objetivo (sutil, de abajo hacia arriba).
-    //    Escala con el tablero, pero suave en los chicos (5×5→3, 6×6→5, 7×7→6, 8×8→7).
+    // 3) asegurar el mínimo de jugadas (sutil, de abajo hacia arriba). Dos garantías:
+    //    - TOTAL: al menos MIN_MOVES jugadas a cualquier objetivo (escala con el tablero:
+    //      5×5→3, 6×6→5, 7×7→6, 8×8→7).
+    //    - POR OBJETIVO (solo doble): cada objetivo tiene sus propias jugadas, así el más
+    //      fácil (ej. 10) no se come el tablero dejando al otro (ej. 5) casi sin salida.
+    //    Se itera porque reforzar uno puede reducir levemente al otro; `avoid`=TODOS los
+    //    objetivos evita que al reforzar uno quede formado otro.
     const MIN_MOVES = this.level.minMoves ?? (this.level.size <= 5 ? 3 : this.level.size - 1)
-    if (countTargetMoves(grid, this.targets, this.md, this.mo, MIN_MOVES) < MIN_MOVES) {
-      changed.push(...addTargetMovesSubtle(grid, this.gen, this.targets, this.md, this.mo, MIN_MOVES))
-      // último recurso (rarísimo): si aún no hay ninguna jugada, plantar una
-      if (!findHintFallback(grid, this.targets, this.md, this.mo)) {
-        changed.push(...plantTargetMove(grid, this.gen))
+    const eachMin = this.level.minMovesEach ?? 2
+    for (let pass = 0; pass < 4; pass++) {
+      let ok = true
+      if (this.targets.length > 1) {
+        for (const t of this.targets) {
+          if (countTargetMoves(grid, [t], this.md, this.mo, eachMin) < eachMin) {
+            changed.push(...addTargetMovesSubtle(grid, this.gen, [t], this.md, this.mo, eachMin, this.targets))
+            ok = false
+          }
+        }
+      }
+      if (countTargetMoves(grid, this.targets, this.md, this.mo, MIN_MOVES) < MIN_MOVES) {
+        changed.push(...addTargetMovesSubtle(grid, this.gen, this.targets, this.md, this.mo, MIN_MOVES))
+        ok = false
+      }
+      if (ok) break
+    }
+    // Último recurso: si algún objetivo sigue por debajo del mínimo (el refuerzo sutil solo
+    // cambia dígitos y a veces no alcanza porque los operadores quedaron lejos), PLANTAR
+    // jugadas para ESE objetivo (planta también el operador). En doble se planta por objetivo.
+    for (const t of this.targets) {
+      const onlyT = this.targets.length > 1 ? t : null
+      let g = 0
+      while (countTargetMoves(grid, [t], this.md, this.mo, eachMin) < eachMin && g++ < 4) {
+        const pc = plantTargetMove(grid, this.gen, onlyT)
+        if (!pc.length) break
+        changed.push(...pc)
+        // el plantado pudo formar un objetivo en la línea perpendicular: romperlo
+        changed.push(...breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo))
       }
     }
-    // dedup de celdas tocadas por varios pasos; aplicar SIN animación
-    const uniq = [...new Map(changed.map(([r, c]) => [r + ',' + c, [r, c]])).values()]
-    if (uniq.length) this.board.applyCharsPlain(uniq, grid)
+    // por si el tablero quedó SIN ninguna jugada global (rarísimo)
+    if (!findHintFallback(grid, this.targets, this.md, this.mo)) {
+      changed.push(...plantTargetMove(grid, this.gen))
+    }
+    // SIEMBRA local: cuentas fáciles alrededor de donde jugó el jugador (se muestran con pop).
+    const seeded = nearCols
+      ? seedTargetMovesNear(grid, this.gen, this.targets, [...nearCols], this.md, this.mo, NEAR_MOVES)
+      : []
+    const seededKeys = new Set(seeded.map(([r, c]) => r + ',' + c))
+    // mantenimiento de fondo: escondido en el temblor (sin animación), excluyendo lo sembrado
+    const bg = [...new Map(changed.map(([r, c]) => [r + ',' + c, [r, c]])).values()]
+      .filter(([r, c]) => !seededKeys.has(r + ',' + c))
+    if (bg.length) this.board.applyCharsPlain(bg, grid)
+    if (seeded.length) this.board.applyChars(seeded, grid)   // pop VISIBLE de la siembra
   }
 
   _pickTargets(consumed = new Set()) {
     // Objetivo fijo: no rota. El mantenimiento del tablero se hace en el ATERRIZAJE
     // (ver _resolve / _healFixedBoard); acá sólo fijamos y mostramos el objetivo.
-    if (this.fixedTarget != null) {
-      this.targets = [this.fixedTarget]
+    if (this.fixedTargets != null) {
+      this.targets = [...this.fixedTargets]
       this._pushTargets(false)
       return
     }
@@ -278,12 +341,28 @@ export class Controller {
     this._afterMove(consumed)
   }
 
+  // twist "objetivo que cambia": al llegar a media quota, el objetivo fijo pasa a targetTo.
+  // Regenera el bag (nuevos dígitos calientes), reacomoda el tablero y avisa por coach.
+  _maybeSwitchTarget() {
+    if (this.level.targetTo == null || this.switched || this.ended) return false
+    const half = Math.ceil((this.level.quota ?? 6) / 2)
+    if (this.left > half) return false
+    this.switched = true
+    this.fixedTargets = [this.level.targetTo]
+    this.gen = makeGen({ ...this.level, target: this.level.targetTo }, this.cfg)
+    this._healFixedBoard()      // fija this.targets al nuevo objetivo y reacomoda el tablero
+    this._pushTargets(true)     // re-render de los chips (con flash)
+    this._coach([{ text: '¡El objetivo cambió! Ahora formá ' + this.level.targetTo + '.', highlight: 'target' }])
+    return true
+  }
+
   _afterMove(consumed) {
     if (this.ended) return
     // El temblor ya ocurrió al EXPLOTAR la cuenta (en _resolve). Acá el mantenimiento
     // cambia las fichas necesarias de forma sutil (sin un segundo temblor), como parte
     // del mismo momento en que el tablero se asienta.
     this._pickTargets(consumed)
+    if (consumed.size > 0 && this._maybeSwitchTarget()) return   // el objetivo cambió: coach + pausa
     // Tutorial (nivel 1): 2do paso, recién DESPUÉS del primer acierto (no todo junto al arrancar).
     if (this.tutorial && consumed.size > 0 && !this.coachedTutorialFirst) {
       this.coachedTutorialFirst = true
@@ -329,6 +408,7 @@ export class Controller {
   // ---------- cascada ----------
   async _resolve() {
     let combo = 0
+    let playedCols = null                 // columnas donde el jugador hizo su jugada (para sembrar cerca)
     const consumed = new Set()
     while (!this.ended) {
       const grid = this.board.gridChars()
@@ -339,25 +419,36 @@ export class Controller {
 
       combo++; this.combo = combo
       // cuentas por SEGMENTO (no por valor distinto): formar el objetivo 2 veces en un
-      // movimiento cuenta 2. Los combos (combo≥2) igual NO descuentan del objetivo (abajo).
+      // movimiento cuenta 2.
       const cuentas = tg.segs + (eq.size > 0 ? 1 : 0)
-      const deliberate = combo === 1                        // combo 1 = jugada del jugador; 2+ = cascada "por azar"
+      const deliberate = combo === 1                        // combo 1 = jugada del jugador; 2+ = cascada por piezas nuevas
       tg.hit.forEach((v) => consumed.add(v))
       if (tg.hit.size) this.hooks.targetHit?.([...tg.hit])   // avisar qué objetivo se logró
-      const bonus = TIME_PER_CUENTA * cuentas               // toda cuenta suma tiempo
+      // TODA cuenta suma al PROGRESO (descuenta del objetivo), sea jugada del jugador o
+      // combo por piezas nuevas. Los combos YA NO dan tiempo: solo la jugada del jugador
+      // extiende el reloj. Los combos "pagan" en progreso hacia pasar el nivel, no en tiempo.
+      // En el nivel "Fiebre de combos" (comboFever) los combos cuentan DOBLE al objetivo.
+      const bonus = deliberate ? TIME_PER_CUENTA * cuentas : 0
+      const dec = (!deliberate && this.level.comboFever) ? cuentas * 2 : cuentas
       if (cuentas > 0) {
-        if (deliberate) this._decCuentas(cuentas)           // solo la jugada del jugador cuenta al objetivo
-        else this.hooks.toast?.('¡Combo por azar! +' + bonus + 's ⏱')
-        this._addTime(bonus)
+        this._decCuentas(dec)
+        if (deliberate) this._addTime(bonus)
+        else this.hooks.toast?.(this.level.comboFever
+          ? '¡Combo DOBLE! +' + dec + ' cuentas 🔥'
+          : '¡Combo! +' + cuentas + ' cuenta' + (cuentas > 1 ? 's' : '') + ' 🔥')
       }
 
       const cells = [...all].map((k) => { const [r, c] = k.split(',').map(Number); return { r, c } })
+      // banda "alrededor de la jugada": columnas de la cuenta del jugador ± 1 (para sembrar ahí)
+      if (deliberate) playedCols = new Set(cells.flatMap(({ c }) => [c - 1, c, c + 1]))
       const ctr = this.board.cellsCenter(cells)
 
       await this.board.highlight(cells)   // resaltar la combinación antes de explotar
-      this.board.popup(ctr.x, ctr.y, '+' + bonus + 's' + (combo > 1 ? '  ¡combo x' + combo + '!' : ''))
-      // solo la cuenta del jugador vuela al chip del objetivo (las de azar dan tiempo, no objetivo)
-      if (deliberate) this.hooks.onCuenta?.({
+      this.board.popup(ctr.x, ctr.y, combo > 1
+        ? '¡combo x' + combo + '!  +' + dec
+        : '+' + bonus + 's')
+      // TODA cuenta vuela al chip del objetivo (jugada del jugador o combo)
+      if (cuentas > 0) this.hooks.onCuenta?.({
         cells: cells.map(({ r, c }) => ({ r, c, ch: grid[r]?.[c] })),
         rows: this.board.rows, cols: this.board.cols, value: [...tg.hit][0],
       })
@@ -374,7 +465,7 @@ export class Controller {
     // las fichas necesarias sin ninguna animación (queda escondido en la sacudida).
     if (!this.ended && consumed.size > 0) {
       this.board.shake(12)
-      if (this.fixedTarget != null) this._healFixedBoard()
+      if (this.fixedTargets != null) this._healFixedBoard(playedCols)
     }
     return consumed
   }
@@ -460,7 +551,12 @@ export class Controller {
     this.board.hideHandGuide()
     this._clearAutoHint()
     if (this.timerId) clearTimeout(this.timerId)
-    const stars = starsFor(this.level, { completed, timeLeft: this.timeLeft, totalTime: START_TIME })
+    // Modo relax: no hay reloj, así que las estrellas premian la PRECISIÓN (cuántos
+    // movimientos fallados = intentos gastados). 3★ sin fallar, 2★ hasta 3, 1★ completar.
+    const maxTries = this.level.tries ?? MAX_TRIES
+    const stars = this.relax
+      ? (completed ? (this.tries >= maxTries ? 3 : this.tries >= maxTries - 3 ? 2 : 1) : 0)
+      : starsFor(this.level, { completed, timeLeft: this.timeLeft, totalTime: START_TIME })
     this._pushInventory()
     this.hooks.onLevelEnd({
       index: this.levelIndex, completed, reason, stars,
@@ -542,6 +638,7 @@ export class Controller {
     })
   }
   _pushHud() {
+    this.hooks.setMode?.({ relax: this.relax })
     this.hooks.setTime(this.timeLeft)
     this.hooks.setCuentas?.({ left: this.left, quota: this.level.quota ?? 6, dec: false })
     this.hooks.setTries?.({ left: this.tries, dec: false })

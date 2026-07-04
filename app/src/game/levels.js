@@ -6,6 +6,7 @@
 import { EQ, targetTriples } from './logic.js'
 
 const range = (a, b) => { const r = []; for (let i = a; i <= b; i++) r.push(String(i)); return r; };
+const shuffleArr = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 // Cada nivel es un escenario temático por operador. size = tablero NxN.
 // tMin/tMax = rango preferido del objetivo. quota = cuántas cuentas hay que completar para ganar.
@@ -15,52 +16,53 @@ const range = (a, b) => { const r = []; for (let i = a; i <= b; i++) r.push(Stri
 // maxOps = operadores por cuenta (default 1 = "num op num"; sin cuentas encadenadas).
 //   👉 Pendiente: en niveles avanzados (20+) subir a maxOps: 2 (ej. 7−3+1) y AVISAR
 //      al jugador con un coach. Por ahora TODOS los niveles usan 1 (una sola operación).
-// target = OBJETIVO FIJO del nivel (nueva mecánica). Si está, el objetivo NO rota:
-//   se muestra siempre "Formá T", el tablero se genera SESGADO al objetivo (lleno de
-//   jugadas a un movimiento) y ganás al formar T `quota` veces. Ver DOCUMENTACION §13.
-//   (Niveles 1-3 ya migrados; el resto sigue con objetivos inteligentes rotativos.)
+// target = OBJETIVO FIJO del nivel. Si está, el objetivo NO rota: se muestra siempre
+//   "Formá T", el tablero se genera SESGADO al objetivo (lleno de jugadas a un
+//   movimiento) y ganás al formar T `quota` veces. Puede ser un ARRAY (twist "doble
+//   objetivo": vale formar cualquiera de los dos). Ver DOCUMENTACION §13-15.
+// --- FLAGS DE TWIST (bloque Suma, DISEÑO_PROGRESION §5.2) ---
+//   relax:true     → sin reloj: se gana solo por quota; estrellas por PRECISIÓN (pocos
+//                    movimientos fallados), no por rapidez.
+//   comboFever:true→ los combos (cascadas por piezas nuevas) cuentan DOBLE al objetivo.
+//                    (Los combos SIEMPRE cuentan al objetivo; acá valen x2.)
+//   targetTo:N     → el objetivo CAMBIA a N al llegar a media quota (objetivo que cambia).
 export const LEVELS = [
-  // ================= BLOQUE SUMAS (niveles 1-10, objetivo fijo) =================
-  // Todo suma, 1 cifra, 1 operador: el jugador se acostumbra a la mecánica.
-  // La dificultad sube por objetivo + tamaño de tablero + quota. Los nombres "Sumá N"
-  // son informativos (fase de aprendizaje). ⚠️ Pendiente: rediseñar la PROGRESIÓN y los
-  // motivadores/desbloqueos tras los 10 (investigación de diseño mobile). Ver DOCU §13.
-  { name: 'Primeros pasos', size: 4, digits: range(1, 3), ops: ['+'], eq: false, maxDigits: 1, target: 4,  quota: 5,  tutorial: true },
-  { name: 'Sumá 5',         size: 5, digits: range(1, 5), ops: ['+'], eq: false, maxDigits: 1, target: 5,  quota: 8  },
-  { name: 'Sumá 6',         size: 5, digits: range(1, 6), ops: ['+'], eq: false, maxDigits: 1, target: 6,  quota: 10 },
-  { name: 'Sumá 7',         size: 5, digits: range(1, 7), ops: ['+'], eq: false, maxDigits: 1, target: 7,  quota: 10 },
-  { name: 'Sumá 8',         size: 5, digits: range(1, 8), ops: ['+'], eq: false, maxDigits: 1, target: 8,  quota: 10 },
-  { name: 'Sumá 9',         size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 9,  quota: 12 },
-  { name: 'Sumá 10',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 10, quota: 12 },
-  { name: 'Sumá 11',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 11, quota: 12 },
-  { name: 'Sumá 12',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12, quota: 15 },
-  { name: 'Sumá 13',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 13, quota: 15 },
+  // ================= MUNDO SUMA (niveles 1-10, objetivo fijo + twists) =================
+  // Todo suma, 1 cifra, 1 operador. Números elegidos por SIGNIFICADO (10 = número héroe,
+  // 5/dobles), no por escalera. Cada 2-3 niveles un twist rompe la monotonía (teach→test→
+  // twist). La dificultad viene de tablero/quota/twist, no de +1 al objetivo. Ver DISEÑO §5.
+  // teach→test→twist: se enseñan 4,5,6,8 sueltos (1-4) y desde el nivel 5 los twists
+  // aparecen intercalados (un giro sí / uno no) para cortar la monotonía. La suma sigue
+  // siendo de 1 cifra; los twists cambian la EXPERIENCIA, no la carga matemática.
+  { name: 'Primeros pasos',   size: 4, digits: range(1, 3), ops: ['+'], eq: false, maxDigits: 1, target: 4,        quota: 10, tutorial: true },
+  { name: 'Amigos del 5',     size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 5,        quota: 10 },
+  { name: 'Media docena',     size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 6,        quota: 10 },
+  { name: 'Solo pares',       size: 5, digits: ['2', '4', '6'], ops: ['+'], eq: false, maxDigits: 1, target: 8,   quota: 10 },  // solo pares → 2+6, 4+4
+  { name: 'Doble objetivo',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [4, 8],   quota: 10 },  // 🎁 twist: 4 y 8 a la vez
+  { name: 'Ponete la 10',     size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 10,       quota: 10 },
+  { name: 'Modo relax',       size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 9,        quota: 10, relax: true },       // 🎁 twist: sin reloj
+  { name: 'Una docena',       size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12,       quota: 10 },
+  { name: 'Fiebre de combos', size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 7,        quota: 10, comboFever: true },  // 🎁 twist: los combos cuentan DOBLE
+  { name: 'Cambia el objetivo', size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 10, targetTo: 6, quota: 15 },           // 🎁 twist: cambia a mitad (nivel 10 → quota 15)
 
-  // ===== Niveles avanzados (WIP: a REDISEÑAR con la nueva mecánica y progresión) =====
-  { name: 'Restas',         size: 5, digits: range(1, 9), ops: ['−'],            eq: false, maxDigits: 1, tMin: 1,  tMax: 8,  quota: 5 },
-  { name: 'Suma y resta',   size: 5, digits: range(1, 9), ops: ['+', '−'],       eq: false, maxDigits: 1, tMin: 2,  tMax: 15, quota: 5 },
-  { name: 'Práctica',       size: 5, digits: range(1, 9), ops: ['+', '−'],       eq: false, maxDigits: 1, tMin: 3,  tMax: 18, quota: 5 },
-
-  // ---- Bloque 6×6: aparece la multiplicación (quota 10) ----
-  { name: 'Más espacio',    size: 6, digits: range(1, 9), ops: ['+', '−'],       eq: false, maxDigits: 1, tMin: 3,  tMax: 18, quota: 10 },
-  { name: 'Multiplicar',    size: 6, digits: range(1, 9), ops: ['×'],            eq: false, maxDigits: 1, tMin: 6,  tMax: 36, quota: 10 },
-  { name: 'Suma y por',     size: 6, digits: range(1, 9), ops: ['+', '×'],       eq: false, maxDigits: 1, tMin: 5,  tMax: 36, quota: 10 },
-  { name: 'Resta y por',    size: 6, digits: range(1, 9), ops: ['−', '×'],       eq: false, maxDigits: 1, tMin: 4,  tMax: 36, quota: 10 },
-  { name: 'Mezcla',         size: 6, digits: range(1, 9), ops: ['+', '−', '×'],  eq: false, maxDigits: 1, tMin: 4,  tMax: 40, quota: 10 },
-
-  // ---- Bloque 7×7: aparece la división (quota 10) ----
-  { name: 'Más mezcla',     size: 7, digits: range(1, 9), ops: ['+', '−', '×'],       eq: false, maxDigits: 1, tMin: 5,  tMax: 45, quota: 10 },
-  { name: 'Con división',   size: 7, digits: range(1, 9), ops: ['+', '−', '×', '÷'],  eq: false, maxDigits: 1, tMin: 4,  tMax: 40, quota: 10 },
-  { name: 'División +',     size: 7, digits: range(1, 9), ops: ['+', '−', '×', '÷'],  eq: false, maxDigits: 1, tMin: 5,  tMax: 45, quota: 10 },
-  { name: 'Desafío',        size: 7, digits: range(1, 9), ops: ['+', '−', '×', '÷'],  eq: false, maxDigits: 1, tMin: 6,  tMax: 50, quota: 10 },
-  { name: 'Experto',        size: 7, digits: range(1, 9), ops: ['+', '−', '×', '÷'],  eq: false, maxDigits: 1, tMin: 6,  tMax: 60, quota: 10 },
-
-  // ---- Bloque 8×8: dos cifras y ecuaciones (quota 10) ----
-  { name: 'Dos cifras',     size: 8, digits: range(0, 9), ops: ['+', '−'],            eq: false, maxDigits: 2, tMin: 10, tMax: 50, quota: 10 },
-  { name: 'Dos cifras ×',   size: 8, digits: range(0, 9), ops: ['+', '−', '×'],       eq: false, maxDigits: 2, tMin: 10, tMax: 60, quota: 10 },
-  { name: 'Todo junto',     size: 8, digits: range(0, 9), ops: ['+', '−', '×', '÷'],  eq: false, maxDigits: 2, tMin: 12, tMax: 70, quota: 10 },
-  { name: 'Ecuaciones',     size: 8, digits: range(0, 9), ops: ['+', '−', '×', '÷'],  eq: true,  maxDigits: 2, tMin: 10, tMax: 80, quota: 10 },
-  { name: 'Maestría',       size: 8, digits: range(0, 9), ops: ['+', '−', '×', '÷'],  eq: true,  maxDigits: 2, tMin: 12, tMax: 99, quota: 10 },
+  // ================= MUNDO RESTA (niveles 11-15, objetivo fijo, mecánica nueva) =================
+  // Resta de 1 cifra, resultados CHICOS y fáciles (≥0, sin negativos aún). Mismo motor
+  // target-rich que la suma: tablero sesgado al objetivo, siembra de cuentas fáciles,
+  // dígitos = operandos útiles (acá el minuendo puede ser mayor al resultado, ej. 9−4=5).
+  // teach→test→twist, números bajos primero. Ver DISEÑO §7 (mundos por operación).
+  // En resta, objetivo ALTO = MENOS pares (target 6 solo tiene 3: 9−3,8−2,7−1). Banda cómoda
+  // 3-6. Arranca en 3 (no trivial) y la doble entra temprano (el jugador ya sabe la mecánica).
+  { name: 'Primera resta',    size: 5, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 3,       quota: 10 },
+  { name: 'Doble resta',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 5],  quota: 10 },  // 🎁 twist: 2 y 5 a la vez
+  { name: 'Diferencia 5',     size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 5,       quota: 10 },
+  { name: 'Diferencia 6',     size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 6,       quota: 10 },
+  { name: 'Fiebre de restas', size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 4,       quota: 10, comboFever: true },  // 🎁 twist: combos x2
+  // --- 4 niveles de RESTA con DOBLE objetivo (cada uno mezcla un target cómodo con uno más
+  // difícil = menos pares; ej. 7 solo tiene 8−1 y 9−2). Twists encima para variar. ---
+  { name: 'Resta doble',    size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 6], quota: 10 },
+  { name: 'Doble relax',    size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 6], quota: 10, relax: true },       // 🎁 sin reloj
+  { name: 'Doble combos',   size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 7], quota: 10, comboFever: true },  // 🎁 combos x2
+  { name: 'Resta maestra',  size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7], quota: 15 },                    // tablero 7×7
 ];
 
 export const LEVEL_COUNT = LEVELS.length;
@@ -113,11 +115,39 @@ const HOT_BIAS = 0.78;       // proporción de dígitos "calientes" (operandos d
 const TARGET_PCT_OPS = 33;   // ~1 operador cada 2 dígitos → máxima densidad de "num op num"
 function makeTargetGen(level, cfg) {
   const ops = level.ops;
-  const digits = level.digits;
+  // Pool "frío" (variedad): acotado a cifras que NO superen el objetivo mayor, para que
+  // no aparezcan números inútiles (ej. un 7 cuando hay que formar 5). En una suma solo
+  // sirven las cifras ≤ objetivo; el tablero queda lleno de operandos (1,2,3,4 para el 5).
+  const targetsArr = (Array.isArray(level.target) ? level.target : [level.target]).map(Number);
   const triples = targetTriples(level);
-  const hot = [...new Set(triples.flatMap(([a, , b]) => [a, b]))];
-  const randDigit = () => (hot.length && Math.random() < HOT_BIAS)
-    ? hot[Math.floor(Math.random() * hot.length)]
+  const hot = [...new Set(triples.flatMap(([a, , b]) => [a, b]))];   // operandos útiles (unión)
+  // Pool "frío" (variedad) = cifras ÚTILES (operandos de algún objetivo). Operación-agnóstico:
+  // en SUMA los operandos son < objetivo (no aparece un "5" en formá-5); en RESTA pueden ser
+  // MAYORES (el minuendo: 9−4=5). Así nunca sale una cifra que no sirva para el objetivo.
+  const usefulSet = new Set(hot);
+  const cold = level.digits.filter((d) => usefulSet.has(d));
+  const digits = cold.length ? cold : level.digits;
+  // Operandos calientes POR objetivo. En objetivo doble se elige primero un objetivo al
+  // azar y después uno de SUS operandos → ambos números tienen densidad pareja. Si no,
+  // el más fácil de formar (ej. 10, que sale de casi cualquier par 1-9) se come el tablero
+  // y el otro (ej. 5, que necesita 1-4) casi no aparece.
+  const hotByTarget = targetsArr
+    .map((t) => [...new Set(targetTriples({ ...level, target: t }).flatMap(([a, , b]) => [a, b]))])
+    .filter((h) => h.length);
+  // Bolsa barajada de operandos: reparte PAREJO y evita rachas (ej. "muchos 4 y ningún 1"
+  // en formá 5, que dejan cifras sin con qué emparejar). Un bag de objetivos elige cuál
+  // objetivo (parejo en doble) y un bag por objetivo elige el operando sin reemplazo;
+  // ambos se rebarajan al vaciarse. Así 1,2,3,4 salen en cantidades similares.
+  const opBags = hotByTarget.map(() => []);
+  let tBag = [];
+  const drawHot = () => {
+    if (!tBag.length) tBag = shuffleArr(hotByTarget.map((_, i) => i));
+    const ti = tBag.pop();
+    if (!opBags[ti].length) opBags[ti] = shuffleArr([...hotByTarget[ti]]);
+    return opBags[ti].pop();
+  };
+  const randDigit = () => (hotByTarget.length && Math.random() < HOT_BIAS)
+    ? drawHot()
     : digits[Math.floor(Math.random() * digits.length)];
   const randTile = () => (Math.random() * 100 < TARGET_PCT_OPS)
     ? ops[Math.floor(Math.random() * ops.length)]

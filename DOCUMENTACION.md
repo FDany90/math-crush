@@ -329,3 +329,52 @@ Aplicación de **DISEÑO_PROGRESION §5.2**: el bloque de 10 sumas dejó de ser 
 - **Mundo Resta (11-15):** `ops:['−']`, resultados chicos ≥0 (sin negativos), dígitos 1-9, quota 10. `11 Primera resta`(1) · `12 Diferencia 2`(2) · `13 Diferencia 3`(3) · `14 Diferencia 5`(5) · `15 Doble resta`([2,4], twist doble objetivo). teach→test→twist, números bajos primero.
 - **Generador operación-agnóstico:** la regla del pool "frío" pasó de "dígitos < objetivo" (solo servía para suma) a **"dígitos = operandos útiles"** (los que devuelve `targetTriples`, que maneja `+ − × ÷`). En resta el minuendo es mayor al resultado (9−4=5) → esos dígitos ahora aparecen; en suma sigue sin salir un "5" en formá-5. Verificado 1500 tableros/nivel: 0 formadas, 0 deadlocks, resultados ≥0.
 - **`PROGRESS_VERSION='5'`** (cambió cantidad y contenido → reset).
+- *(Nota: la resta creció después a 9 niveles —5 intro + 4 dobles [3,6]/[4,6]/[2,7]/[4,7]— antes de la expansión a 40. Ver §17.)*
+
+## 17. Expansión a 40 niveles + Acumulativo, pistas globales, mapa por sectores, reward diario (2026-07-04, sesión autónoma)
+
+> Sesión autónoma (el usuario pidió avanzar sin preguntar). Decisiones completas en
+> **`PLAN_SESION_AUTONOMA.md`** (raíz). `PROGRESS_VERSION='6'`.
+
+### 17.1 Estructura: 40 niveles = 4 mundos × (9 regulares + 1 acumulativo)
+- **SUMA 1-10 · RESTA 11-20 · MULTIPLICACIÓN 21-30 · DIVISIÓN 31-40.** Cada mundo termina en
+  un nivel **acumulativo** (10/20/30/40). Dobles objetivo intercalados en cada mundo.
+- **Multiplicación:** productos de 1 cifra, banda 6-24 (altos = menos pares: 20 solo 4×5).
+  `21 Tabla fácil`(6)···`29 Fiebre por`(12,comboFever) + `30 Multiplicá a 100` (acum).
+- **División:** `÷` exacta, cocientes **2/3/4** (los únicos viables con 1 cifra — mundo algo
+  repetitivo, limitación conocida). `31 Primera división`(2)···`39 Doble maestro`([2,3]) +
+  `40 Dividí a 0` (acum). ⚠️ Mejora futura: dividendos de 2 cifras (el generador target-rich
+  hoy solo genera operandos de 1 cifra).
+- Verificado por simulación (800 tableros/nivel): **0 formadas, mínimo de jugadas, 0 deadlocks
+  en los 40**.
+
+### 17.2 Modo Acumulativo (nuevo motor)
+- Campo de nivel `accum: { start, goal }` (+ `target: [set de resultados]` para el board).
+  En vez de descontar quota, formás cualquiera del set y su **VALOR** suma (si goal>start) o
+  resta (si goal<start) a un total; ganás al alcanzar la meta. Reusa TODO el motor multi-objetivo.
+- Metas: suma/mult **0→100**, resta **40→0**, div **24→0** (estimadas, calibrar con playtest).
+- Impl: `logic.findTargetCellsMulti` ahora devuelve **`sum`** (valor total formado, vía `scanLineMulti`
+  con acumulador). `Controller._addAccum(value)` mueve el total y, al llegar, setea `left=0`
+  (dispara la victoria por los checks existentes). Estado `this.accum/accumTotal/accumDir`.
+  Hook `setAccum`. UI: barra `.accum-bar/.accum-fill` con el número (App.jsx, reemplaza el
+  tally cuando `accum` está activo). ⚠️ v1 usa un SET fijo de resultados; v2 futuro = aceptar
+  CUALQUIER expresión válida. **Pendiente: verificar en runtime** (build+lógica OK).
+
+### 17.3 Pistas GLOBALES (pool que persiste)
+- Antes: `MAX_HINTS=3` por nivel (se reseteaba). Ahora: **pool único, máx 10** (`math_hints`
+  en localStorage, persiste entre niveles), arranca en **5**. Podés gastar todas en un nivel;
+  se acaban para el próximo. Auto-pistas (niveles bajos) **no** gastan pool.
+- `getHintPool()`/`setHintPool(n)`/`HINTS_MAX` exportados de `controller.js` (los usa App para
+  el reward diario y el contador del mapa). `hint()` descuenta con `setHintPool`.
+
+### 17.4 Mapa por sectores (menos infantil)
+- `WORLDS` (App.jsx): 4 mundos con **símbolo + nombre** (SUMA +, RESTA −, MULTIPLICAR ×,
+  DIVISIÓN ÷) y color. Carteles `.sector` sobre el camino en el 1er nivel de cada mundo.
+- Color de nodo por **mundo** (`zoneColor(i)` = por índice, antes por tamaño de tablero).
+- Estética más sobria: blobs atenuados (opacity .14) + paleta desaturada.
+
+### 17.5 Reward diario
+- Botón 🎁 en `.map-top` (fijo, con puntito verde si hay premio sin reclamar) + pop-up.
+- Da **+3 pistas por día** (`math_daily_<YYYY-MM-DD>`), respetando el tope de 10. **Celebratorio,
+  sin castigo por faltar** (línea roja ética, DISEÑO §7.6). Muestra las pistas actuales.
+- Por ahora da pistas; a futuro podría dar cosméticos/estrellas (nunca power-ups).

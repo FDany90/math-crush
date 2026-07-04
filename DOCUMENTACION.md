@@ -250,3 +250,27 @@ Cada nivel es un objeto con estos campos:
 - ⚠️ Cambió la cantidad/orden de niveles → **resetear** `localStorage.removeItem('math_progress')`.
 
 **Pendiente (próximo foco):** el bloque de 10 sumas puede sentirse **monótono**. Antes de rediseñar los niveles 11+, hacer una **investigación de diseño de juegos mobile** para sumar **motivadores/desbloqueos** (progresión, recompensas, variedad) que enganchen a seguir jugando.
+
+---
+
+## 14. Ajustes de mantenimiento, temblor de aterrizaje y fixes (2026-07-03 bis)
+
+Refinamientos sobre la mecánica de objetivo fijo (§13) a partir de playtest. **Todo el mantenimiento del tablero de objetivo fijo está ahora en `Controller._healFixedBoard()`** (antes estaba disperso en `_pickTargets`/`_rebuild`).
+
+**Fixes:**
+- **Cuentas YA formadas por el reponedor de operadores:** `_replenishOperators` metía un operador entre dos dígitos que sumaban el objetivo (ej. un `+` entre 3 y 2 = 5) y dejaba la cuenta **hecha** en el tablero. Fix: tras reponer operadores, `_healFixedBoard` corre `breakFormedTargets` → el tablero se entrega siempre **resuelto** (solo jugadas a un movimiento). Verificado 0/1200 tableros con cuenta formada.
+
+**Mejoras de tablero (`logic.js`):**
+- **`MIN_MOVES` escala con el tamaño:** `level.minMoves ?? (size <= 5 ? 3 : size − 1)` → 4×4→3, 5×5→3, 6×6→5, 7×7→6, 8×8→7. Cuanto más grande el tablero, más jugadas visibles.
+- **`ensureMinOperators` reescrito:** coloca operadores solo donde **sirven** (pueden ser el centro de una cuenta, `opUsableAt`) y **repartidos** (penaliza vecinos-operador) → no más columnas llenas de `+`.
+- **`destrandOperators` (nueva):** convierte a dígito los operadores **varados** (esquinas / sin uso posible en ninguna línea). Corre antes de reponer.
+- Verificado en 1200 tableros: siempre ≥ mínimo de jugadas, 0 operadores varados, 0 cuentas formadas.
+
+**Temblor de aterrizaje + intercambio invisible (`controller.js` + `pixi/Board.js`):**
+- El temblor ya **no** ocurre al explotar la cuenta. Ahora se dispara **al ATERRIZAR las piezas** (al final de la caída, después del último `collapse`, en `_resolve`): `this.board.shake(12)`.
+- **Dentro de ese temblor**, con todas las posiciones ya definidas, corre `_healFixedBoard()`, que aplica los cambios con **`Board.applyCharsPlain`** — **sin ninguna animación** (solo `setChar`, sin el "pop"/escala) → el ajuste de fichas queda **escondido en la sacudida** del aterrizaje.
+- Un solo temblor por movimiento. `_pickTargets` para objetivo fijo ahora solo fija/muestra el objetivo (el mantenimiento salió de ahí).
+
+**Reset de progreso por versión (`App.jsx`):** `PROGRESS_VERSION` (const). Al cargar, si la versión guardada en el browser no coincide, se borra `math_progress` una vez → **todos los jugadores empiezan de cero** en su próxima visita (subir el número cada vez que se reestructuren niveles). Requiere redeploy.
+
+**Diseño de progresión (documento aparte):** todo lo de motivadores, desbloqueos, economía de estrellas y estructura de mundos por operación está en **`DISEÑO_PROGRESION.md`** (raíz). Es el doc maestro para diseñar la progresión.

@@ -274,3 +274,58 @@ Refinamientos sobre la mecánica de objetivo fijo (§13) a partir de playtest. *
 **Reset de progreso por versión (`App.jsx`):** `PROGRESS_VERSION` (const). Al cargar, si la versión guardada en el browser no coincide, se borra `math_progress` una vez → **todos los jugadores empiezan de cero** en su próxima visita (subir el número cada vez que se reestructuren niveles). Requiere redeploy.
 
 **Diseño de progresión (documento aparte):** todo lo de motivadores, desbloqueos, economía de estrellas y estructura de mundos por operación está en **`DISEÑO_PROGRESION.md`** (raíz). Es el doc maestro para diseñar la progresión.
+
+## 15. Rediseño del Mundo Suma + twists (2026-07-04)
+
+Aplicación de **DISEÑO_PROGRESION §5.2**: el bloque de 10 sumas dejó de ser una escalera monótona de objetivos (4→13, con los "feos" 11/13) y pasó a números elegidos por **significado** + un **twist cada 2-3 niveles** (teach→test→twist). La dificultad viene del tablero/quota/twist, no de +1 al objetivo.
+
+**Secuencia (`levels.js`) — teach→test→twist: enseña 4,5,6,8 sueltos y desde el nivel 5 intercala twists (uno sí/uno no) para cortar la monotonía:**
+
+| # | Nombre | Objetivo | Twist |
+|---|--------|----------|-------|
+| 1 | Primeros pasos | 4 | tutorial |
+| 2 | Amigos del 5 | 5 | — |
+| 3 | Media docena | 6 | — |
+| 4 | El pulpo | 8 | — |
+| 5 | Doble objetivo | **[4, 8]** | 🎁 doble objetivo |
+| 6 | Ponete la 10 | 10 ⭐ | — |
+| 7 | Modo relax | 9 | 🎁 **relax** (sin reloj) |
+| 8 | Una docena | 12 | — |
+| 9 | Fiebre de combos | 7 | 🎁 **comboFever** |
+| 10 | Cambia el objetivo | **10 → 6** | 🎁 **targetTo** |
+
+**Twists (todos son cambios acotados sobre el motor de objetivo fijo del §13):**
+- **Doble objetivo** (`target: [5, 10]`): el objetivo fijo ahora puede ser un **array**. La maquinaria multi-objetivo ya existía (`this.targets` siempre fue un array; `findTargetCellsMulti`/`countTargetMoves`/etc. reciben un array). Solo hubo que: (a) `targetTriples` acepta array (une los operandos de todos los objetivos en el bag "caliente"), (b) el controller normaliza `level.target` → `this.fixedTargets` (array). Vale formar **cualquiera** de los dos; ambos descuentan quota. La UI ya renderiza "Formá 5 o 10" (chips con "o").
+- **Modo relax** (`relax: true`): `_ensureStarted` **no arranca el reloj**; se gana solo por quota. Las estrellas premian **precisión** (movimientos fallados = intentos gastados): 3★ sin fallar, 2★ hasta 3 fallos, 1★ completar. La UI muestra "😌 Relax" en vez del cronómetro (hook `setMode`, estado `mode.relax`, CSS `.time-big.relax`).
+- **Fiebre de combos** (`comboFever: true`): las cascadas "por azar" (combo≥2), que normalmente solo dan tiempo, **también descuentan del objetivo** y vuelan al chip. Toast "¡Fiebre de combos! +N cuentas 🔥".
+- **Objetivo que cambia** (`targetTo: N`): al llegar a **media quota**, `_maybeSwitchTarget` cambia el objetivo fijo a `targetTo`, **regenera el bag** (nuevos dígitos calientes con `makeGen`), reacomoda el tablero (`_healFixedBoard`) y avisa por coach (que pausa el reloj un instante). Flag `this.switched` evita repetirlo.
+
+**Verificación:** build OK + simulación de **400 tableros por nivel** (incluyendo ambos objetivos del switch 10 y 6): **0 cuentas ya formadas, 0 tableros bajo el mínimo de jugadas, 0 deadlocks**. El generador target-rich funciona igual para objetivo array y para todos los twists.
+
+**Ajustes finos del generador (mismo día):**
+- **Cifras acotadas al objetivo:** el pool "frío" (variedad) de `makeTargetGen` se limita a cifras **≤ objetivo mayor** (`Number(d) <= maxT`). Antes, con `digits: range(1,9)` en todos los niveles, aparecían 6/7/8/9 inútiles en un tablero de "formá 5" (donde solo sirven 1-4). Ahora el tablero queda lleno de operandos del objetivo.
+- **Balance del objetivo DOBLE (mínimo de jugadas POR objetivo):** en `[5,10]` el 10 (fácil de armar con cualquier par 1-9) se comía el tablero y el 5 casi no tenía jugadas. Tres capas: (1) el generador elige **primero un objetivo al azar y después uno de SUS operandos** (`hotByTarget`) → densidad pareja; (2) `_healFixedBoard` garantiza jugadas por objetivo (`minMovesEach`, default 2) en un bucle, con `addTargetMovesSubtle(..., avoid)` = todos los objetivos para no formar el otro; (3) respaldo: `plantTargetMove(grid, gen, onlyTarget)` planta jugadas (incluido el operador) para el objetivo faltante. Sim 4000 tableros: **mín. 2 jugadas para CADA objetivo**, promedio ~4.5/~4.1, 0 formadas. Campo de nivel nuevo: `minMovesEach`.
+
+**UI — cuentas restantes pegadas al objetivo:** el tally (palitos) se movió de arriba-derecha a **dentro de `.obj-card`**, a la derecha del "Formá [N]" (contador pegado al objetivo, tipo Candy Crush). Se quitó el **verde persistente** del chip al cumplir (borradas `.tchip.achieved`/`::after` y el estado `achieved`/hook `targetHit`); el chip queda dorado y solo **titila** (escala + brillo/glow dorado por WAAPI en `flyTokens`, un pulso por ficha que llega) mientras absorbe.
+
+**Reset de progreso:** `PROGRESS_VERSION` subido a `'4'` (cambió contenido y ORDEN de los niveles → todos empiezan de cero al redeployar).
+
+### Cómo agregar/reordenar niveles (y el pendiente de progreso por `id`)
+`LEVELS` (en `levels.js`) es un **array ordenado**; agregar un nivel en cualquier posición = **insertar un objeto literal**. Todo se recalcula solo (mapa, `LEVEL_COUNT = LEVELS.length`, desbloqueos por estrellas). No hay que tocar nada más.
+
+⚠️ **Único costo hoy:** el progreso se guarda en `localStorage.math_progress` **indexado por POSICIÓN** (`{ stars: { 0: 3, 1: 2, ... } }`). Insertar/reordenar en el medio corre los índices → las estrellas quedan asignadas al nivel equivocado. Por eso, cada vez que se reestructura, hay que **subir `PROGRESS_VERSION`** (borra el progreso una vez; ver §14). En etapa de desarrollo esto es inofensivo (decisión del usuario, 2026-07-04: por ahora no importa perder progreso).
+
+🔜 **PENDIENTE / FUTURO (cuando haya jugadores reales con progreso a conservar):** migrar el progreso a estar **indexado por un `id` estable de nivel** en vez de por índice. Plan:
+1. Agregar un campo `id` único e inmutable a cada nivel en `LEVELS` (ej. `id: 'suma-05'`, `id: 'suma-doble-5-10'`). El `id` NO cambia aunque el nivel se mueva de posición.
+2. Guardar el progreso como `{ stars: { 'suma-05': 3, ... } }` (por `id`), no por índice numérico.
+3. Al leer/escribir estrellas y decidir desbloqueos, usar `level.id` en lugar de `index`. Migrar el `math_progress` viejo (por índice) mapeando índice→id una única vez, o simplemente resetear si aún no hay usuarios que importen.
+4. Con esto, **insertar/reordenar/renombrar niveles NO borra el avance de nadie** y se puede dejar de bumpear `PROGRESS_VERSION` por cambios de orden (solo por cambios que afecten la validez de las estrellas guardadas).
+
+**Pendiente del plan A+B:** los twists están en el MOTOR pero aún **no** hay desbloqueos/telegrafiado en el mapa (§6.5) ni tienda de estrellas. Próximo gran bloque = **mundos + desbloqueos** (DISEÑO §6-7).
+
+## 16. Mundo Resta + limpieza de niveles (2026-07-04)
+
+- **Se eliminaron los 18 niveles avanzados viejos** (prototipo con mecánica rotativa `tMin/tMax`). Quedan **15 niveles**: 10 Suma (§15, intactos) + **5 Resta nuevos** con la mecánica pulida (target fijo, target-rich, siembra local, dígitos útiles). Desbloqueo secuencial (1★ abre el siguiente).
+- **Mundo Resta (11-15):** `ops:['−']`, resultados chicos ≥0 (sin negativos), dígitos 1-9, quota 10. `11 Primera resta`(1) · `12 Diferencia 2`(2) · `13 Diferencia 3`(3) · `14 Diferencia 5`(5) · `15 Doble resta`([2,4], twist doble objetivo). teach→test→twist, números bajos primero.
+- **Generador operación-agnóstico:** la regla del pool "frío" pasó de "dígitos < objetivo" (solo servía para suma) a **"dígitos = operandos útiles"** (los que devuelve `targetTriples`, que maneja `+ − × ÷`). En resta el minuendo es mayor al resultado (9−4=5) → esos dígitos ahora aparecen; en suma sigue sin salir un "5" en formá-5. Verificado 1500 tableros/nivel: 0 formadas, 0 deadlocks, resultados ≥0.
+- **`PROGRESS_VERSION='5'`** (cambió cantidad y contenido → reset).

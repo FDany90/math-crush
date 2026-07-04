@@ -56,9 +56,13 @@ async function upsertPlayer() {
 }
 
 // llamar una vez al arrancar la app
+let opened = false
 export function initMetrics() {
   getPlayerId()
   upsertPlayer()
+  // 'open' = un día activo del jugador (base para DAU y retención D1/D7/D30).
+  // Una sola vez por carga (evita duplicados por StrictMode/hot-reload en dev).
+  if (!opened) { opened = true; trackEvent('open', null) }
 }
 
 // contador local por nivel (fallback y para ver rápido en consola)
@@ -74,7 +78,7 @@ function bumpLocal(kind, levelIdx) {
 // registrar un evento (fire-and-forget: no bloquea el juego)
 export function trackEvent(kind, levelIdx, meta = {}) {
   bumpLocal(kind, levelIdx)
-  console.log('[metrics]', kind, '· nivel', levelIdx + 1, meta)
+  console.log('[metrics]', kind, levelIdx == null ? '' : '· nivel ' + (levelIdx + 1), meta)
   if (!supabase) return
   supabase
     .from('events')

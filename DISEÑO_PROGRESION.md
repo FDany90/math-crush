@@ -429,6 +429,35 @@ niveles (§5). Más adelante (fase madura, ~nivel 30+) se puede abrir un **menú
 "Modos"** aparte, como sistema de re-juego. **No** son el eje de progresión: el eje
 son los mundos.
 
+#### 🔮 IDEA PENDIENTE — Modo Libre / Acumulación (hito cada ~10 niveles)
+> Documentado 2026-07-04. Idea del usuario, **no implementada**. Poner un nivel especial
+> **cada ~10 niveles** (encaja con la cadencia de hitos del §6.4) que rompa el loop de
+> "formá el mismo número N veces" por uno **acumulativo y sin objetivo fijo**.
+
+- **Mecánica (suma):** se puede formar **cualquier suma válida** (sin restricción de qué
+  número hacer). Cada cuenta que hacés **suma su resultado a un total acumulado**. Meta:
+  **llegar a un número grande, ej. 100.** (Ej.: hacés 7+2=9 → total 9; después 4+5=9 →
+  total 18; y así hasta 100.) Es "libre": el jugador elige qué cuentas armar.
+- **Mecánica (resta):** al revés — **arrancás en 100** (o el número) y cada resta **baja**
+  el total. Meta: **llegar a 0** (o lo más cerca posible).
+- **Por qué mola:** da **autonomía** (§1.1, elegís qué cuentas) y variedad; el total
+  acumulado es un **goal-gradient** natural (barra que sube/baja hacia la meta); premia
+  hacer cuentas grandes (llegás más rápido) → decisión estratégica sin cambiar la mecánica
+  base de mover fichas.
+- **Encaje:** como **hito cada ~10 niveles** (cierre de mundo / recompensa) o como modo
+  desbloqueable en el menú "Modos" de la fase madura. Nombre tentativo: **"Modo Libre"**
+  o **"Acumulación"** (suma) / **"Cuenta regresiva"** (resta, 100→0).
+- **Preguntas abiertas (a definir al implementarlo):**
+  1. ¿Qué pasa si te **pasás** de 100 (suma) o de 0 (resta)? ¿Overshoot permitido y ganás
+     igual, o hay que caer justo? (Caer justo = más difícil/estratégico; permitir pasarse =
+     más relajado.)
+  2. ¿Hay **reloj** o es libre (tipo relax)? Probablemente contrarreloj para darle tensión,
+     pero se puede combinar con relax.
+  3. ¿Las **estrellas** se dan por rapidez, por caer justo, o por eficiencia (menos cuentas)?
+  4. En resta, ¿se permite bajar de 0 a **negativos** (una vez introducido ese mundo)?
+  5. Necesita UI nueva: **barra/contador de total acumulado** hacia la meta (distinto del
+     tally de quota actual). Motor: en vez de `target` fijo + `quota`, un `accumulate:{from,to}`.
+
 ### 7.6 El mapa con mundos bloqueados (tu idea)
 Mostrar el mapa completo con los mundos **futuros visibles pero bloqueados** — es
 justo la palanca de **anticipación** (§1.4) y hay que aprovecharla:
@@ -438,6 +467,26 @@ justo la palanca de **anticipación** (§1.4) y hay que aprovecharla:
 - Al desbloquear: transición celebratoria (la mascota presenta el mundo nuevo).
 - Esto convierte el mapa en el motivador de largo plazo: *"quiero llegar a
   Potencias"*.
+
+#### 🔮 IDEA PENDIENTE — Opciones en el menú/mapa + Reward diario
+> Documentado 2026-07-04. Idea del usuario, **no implementada**. El mapa (pantalla
+> principal) hoy no tiene "opciones"/features accesorias. Pensar una zona (ej. barra
+> superior o botones flotantes) con accesos a: **reward diario**, **tienda de estrellas**
+> (§6.2), **racha**, ajustes, etc.
+
+- **Reward diario:** un regalo por jugar cada día (estrellas para la tienda, un cosmético,
+  o polvo de tiza). Un ícono en el mapa que, al tocarlo, entrega el premio del día.
+- **⚠️ LÍNEA ROJA ÉTICA (§1.6, §8 — CRÍTICO en público infantil):** el reward diario es OK
+  **solo si es celebratorio y NO coercitivo**. Regalo por aparecer, **nunca castigo por
+  faltar**. Prohibido: "logueate todos los días o perdés X", countdowns de FOMO, rachas que
+  se resetean de forma dolorosa, tiendas que rotan cada 24h para presionar. Una racha suave
+  que **celebra** (🔥 "¡3 días seguidos!") sí; una que **amenaza** no.
+- **Qué puede dar (§1.3, §6.3):** cosméticos / estrellas (para cosméticos). **NUNCA** power-ups
+  ni ventajas que afecten la competencia (eso se "compra el logro" y socava la motivación).
+- **Preguntas abiertas:** ¿racha o regalo plano por día? ¿escala el premio con días seguidos
+  (sin castigo al cortarse)? ¿qué da exactamente? ¿cómo se muestra sin generar presión?
+- Relación: encaja con la **tienda de estrellas** (§6.2) como fuente extra de estrellas
+  "por aparecer", y con la **racha suave** de la Fase B (§3, punto 5).
 
 ---
 
@@ -472,7 +521,143 @@ justo la palanca de **anticipación** (§1.4) y hay que aprovecharla:
 
 ---
 
-## 10. Fuentes (primarias en negrita)
+## 10. Retención como norte + modelo de publicidad (opt-in)
+
+> Decisión de negocio (2026-07-04): el **objetivo de Math Crush es la RETENCIÓN**
+> (D1, D7 y D7+), no el volumen de descargas ni exprimir ARPU con publicidad
+> agresiva. Esta sección fija por qué, cómo se mide, y el modelo de ads elegido.
+
+### 10.1 Por qué retención y no volumen (benchmark de competidores)
+Investigación ligera de mercado (2026-07-04) sobre los dos competidores directos
+más visibles en el top de puzzle matemático mobile:
+
+| Juego | Estudio | Descargas aprox. | Modelo | Lectura |
+|---|---|---|---|---|
+| **Crossmath** (Math Puzzle Games) | Guru Smart Holding | ~37M Android + ~12.5M iOS; ~1.2M/mes | Ads intrusivos + IAP | ARPU bajo, vive del volumen |
+| **Number Match** | Easybrain (Miniclip/Tencent) | portfolio +2.5 mil M; ~1.4M/mes | Ads a escala + IAP | Vive de la distribución de Tencent |
+
+- Las estimaciones de ingresos de herramientas gratis (~$63K/mes IAP Crossmath iOS,
+  ~$10K/mes IAP Number Match) son **casi solo IAP y subestiman los ads** — que es de
+  donde ambos sacan la plata. El dato real por ads no es público (requiere Sensor
+  Tower / AppMagic de pago).
+- 🔑 **Conclusión:** ambos ganan por **escala de instalaciones + publicidad**, con
+  juegos que el propio usuario probó y encontró **"más aburridos que el mío"**. No se
+  puede competir contra el presupuesto de UA de Tencent (Number Match) ni tiene
+  sentido pelear por descargas baratas.
+- **La ventaja de Math Crush es ser más divertido → mejor retención y sesión.** El
+  eje competitivo es **D7/D30 y minutos por sesión**, no descargas. Es coherente con
+  toda esta guía: la diversión (competencia + autonomía, §1) es justo lo que a la
+  competencia le falta.
+
+### 10.2 Instrumentación (ya implementada, 2026-07-04)
+No se puede optimizar lo que no se mide. Se instrumentó la retención **antes** de
+construir features de retención:
+- **Evento `open`** (`metrics.js` → `initMetrics`): se registra al abrir la app (una
+  vez por carga; `level_idx` null). Es la base de **DAU** y del denominador de
+  retención. Antes solo se sabía cuándo alguien *empezaba un nivel*, no cuándo
+  *volvía*.
+- **Sección "Retención" en `/metricas`** (`Metrics.jsx` → `retention()`): calcula
+  cohortes **D1 / D3 / D7 / D14 / D30** desde `created_at` + el UUID persistente que
+  ya existía, y un gráfico de **actividad diaria** (activos + nuevos, últimos 14
+  días). Semáforo contra benchmark casual (**D1 ~35-45%, D7 ~10-15%**).
+- Eventos futuros ya documentados en `supabase.sql`: `rewarded_ad` (meta:
+  `placement`, `reward`) y `daily_reward` (meta: `day`, `reward`, `boosted`).
+- ⚠️ *Caveats:* la retención se cuenta **por dispositivo** (UUID en localStorage;
+  limpiar el navegador = jugador nuevo) y el bucketing de días es **UTC**. Aceptable
+  para playtest; si escala, pasar a identidad más estable + tz local.
+- **Método de trabajo:** instrumentar → shippear la feature → **leer si D1/D7 sube**.
+  No adivinar el efecto; medirlo.
+
+### 10.3 Modelo de publicidad: SOLO rewarded, opt-in, nunca invasivo
+Regla dura de producto, alineada con la ética de §1.5-1.6 y con la **autonomía**
+(§1.1: dejar al jugador *elegir* respeta la autonomía; obligarlo la rompe):
+
+- ✅ **Solo rewarded (recompensado) y por elección.** El jugador ve **de 1 a 5
+  anuncios/día si le apetece**; el rewarded por naturaleza lo pide él, así que casi
+  se autolimita.
+- 🔴 **Nada de interstitials** entre niveles, **nada de banners** sobre el gameplay,
+  nada forzado. Esto es lo que hace la competencia y es justo lo que NO hacemos.
+- **Placements previstos** (todos opt-in, el beneficio base siempre disponible sin
+  ad):
+  1. **+2 min al perder por tiempo** — es un "continue" (ya existe `MAX_CONTINUES`);
+     da otra oportunidad, **no** resuelve el nivel. Mantener el tope.
+  2. **Power-up puntual desde el menú** a cambio de ver un anuncio antes.
+  3. **Boost del regalo diario** (ver §11) — la fuente natural de los 1-5 ads/día.
+
+### 10.4 Candado de diseño: el ad no puede robar la maestría
+La competencia es la palanca #1 (§1.2) y las recompensas extrínsecas la socavan
+(§1.3). Por eso:
+- Un rewarded **ayuda, no juega por el jugador.** Si un power-up "resuelve" el
+  tablero, se gana pero no se *siente* el logro → menos disfrute y menos retención.
+- Los rewarded **nunca dan estrellas** ni desbloquean niveles/mundos (eso es solo por
+  habilidad, §7.3). Solo dan helpers acotados (pistas, +tiempo) y **cosméticos**.
+
+### 10.5 El trade-off, asumido a conciencia
+Solo-rewarded = **se gana bastante menos por usuario** que quien mete interstitials.
+Es una **apuesta deliberada** a retención + reputación en vez de exprimir. Para un
+juego cuya tesis es "más divertido que los competidores", es la decisión correcta;
+solo debe quedar claro que es a propósito, no un descuido.
+
+---
+
+## 11. Regalo diario ("Regalo del día")
+
+> Diseño del daily reward, atado a las dos reglas de §10 (retención + no abusar de
+> ads) y a la ética de §1.3/§1.6 (nada de monedas/loot, nada de FOMO/culpa).
+
+### 11.1 Tres candados de diseño (no negociables)
+1. **El regalo NUNCA da estrellas** ni desbloquea niveles/mundos → eso se gana solo
+   con habilidad (§7.3). Si no, se rompe la sensación de logro (§1.2).
+2. Los premios **funcionales** (pistas, +tiempo) **ayudan pero no resuelven** el
+   nivel.
+3. Los **cosméticos** son el premio estrella: dan alegría **sin tocar la
+   dificultad**. Es la moneda emocional segura (modelo Royal Match, §1.7 / §6).
+
+### 11.2 Estructura: "Semana de bienvenida" + regalo perpetuo
+En vez de una racha castigadora (§1.6 **refutó** el FOMO/culpa), un **calendario de
+los primeros 7 días distintos** del jugador — que es *literalmente* la ventana D1-D7,
+el norte de §10:
+
+| Día | Premio | Tipo |
+|---|---|---|
+| 1 | 3 pistas + saludo de la mascota | funcional suave |
+| 2 | 🎨 Color de tiza nuevo (fichas) | cosmético |
+| 3 | ⏱️ 1 token "+2 min" | funcional (opt-in) |
+| 4 | 🦉 Accesorio de la mascota (gorrito) | cosmético |
+| 5 | 3 pistas + doodle de fondo | mixto |
+| 6 | 🖼️ Marco de pizarrón alternativo | cosmético |
+| **7** | ✨ **Tiza dorada / skin de mascota** | **cosmético héroe** |
+
+- **Se cuenta por días jugados distintos, NO consecutivos** → si falta un día no
+  pierde nada, **no** hay pantalla roja de "¡rompiste tu racha!". Framing siempre
+  positivo ("¡Día 4! 🎉"). Coherente con §1.6 y el checklist ético (§8).
+- **Después del día 7 (D7+):** regalo perpetuo chico rotativo (1-3 pistas *o* una
+  pieza cosmética de un pool). Sostiene el hábito sin treadmill.
+
+### 11.3 Tie-in con rewarded ads (opt-in)
+Cada regalo tiene dos botones: **"Recoger"** (gratis, siempre) y **"Mejorar 🎬"**
+(ver 1 anuncio → duplica las pistas / suma una pieza cosmética / adelanta el
+cosmético). **Nunca obligatorio**; el regalo base se toma sin ad. Esto, más los otros
+placements de §10.3, genera naturalmente los 1-5 rewarded/día sin ser invasivo.
+
+### 11.4 Secuencia de implementación (realista)
+El sistema de cosméticos/tienda todavía **no existe** (planificado en §6). Por eso:
+- **v1 (se puede shippear ya):** calendario con **pistas + tokens de +tiempo**
+  solamente + boost por ad. El loop de retención queda vivo y **medible** con la
+  retención de §10.2.
+- **v2:** primer cosmético real (color de tiza) → el regalo empieza a soltar
+  cosméticos.
+- **v3:** integrado con la tienda de estrellas (§6) cuando exista.
+
+### 11.5 Honestidad de diseño
+Que el regalo diario *mueva* D1/D7 está **alineado** con la evidencia de anticipación
+(§1.4) y de hábito, pero es buena práctica de diseño, **no un número medido** para
+este juego. Por eso se instrumentó primero (§10.2): se valida leyendo la retención,
+no se asume.
+
+---
+
+## 12. Fuentes (primarias en negrita)
 
 **Académicas / primarias**
 - **Ryan, Rigby & Przybylski (2006), "The Motivational Pull of Video Games", *Motivation and Emotion* 30:344-360** — SDT, competencia/autonomía/relación.

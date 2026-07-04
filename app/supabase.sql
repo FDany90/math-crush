@@ -12,11 +12,14 @@ create table if not exists players (
 );
 
 -- Log de eventos (una fila por acción). kind:
---   'start'    → empezó un nivel
---   'win'      → completó el nivel   (meta: { stars, timeLeft })
---   'lose'     → perdió el nivel     (meta: { reason, left, timeLeft })
---   'hint'     → pidió una pista
---   'continue' → usó "+1 minuto"
+--   'open'        → abrió la app (level_idx null) — base de DAU y retención D1/D7/D30
+--   'start'       → empezó un nivel
+--   'win'         → completó el nivel   (meta: { stars, timeLeft })
+--   'lose'        → perdió el nivel     (meta: { reason, left, timeLeft })
+--   'hint'        → pidió una pista
+--   'continue'    → usó "+1 minuto"
+--   'rewarded_ad' → (futuro) vio un anuncio opt-in (meta: { placement, reward })
+--   'daily_reward'→ (futuro) reclamó el regalo del día (meta: { day, reward, boosted })
 create table if not exists events (
   id          bigint generated always as identity primary key,
   player_id   uuid not null,

@@ -67,6 +67,46 @@ function aggregate(events) {
   return { byLevel, reachHist, totals, playerList }
 }
 
+// ---------- retención: días activos por jugador (cualquier evento cuenta) ----------
+// Usa el UUID anónimo (localStorage) + created_at. Cada día con ≥1 evento = día activo.
+// Dn = de los jugadores con ≥n días desde su 1er día, cuántos volvieron EXACTO el día +n.
+const DAY_MS = 86400000
+const dayNum = (iso) => Math.floor(Date.parse(iso) / DAY_MS)   // día absoluto (UTC)
+
+function retention(events, nowMs) {
+  const byPlayer = new Map()
+  for (const e of events) {
+    const t = Date.parse(e.created_at); if (isNaN(t)) continue
+    const d = Math.floor(t / DAY_MS)
+    let p = byPlayer.get(e.player_id)
+    if (!p) { p = { first: d, days: new Set() }; byPlayer.set(e.player_id, p) }
+    if (d < p.first) p.first = d
+    p.days.add(d)
+  }
+  const today = Math.floor(nowMs / DAY_MS)
+  const buckets = [1, 3, 7, 14, 30].map((n) => {
+    let elig = 0, back = 0
+    for (const p of byPlayer.values()) {
+      if (today - p.first >= n) { elig++; if (p.days.has(p.first + n)) back++ }
+    }
+    return { n, elig, back, pct: elig ? Math.round((back / elig) * 100) : null }
+  })
+  // DAU + nuevos, últimos 14 días
+  const daily = []
+  for (let i = 13; i >= 0; i--) {
+    const day = today - i
+    let active = 0, fresh = 0
+    for (const p of byPlayer.values()) {
+      if (p.days.has(day)) active++
+      if (p.first === day) fresh++
+    }
+    daily.push({ day, active, fresh })
+  }
+  let returning = 0
+  for (const p of byPlayer.values()) if (p.days.size > 1) returning++
+  return { buckets, daily, players: byPlayer.size, returning }
+}
+
 export default function Metrics() {
   const supa = getSupabase()
   const [events, setEvents] = useState(null)
@@ -97,7 +137,9 @@ export default function Metrics() {
   useEffect(() => { load() }, [])
 
   const agg = useMemo(() => aggregate(events || []), [events])
+  const ret = useMemo(() => retention(events || [], Date.now()), [events])
   const maxReach = Math.max(1, ...agg.byLevel.map((L) => L.startedBy.size))
+  const maxDau = Math.max(1, ...ret.daily.map((d) => d.active))
 
   return (
     <div className="mtx">
@@ -122,6 +164,37 @@ export default function Metrics() {
             <Kpi label="Perdidas" value={agg.totals.losses} />
             <Kpi label="Pistas" value={agg.totals.hints} accent="#7fdfff" />
             <Kpi label="+1 minuto" value={agg.totals.continues} accent="#ffd23f" />
+          </section>
+
+          {/* Retención: ¿vuelven al día siguiente / a la semana? (el NORTE del juego) */}
+          <section className="mtx-card">
+            <h2>Retención <small>(días activos por jugador · el objetivo del juego)</small></h2>
+            <div className="mtx-ret">
+              {ret.buckets.map((b) => (
+                <div key={b.n} className="mtx-retcell">
+                  <div className="mtx-retval" style={{ color: b.pct == null ? '#6b7a75' : b.pct >= 30 ? '#7fe0a0' : b.pct >= 15 ? '#ffd23f' : '#ff7a7a' }}>
+                    {b.pct == null ? '—' : b.pct + '%'}
+                  </div>
+                  <div className="mtx-retlabel">D{b.n}</div>
+                  <div className="mtx-retsub">{b.elig ? `${b.back}/${b.elig}` : 'sin datos'}</div>
+                </div>
+              ))}
+            </div>
+            <p className="mtx-hint">
+              Dn = de los que ya tuvieron {`≥`}n días desde su 1ª vez, cuántos volvieron el día n.
+              Benchmark casual: D1 ~35-45%, D7 ~10-15%. {ret.returning} de {ret.players} jugadores volvieron algún otro día.
+            </p>
+            <h2 style={{ marginTop: 18 }}>Actividad diaria <small>(últimos 14 días · ▓ activos · ● nuevos)</small></h2>
+            <div className="mtx-dau">
+              {ret.daily.map((d) => (
+                <div key={d.day} className="mtx-daucol" title={`activos ${d.active} · nuevos ${d.fresh}`}>
+                  <div className="mtx-daubar" style={{ height: Math.round((d.active / maxDau) * 100) + '%' }}>
+                    <span className="mtx-daun">{d.active || ''}</span>
+                  </div>
+                  {d.fresh > 0 && <div className="mtx-daufresh" style={{ height: Math.round((d.fresh / maxDau) * 100) + '%' }} />}
+                </div>
+              ))}
+            </div>
           </section>
 
           {/* Funnel: cuántos jugadores llegaron a cada nivel + cuántos lo ganaron */}

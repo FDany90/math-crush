@@ -66,17 +66,23 @@ const WORLDS = [
 ]
 const worldOf = (i) => WORLDS[Math.min(WORLDS.length - 1, Math.floor(i / 10))]
 const zoneColor = (i) => worldOf(i).color
-// Sumas de tiza blanca repartidas por la fase de Suma del mapa (decorativas, simples, pocas).
-// Cada una coincide con el objetivo del nivel cercano; L8/L9 muestran sumas de 2 OPERADORES
-// (la mecánica de súper ficha). `at` = índice de nivel de referencia (para la altura).
-const SUMA_DOODLES = [
-  { at: 1, text: '2+3' },     // nivel 2 → 5
-  { at: 2, text: '2+4' },     // nivel 3 → 6
-  { at: 3, text: '4+4' },     // nivel 4 → 8
-  { at: 5, text: '4+6' },     // nivel 6 → 10
-  { at: 6, text: '5+7' },     // nivel 7 → 12
-  { at: 7, text: '3+4+5' },   // nivel 8 → 12 (2 operadores)
-  { at: 8, text: '4+5+6' },   // nivel 9 → 15 (2 operadores)
+// Cuentas de tiza blanca repartidas por cada fase del mapa (decorativas, simples, ~7 por mundo).
+// Cada una coincide con el objetivo del nivel cercano. `at` = índice de nivel de referencia
+// (para la altura). Suma: L8/L9 muestran cuentas de 2 OPERADORES (mecánica de súper ficha).
+const MAP_EQS = [
+  // ---- SUMA (1-10) ----
+  { at: 1, text: '2+3' }, { at: 2, text: '2+4' }, { at: 3, text: '4+4' },
+  { at: 5, text: '4+6' }, { at: 6, text: '5+7' },
+  { at: 7, text: '3+4+5' }, { at: 8, text: '4+5+6' },   // 2 operadores
+  // ---- RESTA (11-20) ----
+  { at: 10, text: '7−3' }, { at: 11, text: '9−4' }, { at: 12, text: '9−3' },
+  { at: 14, text: '8−3' }, { at: 15, text: '9−2' }, { at: 17, text: '8−2' }, { at: 18, text: '7−4' },
+  // ---- MULTIPLICACIÓN (21-30) ----
+  { at: 20, text: '2×3' }, { at: 21, text: '2×4' }, { at: 22, text: '3×4' },
+  { at: 24, text: '2×6' }, { at: 25, text: '4×6' }, { at: 27, text: '3×8' }, { at: 28, text: '4×3' },
+  // ---- DIVISIÓN (31-40) ----
+  { at: 30, text: '6÷3' }, { at: 31, text: '9÷3' }, { at: 32, text: '8÷4' },
+  { at: 34, text: '8÷2' }, { at: 35, text: '4÷1' }, { at: 37, text: '4÷2' }, { at: 38, text: '6÷2' },
 ]
 const CHALK_COLORS = ['#7fdfff', '#ff79b8', '#ffd23f', '#b98cff', '#7bed9f', '#f4f1e8']
 const DOODLE_TYPES = ['star', 'house', 'tree', 'planet', 'book', 'spark', 'heart', 'triangle', 'bulb']
@@ -746,8 +752,8 @@ export default function App() {
                 </span>
               ))}
             </div>
-            {/* sumas de tiza blanca (fase Suma): decorativas, del lado opuesto al nodo */}
-            {SUMA_DOODLES.map((d, k) => {
+            {/* cuentas de tiza blanca por fase (suma/resta/mult/div): decorativas, opuestas al nodo */}
+            {MAP_EQS.map((d, k) => {
               const p = mapGeo.pts[d.at]
               if (!p) return null
               const onLeft = p.x / MAP_W < 0.5

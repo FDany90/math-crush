@@ -1109,3 +1109,34 @@ motor jamás debe convertirlos en un número para "asegurar" una jugada.
 - **Usable a mano:** el + infestado SÍ cuenta como operador válido si el jugador arma la cuenta a mano
   (no lo enmascaramos para la DETECCIÓN de cuentas del jugador), pero queda fuera de toda REESCRITURA
   automática. (Decidir si además bloquea o no; lo importante: inmutable para el motor.)
+
+#### 18.6.2 Jefe SUMA (L10) — estructura de 2 FASES por HP (idea del usuario, 2026-07-05)
+Boss HP de referencia: 500 (ajustable). Las fases se disparan por % de HP restante.
+
+**FASE 1 — EXPANSIÓN del escenario (100% → 50% HP):**
+- El tablero arranca **5×5** y CRECE hasta **7×7**. Cada vez que el HP cruza un umbral de **10%** se
+  agrega **una fila o columna** (alternando), **hasta el 60%**. Umbrales: 90% → +fila, 80% → +col,
+  70% → +fila, 60% → +col ⇒ 4 agregados = 5×5 → 7×7. Entre 60% y 50%: ya está en 7×7, sin más crecer.
+- Amenaza: NINGUNA propia (es espectáculo + establece el tema "crecer/agregar"). El jugador daña al
+  jefe normal (cada cuenta le baja HP); las celdas nuevas caen con fichas frescas.
+- (Opcional lindo: las filas/columnas nuevas podrían traer 1-2 fichas ya infestadas como TELEGRAFÍA
+  de la fase 2.)
+
+**FASE 2 — INFESTACIÓN de + (50% → 0% HP):**
+- Al llegar a **50%** arranca la infestación (§18.6): los + suben desde abajo y se expanden. Si cubre
+  todo / te deja sin jugadas → PERDÉS. Se retrocede jugando cuentas adyacentes.
+- Doble tarea: seguís bajándole HP al jefe **y** conteniendo el frente. Ganás si lo dejás en 0 antes de
+  que la marea de + te tape. Los + infestados son INMUTABLES para el motor (§18.6.1).
+
+**Balance a tunear:** 250 HP para la fase 2 (~36 cuentas con objetivos 5/6/8/10) contra un frente que
+sube en un 7×7 (~7 filas de colchón). Velocidad de avance del frente = la palanca principal; empezar
+lento. Umbrales de fase configurables.
+
+**Impl (piezas nuevas, esfuerzo ALTO — a estadificar):**
+1. **Infestación** (§18.6): CELL_STATE + spread + break-por-contacto + protección/inmutabilidad
+   (§18.6.1) + loss 'flooded'. → SE PUEDE construir y probar SOLA primero.
+2. **Resize del tablero EN VIVO** (agregar fila/columna sin destruir lo existente): hoy `size` es fijo
+   por nivel; Board/Controller no crecen a mitad de partida. Requiere agregar celdas + relayout +
+   resize del canvas. Es la pieza más nueva del motor.
+3. **Sistema de FASES por HP** en el controller (umbrales → disparar expansión / activar infestación).
+- **Orden sugerido:** (1) infestación sola en un nivel de prueba → (2) fases por HP → (3) resize en vivo.

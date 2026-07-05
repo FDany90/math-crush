@@ -484,3 +484,62 @@ visual/shell); ads no se prueban en web (usar capa `ads.js` + stub); plataforma 
 ### 19.6 Reset de progreso
 `PROGRESS_VERSION` subió a `'8'` (cambió contenido de varios niveles). Triple-clic en un nodo
 bloqueado sigue sirviendo para saltar a cualquier nivel a probar.
+
+## 20. El Rey (jefes), jefe Suma de 2 fases, infestación, súper ficha y REFACTOR (2026-07-05 bis)
+
+Sesión larga. TODO pusheado a `qa` (último commit `694347e`). Diseño de mecánicas de jefe en
+**DISEÑO_PROGRESION.md §16-18** (leer antes de tocar jefes).
+
+### 20.1 Jefes = "El Rey [signo]"
+Los 4 jefes se renombraron de "Jefe: el signo X" a **"El Rey +/−/×/÷"** (nombre de nivel, coaches,
+`levelBrief`, label "HP restante del Rey"). Los coaches genéricos (llegada, congelar) arman el nombre
+con `level.ops[0]`.
+
+### 20.2 Jefe SUMA (nivel 10) = "El Rey +" de 2 FASES — la mecánica estrella
+`levels.js` L10: `size:5, boss:{ hp:500, expandTo:7, infestAt:0.5 }`. Lógica en **`game/hazards.js`**.
+- **FASE 1 (100%→50% HP):** (a) el tablero CRECE de a una fila/columna (alternando) en 90/80/70/60%
+  HP → 5×5 a 7×7, NO cuadrado entre pasos (`Board.addRow`/`addCol`, canvas toma ancho×alto y el
+  `.board-wrap` ajusta su aspect-ratio). (b) Cada 10s el Rey esparce 2 "+" AISLADOS al azar
+  (`_scatterPlus`, animados con pop+destello, NUNCA forman cuenta —`lineFormsTarget`—, evitan la
+  fila 0). Los + son inmutables al mantenimiento y usables a mano.
+- **FASE 2 (desde 50%):** arranca la INFESTACIÓN: apenas cruza 50% planta la primera fila, luego sube
+  una fila cada 15s (`INFEST_MS`), llenando de abajo hacia arriba. Si el frente tapa la fila 0 →
+  perdés (reason 'flooded'). El reintento limpia todo.
+- **Coaches por etapa (1 vez POR PARTIDA):** al 1er +, a la 1ra expansión, y al arrancar la fase 2.
+- `_bossPhaseCheck()` (en `_afterMove`) dispara todo por umbrales de HP. El Rey + NO usa freeze; los
+  otros jefes (−/×/÷) SÍ (freeze genérico, hasta que les diseñemos su ataque).
+
+### 20.3 Infestación de + = mecánica AISLADA y reutilizable
+Estado `CELL_STATES.infested` (un + común, sin look; inmutable, usable). Flag de nivel `infest:true`
+la activa en cualquier nivel (independiente de jefes). **Nivel de prueba TEMPORAL 41 "🧪 Infestación"**
+(7×7, target 10) — ⚠️ QUITAR antes de un release.
+
+### 20.4 Súper ficha (recordatorio, ver §19.4 + DISEÑO §16)
+Nivel 8 "Súper doble ✨" [9,12] y nivel 9 "Súper triple ✨" [9,12,15]: cuenta de 2 operadores → súper
+ficha + que explota en CRUZ (suma todos los números de fila+columna). Tutorial + latido + efectos.
+
+### 20.5 Balance Resta (11-19)
+Metas bajadas de 150→350 a **100→200** (objetivos bajos = menos pts/cuenta); contrarreloj L15 a 150.
+A rebalancear tras jugarlo.
+
+### 20.6 REFACTOR / modularización (etapas 1-2)
+`controller.js` 1047→749. Extraídos como MIXIN (`Object.assign(Controller.prototype, …)`, mismo `this`,
+sin cambio de comportamiento): **`game/hazards.js`** (jefe/hazards — acá va cada mecánica de jefe
+nueva), **`game/boardMaintenance.js`** (`_healFixedBoard`/`_pickTargets`). Y **`pixi/cellStates.js`**
+(registro de estados de ficha aislado). App.jsx ya estaba modularizado (`mapView.jsx`, `Popups.jsx`,
+`uiHelpers.js`, `storage.js`).
+
+### 20.7 Fixes de UI
+Pop-ups de resultado/inicio más chicos; pop-up de inicio con "NIVEL X" grande y nombre chico; recortes
+de texto (fuente Tiza) arreglados; fix "abandonar jefe" (frena el controller); "Puntos que faltaron".
+
+### 20.8 CÓMO SEGUIR (próximos pasos)
+1. **Playtest en QA:** el Rey + de 2 fases (expansión no-cuadrada, scatter, infestación, coaches),
+   balance Resta 100-200, súper ficha niveles 8-9.
+2. **Jefe − (próximo mecánico):** implementar su ataque — elegido **"Borrón"** (borrador de pizarrón,
+   fichas borradas PERMANENTES, tablero se achica; ver DISEÑO §18.1). AL HACERLO: evolucionar
+   `hazards.js` de mixin a **registro/estrategia** (Open/Closed) para que sea escalable.
+3. **Jefes × y ÷:** contagio (×) y mezclar/partir (÷) — DISEÑO §18.
+4. **Catálogo de estados** (jelly, candado, cajón, bomba, niebla) para niveles normales — DISEÑO §18.4.
+5. **Antes de release real:** quitar nivel de prueba 41; `DAILY_UNLIMITED=false`; separar Supabase QA.
+6. **Deuda menor:** extraer hints/coach del controller (opcional); progreso por `id` estable de nivel.

@@ -4,11 +4,12 @@
 // ====================================================================
 import {
   newGrid, tidyBoard, ensureMinOperators, findEquationCells, findTargetCellsMulti,
-  findMatchesMulti, findHintFallback, pickTargets, adjacent, breakFormedTargets, plantTargetMove,
-  countTargetMoves, addTargetMovesSubtle, destrandOperators, seedTargetMovesNear,
-  findTargetSegments, countComboMoves, plantComboMove, findComboMove, lineFormsTarget,
+  findMatchesMulti, findHintFallback, adjacent, destrandOperators,
+  findTargetSegments, findComboMove,
 } from './logic.js'
 import { getLevel, makeGen, randTarget, starsFor, symbolAllowed } from './levels.js'
+import { hazardMethods } from './hazards.js'   // métodos de jefe/hazards (mixin sobre el prototype)
+import { maintenanceMethods } from './boardMaintenance.js'   // _healFixedBoard/_pickTargets (mixin)
 
 const BOOSTER_DEFS = [
   { id: '+',  label: '+',  kind: 'place', ch: '+',  base: 3 },
@@ -28,11 +29,6 @@ const START_HINTS = 5     // pistas con las que arranca un jugador nuevo
 const HINTS_KEY = 'math_hints'
 const MAX_CONTINUES = 2  // veces que se puede "seguir con +1 min" al perder
 const CONTINUE_TIME = 60 // segundos que da cada "+1 min"
-const NEAR_MOVES = 3     // cuentas fáciles que se siembran (visibles) alrededor de donde jugás
-const BOSS_FREEZE_MS = 10000 // cada cuánto ataca el jefe (congela fichas)
-const BOSS_FREEZE_N = 3       // cuántas fichas congela por ataque
-const INFEST_MS = 15000      // cada cuánto sube el frente de la infestación de + (fila nueva)
-const SCATTER_MS = 10000     // cada cuánto el jefe Suma (fase 1) esparce + aislados
 const GOAL_NORMAL = 100  // meta de la barra en niveles normales: sumando el VALOR formado
                          // (contás de N en N) hasta 100. SIN reloj (se pierde sólo por intentos).
                          // Los JEFES usan su propio HP (no esto). Tuneable por nivel con `goal`.
@@ -242,120 +238,8 @@ export class Controller {
     if (this.fixedTargets != null) this._healFixedBoard()
   }
 
-  // ---------- objetivos inteligentes (hasta 3) ----------
-  // consumed = valores que se cumplieron este movimiento (se descartan y reemplazan).
-  // Los demás se conservan si siguen siendo alcanzables; si no, se reemplazan.
-  // Mantenimiento del tablero de objetivo fijo (todo sobre una grilla en memoria):
-  // saca operadores varados, repone con buena distribución, rompe cuentas YA formadas y
-  // asegura el mínimo de jugadas al objetivo. Aplica los cambios SIN animación (el
-  // controller lo llama durante el temblor de aterrizaje, para esconderlos ahí).
-  // nearCols (opcional): columnas donde el jugador acaba de jugar. Si se pasan, se SIEMBRAN
-  // cuentas fáciles ahí (mín. NEAR_MOVES) y esas fichas se muestran con un pop VISIBLE; el
-  // resto del mantenimiento (operadores, romper formadas, piso global) va escondido en el temblor.
-  _healFixedBoard(nearCols = null) {
-    this.targets = [...this.fixedTargets]
-    const grid = this.board.gridChars()
-    const changed = []
-    // 1) operadores: sacar los varados + reponer hasta el piso con buena distribución
-    const min = Math.ceil(this.board.cols * 1.2)
-    changed.push(...destrandOperators(grid, this.gen))
-    changed.push(...ensureMinOperators(grid, this.gen, min))
-    // 2) romper cuentas YA formadas (el paso 1 pudo dejar un '+' entre dos dígitos que
-    //    suman el objetivo). El tablero se entrega resuelto: sólo jugadas a un movimiento.
-    changed.push(...breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo))
-    // 3) asegurar el mínimo de jugadas (sutil, de abajo hacia arriba). Dos garantías:
-    //    - TOTAL: al menos MIN_MOVES jugadas a cualquier objetivo (escala con el tablero:
-    //      5×5→3, 6×6→5, 7×7→6, 8×8→7).
-    //    - POR OBJETIVO (solo doble): cada objetivo tiene sus propias jugadas, así el más
-    //      fácil (ej. 10) no se come el tablero dejando al otro (ej. 5) casi sin salida.
-    //    Se itera porque reforzar uno puede reducir levemente al otro; `avoid`=TODOS los
-    //    objetivos evita que al reforzar uno quede formado otro.
-    const MIN_MOVES = this.level.minMoves ?? (this.board.cols <= 5 ? 3 : this.board.cols - 1)
-    const eachMin = this.level.minMovesEach ?? 2
-    // Garantía POR OBJETIVO: cada objetivo tiene al menos `eachMin` jugadas propias, así el
-    // más fácil no acapara el tablero. Aplica al doble y al acumulativo (set chico 5,6,8,10).
-    const perTarget = this.targets.length > 1
-    for (let pass = 0; pass < 4; pass++) {
-      let ok = true
-      if (perTarget) {
-        for (const t of this.targets) {
-          if (countTargetMoves(grid, [t], this.md, this.mo, eachMin) < eachMin) {
-            changed.push(...addTargetMovesSubtle(grid, this.gen, [t], this.md, this.mo, eachMin, this.targets))
-            ok = false
-          }
-        }
-      }
-      if (countTargetMoves(grid, this.targets, this.md, this.mo, MIN_MOVES) < MIN_MOVES) {
-        changed.push(...addTargetMovesSubtle(grid, this.gen, this.targets, this.md, this.mo, MIN_MOVES))
-        ok = false
-      }
-      if (ok) break
-    }
-    // Último recurso: si algún objetivo sigue por debajo del mínimo (el refuerzo sutil solo
-    // cambia dígitos y a veces no alcanza porque los operadores quedaron lejos), PLANTAR
-    // jugadas para ESE objetivo (planta también el operador). En doble se planta por objetivo.
-    for (const t of (perTarget ? this.targets : [])) {
-      const onlyT = this.targets.length > 1 ? t : null
-      let g = 0
-      while (countTargetMoves(grid, [t], this.md, this.mo, eachMin) < eachMin && g++ < 4) {
-        const pc = plantTargetMove(grid, this.gen, onlyT)
-        if (!pc.length) break
-        changed.push(...pc)
-        // el plantado pudo formar un objetivo en la línea perpendicular: romperlo
-        changed.push(...breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo))
-      }
-    }
-    // por si el tablero quedó SIN ninguna jugada global (rarísimo)
-    if (!findHintFallback(grid, this.targets, this.md, this.mo)) {
-      changed.push(...plantTargetMove(grid, this.gen))
-    }
-    // SÚPER FICHA: garantizar al menos 1 jugada de 2 OPERADORES disponible, así el jugador
-    // SIEMPRE puede generar una súper ficha (arma la cuenta 2+1+3 en vez de 2+4). Sólo suma.
-    if (this.level.superTile && this.mo >= 2) {
-      let g = 0
-      while (!countComboMoves(grid, this.targets, this.md, 1) && g++ < 3) {
-        changed.push(...plantComboMove(grid, this.gen, this.targets[0], this.level.digits))
-        changed.push(...breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo))
-      }
-    }
-    // SIEMBRA local: cuentas fáciles alrededor de donde jugó el jugador (se muestran con pop).
-    const seeded = nearCols
-      ? seedTargetMovesNear(grid, this.gen, this.targets, [...nearCols], this.md, this.mo, NEAR_MOVES)
-      : []
-    const seededKeys = new Set(seeded.map(([r, c]) => r + ',' + c))
-    // NUNCA modificar fichas con estado (hielo) NI súper fichas: el mantenimiento las saltea
-    // (si no, setChar borraría su look y se cambiaría una ficha especial del jugador).
-    const stateKeys = this.board.cellsWithState()
-    const protectedK = new Set([...stateKeys, ...this.board.superCells()])
-    // mantenimiento de fondo: escondido en el temblor (sin animación), excluyendo lo sembrado
-    const bg = [...new Map(changed.map(([r, c]) => [r + ',' + c, [r, c]])).values()]
-      .filter(([r, c]) => !seededKeys.has(r + ',' + c) && !protectedK.has(r + ',' + c))
-    if (bg.length) this.board.applyCharsPlain(bg, grid)
-    const seededFree = seeded.filter(([r, c]) => !protectedK.has(r + ',' + c))
-    if (seededFree.length) this.board.applyChars(seededFree, grid)   // pop VISIBLE de la siembra
-  }
-
-  _pickTargets(consumed = new Set()) {
-    // Objetivo fijo: no rota. El mantenimiento del tablero se hace en el ATERRIZAJE
-    // (ver _resolve / _healFixedBoard); acá sólo fijamos y mostramos el objetivo.
-    if (this.fixedTargets != null) {
-      this.targets = [...this.fixedTargets]
-      this._pushTargets(false)
-      return
-    }
-    this._replenishOperators()
-    const n = this.level.nTargets ?? 3
-    const keep = this.targets.filter((t) => !consumed.has(t))
-    let targets = pickTargets(this.board.gridChars(), this.level, keep, n)
-    let tries = 0
-    while (targets.length === 0 && tries < 14) {
-      this._rebuild()
-      targets = pickTargets(this.board.gridChars(), this.level, [], n)
-      tries++
-    }
-    this.targets = targets
-    this._pushTargets(consumed.size > 0)
-  }
+  // ---- Mantenimiento del tablero target-rich (_healFixedBoard) y elección de objetivos
+  //      (_pickTargets) → viven en game/boardMaintenance.js (mixin, ver Object.assign al final). ----
 
   // ---------- pistas automáticas (solo niveles 1 y 2, a los 5 s de inactividad) ----------
   // config de pistas automáticas por nivel:
@@ -636,194 +520,8 @@ export class Controller {
     this.left = Math.max(0, this.goalNeed - this.goalDone)
   }
 
-  // BATALLA DE JEFE: el valor formado le baja HP al jefe; se gana al dejarlo en 0. El
-  // movimiento VISIBLE de la barra de HP lo dispara onCuenta al llegar las fichas (absorción).
-  _addBoss(value) {
-    this.bossHp = Math.max(0, this.bossHp - value)
-    this.left = this.bossHp   // dispara la victoria por los checks existentes de left<=0
-  }
-
-  // JEFE SUMA de 2 fases (se llama en _afterMove, con el tablero ya asentado): según el % de HP,
-  // FASE 1 hace crecer el tablero por umbrales (5×5→expandTo, repartidos entre 100% e infestAt) y
-  // FASE 2 arranca la infestación al cruzar infestAt. Ver DISEÑO §18.6.2.
-  _bossPhaseCheck() {
-    const b = this.boss
-    if (!b || this.ended) return
-    const frac = this.bossHpMax ? this.bossHp / this.bossHpMax : 0
-    const infestAt = b.infestAt ?? 0
-    // FASE 1 — EXPANSIÓN: agrega de a UNO (fila, luego columna, alternando) en cada umbral de 10%
-    // hasta `expandTo`. De 5×5 a 7×7 = 4 pasos (+fila,+col,+fila,+col), repartidos en (infestAt, 1].
-    if (b.expandTo) {
-      const adds = Math.max(0, (b.expandTo - this.level.size) * 2)   // filas + columnas a agregar
-      for (let k = 1; k <= adds; k++) {
-        const thr = 1 - (1 - infestAt) * (k / (adds + 1))
-        if (frac <= thr && this._grownCount < k) {
-          this._grownCount = k
-          if (k % 2 === 1) this.board.addRow(this.gen.randTile)      // impar = fila abajo
-          else this.board.addCol(this.gen.randTile)                  // par = columna derecha
-          this.board.shake(8)
-          this.hooks.toast?.('🟩 ¡El tablero crece!')
-          if (this.fixedTargets != null) this._healFixedBoard()      // re-saneo target-rich en el nuevo tamaño
-          if (!this._coachedExpand) {
-            this._coachedExpand = true
-            this._coach([{ text: '¡El Rey + agranda el tablero! 🟩 Va sumando filas y columnas para complicarla. Seguí bajándole la vida.' }])
-          }
-        }
-      }
-    }
-    // FASE 2 — INFESTACIÓN: al cruzar infestAt (ej. 50% HP) empiezan a subir los +.
-    if (b.infestAt != null && frac <= b.infestAt && !this._infestStarted) {
-      this._infestStarted = true
-      this.infest = true
-      this._infestRise()      // la PRIMERA fila apenas llega al 50%
-      this._startInfest()     // y sigue subiendo una fila cada INFEST_MS (15s)
-      if (!this._coachedInfest) {
-        this._coachedInfest = true
-        this._coach([{ text: '¡El Rey + se cansó y quiere hacerte perder! Ahora sube FILAS enteras. ¡Apurate a derrotarlo antes de que tape el tablero!' }])
-      }
-    }
-  }
-
-  // ---------- ataques del jefe (estados de casillero) ----------
-  // Loop propio del jefe (no es el reloj del jugador): cada BOSS_FREEZE_MS intenta un ataque.
-  _startBossAttacks() {
-    if (!this.boss || this._bossAtkId) return
-    this._bossAtkId = setTimeout(() => this._bossTick(), BOSS_FREEZE_MS)
-  }
-  _bossTick() {
-    this._bossAtkId = null
-    if (this.ended) return
-    // no atacar si el tablero está ocupado (cascada) o hay un mensaje del coach: se reprograma
-    if (this.started && !this.busy && !this.coachActive) this._bossAttack()
-    this._bossAtkId = setTimeout(() => this._bossTick(), BOSS_FREEZE_MS)
-  }
-  // ATAQUE "congelar": congela hasta BOSS_FREEZE_N fichas libres AL AZAR. SIN guardrail: el
-  // jefe PUEDE congelar todo. Si te deja sin ninguna jugada, perdés (→ "descongelar todo").
-  _bossAttack() {
-    const blocked = this.board.cellsWithState()
-    const chars = this.board.gridChars()
-    const isOp = ({ r, c }) => ['+', '−', '×', '÷'].includes(chars[r]?.[c])
-    const cands = []
-    for (let r = 0; r < this.board.rows; r++)
-      for (let c = 0; c < this.board.cols; c++) if (!blocked.has(r + ',' + c)) cands.push({ r, c })
-    // barajar (Fisher-Yates; fuera de workflow, Math.random OK)
-    for (let i = cands.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[cands[i], cands[j]] = [cands[j], cands[i]] }
-    const toFreeze = cands.slice(0, BOSS_FREEZE_N)
-    // SIEMPRE congelar al menos 1 OPERADOR (si hay libre): así el ataque estorba de verdad
-    // (sin operadores no se pueden armar cuentas en esa zona), no sólo dígitos sueltos.
-    if (toFreeze.length && !toFreeze.some(isOp)) {
-      const op = cands.find(isOp)
-      if (op) toFreeze[toFreeze.length - 1] = op
-    }
-    if (toFreeze.length) {
-      this.board.applyState(toFreeze, 'frozen')
-      this.board.shake(8)
-      this.hooks.toast?.('❄️ ¡El jefe congeló ' + toFreeze.length + ' ficha' + (toFreeze.length > 1 ? 's' : '') + '!')
-      // Primera congelada del juego: explicá el ataque (una sola vez).
-      if (!this.ended && !this._alreadyCoached('math_coached_freeze')) {
-        this._coach([{ text: 'El Rey ' + (this.level.ops?.[0] ?? '+') + ' CONGELA fichas ❄️. Las que tienen hielo no se pueden usar ni mover. Formá una cuenta al lado para romper el hielo 💥.' }])
-      }
-    }
-    this._bossCheckStuck()   // ¿te dejó sin movimientos? → perdés
-  }
-  // si el jefe te dejó SIN ninguna jugada usable, perdés (reason 'frozen'); el reintento
-  // ("descongelar todo") rompe el hielo y seguís.
-  _bossCheckStuck() {
-    if (!this.boss || this.ended || this.busy) return
-    if (!countTargetMoves(this.board.gridCharsMasked(), this.targets, this.md, this.mo, 1)) {
-      this._endLevel(false, 'frozen')
-    }
-  }
-  // rompe TODOS los estados del tablero (para el reintento: "romper el hielo")
-  _breakAllStates() {
-    const cells = [...this.board.cellsWithState()].map((k) => { const [r, c] = k.split(',').map(Number); return { r, c } })
-    if (cells.length) this.board.clearState(cells)
-  }
-  // una cuenta descongela (rompe el estado de) las fichas ortogonalmente adyacentes a sus celdas
-  _breakStatesNear(cells) {
-    const blocked = this.board.cellsWithState()
-    if (!blocked.size) return
-    const toBreak = []
-    for (const { r, c } of cells)
-      for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const k = (r + dr) + ',' + (c + dc)
-        if (blocked.has(k)) { toBreak.push({ r: r + dr, c: c + dc }); blocked.delete(k) }
-      }
-    if (toBreak.length) this.board.clearState(toBreak)
-  }
-
-  // ---------- INFESTACIÓN de + (escenario/jefe Suma) ----------
-  // Loop propio: cada INFEST_MS el frente de + sube UNA fila (una celda por columna). Los +
-  // infestados se pueden usar a mano pero son INMUTABLES para el mantenimiento (tienen estado, y
-  // _healFixedBoard ya excluye las celdas con estado al aplicar). Ver DISEÑO §18.6/§18.6.1.
-  _startInfest() {
-    if (!this.infest || this._infestId) return
-    this._infestId = setTimeout(() => this._infestTick(), INFEST_MS)
-  }
-  _infestTick() {
-    this._infestId = null
-    if (this.ended) return
-    if (this.started && !this.busy && !this.coachActive) this._infestRise()
-    this._infestId = setTimeout(() => this._infestTick(), INFEST_MS)
-  }
-  // sube el frente: en cada columna infesta la celda LIBRE más abajo (llena de abajo hacia arriba;
-  // salta las ya infestadas —incluidas las esparcidas de la fase 1—). No pisa fichas con otro estado.
-  _infestRise() {
-    const toInfest = []
-    for (let c = 0; c < this.board.cols; c++) {
-      for (let r = this.board.rows - 1; r >= 0; r--) {
-        const t = this.board.tiles[r]?.[c]
-        if (!t) continue
-        if (t.state === 'infested') continue      // ya infestada: seguir subiendo
-        if (t.state) break                          // otro estado (raro): no invadir esta columna
-        toInfest.push({ r, c }); break              // primera libre desde abajo → infestar
-      }
-    }
-    if (toInfest.length) { this.board.applyInfest(toInfest); this.board.shake(5) }
-    this._infestCheckLoss()
-  }
-
-  // ---------- FASE 1 del jefe Suma: esparcir + AISLADOS ----------
-  // Cada SCATTER_MS convierte 2 fichas al azar en un '+' (inmutable, con animación notoria). Elige
-  // sólo posiciones donde poner el + NO forma una cuenta (para no regalar jugadas). Evita la fila 0
-  // (que la reserve el frente de la fase 2). Se detiene al arrancar la fase 2.
-  _startScatter() {
-    if (this._scatterId) return
-    this._scatterId = setTimeout(() => this._scatterTick(), SCATTER_MS)
-  }
-  _scatterTick() {
-    this._scatterId = null
-    if (this.ended || this._infestStarted) return   // fase 2: para el scatter (sube el frente)
-    if (this.started && !this.busy && !this.coachActive) this._scatterPlus(2)
-    this._scatterId = setTimeout(() => this._scatterTick(), SCATTER_MS)
-  }
-  _scatterPlus(n = 2) {
-    const grid = this.board.gridChars()
-    const cands = []
-    for (let r = 1; r < this.board.rows; r++) for (let c = 0; c < this.board.cols; c++) {  // r>=1: no la fila 0
-      const t = this.board.tiles[r]?.[c]
-      if (!t || t.state || grid[r][c] === '+') continue
-      const orig = grid[r][c]; grid[r][c] = '+'
-      const forms = lineFormsTarget(grid, r, c, this.targets, this.md, this.mo)   // no formar cuenta al poner el +
-      grid[r][c] = orig
-      if (!forms) cands.push({ r, c })
-    }
-    for (let i = cands.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[cands[i], cands[j]] = [cands[j], cands[i]] }
-    const pick = cands.slice(0, n)
-    if (pick.length) {
-      this.board.applyInfest(pick)
-      if (!this._coachedScatter) {
-        this._coachedScatter = true
-        this._coach([{ text: 'El Rey + empieza a ensuciar el tablero con signos +. Se van acumulando… ¡usalos en tus sumas!' }])
-      }
-    }
-  }
-  // perdés cuando la fila de arriba (row 0) queda TODA infestada (la marea de + llegó al techo)
-  _infestCheckLoss() {
-    if (!this.infest || this.ended) return
-    for (let c = 0; c < this.board.cols; c++) if (!this.board.isInfested(0, c)) return
-    this._endLevel(false, 'flooded')
-  }
+  // ---- Métodos de JEFE / HAZARDS (freeze, infestación, scatter, fases) → viven en
+  //      game/hazards.js y se enchufan al prototype con Object.assign al final del archivo. ----
 
   // MODO ACUMULATIVO: suma (o resta) el valor formado al total; gana al alcanzar la meta.
   // El movimiento VISIBLE de la barra lo dispara onCuenta al llegar las fichas (absorción).
@@ -1045,3 +743,7 @@ export class Controller {
     )
   }
 }
+
+// Enchufa los métodos de jefe/hazards (freeze, infestación, scatter, fases) al prototype del
+// Controller: viven en game/hazards.js pero corren como métodos de instancia (mismo `this`).
+Object.assign(Controller.prototype, hazardMethods, maintenanceMethods)

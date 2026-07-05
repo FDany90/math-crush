@@ -72,6 +72,7 @@ export class Controller {
       : (Array.isArray(this.level.target) ? [...this.level.target] : [this.level.target])
     this.relax = !!this.level.relax        // twist: sin reloj (se gana por quota, estrellas por precisión)
     this.timed = this.level.timed ?? false // reloj: por defecto SIN tiempo (se gana llenando la barra)
+    this.startTime = this.level.time ?? START_TIME  // segundos de reloj (override por nivel con `time`)
     this.switched = false                  // twist targetTo: ¿ya cambió el objetivo?
     // MODO ACUMULATIVO: en vez de quota, formás cualquiera de los objetivos y su VALOR
     // suma/resta a un total; ganás al alcanzar la meta. { start, goal }.
@@ -105,7 +106,7 @@ export class Controller {
     this.moves = 0                         // movimientos hechos (para límite de pistas)
     this.autoHintCount = 0                 // pistas automáticas ya mostradas
     this.combo = 0
-    this.timeLeft = START_TIME
+    this.timeLeft = this.startTime
     this.deadline = 0
     this.timerOn = false
     if (this.timerId) clearTimeout(this.timerId)
@@ -126,6 +127,10 @@ export class Controller {
     // Como el reloj arranca recién en el primer movimiento, no consume tiempo.
     if (this.tutorial) {
       this._coach([{ text: 'Arrastrá una ficha hacia su vecina para formar el número de arriba.', highlight: 'target' }])
+    } else if (this.boss && !this._alreadyCoached('math_coached_boss')) {
+      // Llegaste al JEFE: explicá qué hacer (formar los resultados que marca = daño) y que
+      // va a atacar. El detalle del ataque CONGELAR se explica en la primera congelada.
+      this._coach([{ text: '¡Llegaste al JEFE! 👹 Formá los resultados que marca arriba: cada cuenta le baja la vida. ¡Dejalo en 0 para ganar!' }])
     } else if (this.level.ops.some((o) => o === '−' || o === '÷') && !this._alreadyCoached('math_coached_dir')) {
       // Primera vez en un nivel de resta/división: el ORDEN importa (no da igual como en la
       // suma). Aclaramos la DIRECCIÓN —no el tamaño—, porque más adelante habrá resultados
@@ -142,7 +147,7 @@ export class Controller {
     this.board.hideHandGuide()              // el jugador ya tomó el control: fuera la manito
     if (this.boss) this._startBossAttacks() // el jefe empieza a atacar (congelar) cada 5s
     if (this.relax || !this.timed) return   // sin reloj (por defecto): se gana llenando la barra
-    this.deadline = Date.now() + START_TIME * 1000
+    this.deadline = Date.now() + this.startTime * 1000
     this.timerOn = true
     this._tick()
   }
@@ -557,16 +562,28 @@ export class Controller {
   // jefe PUEDE congelar todo. Si te deja sin ninguna jugada, perdés (→ "descongelar todo").
   _bossAttack() {
     const blocked = this.board.cellsWithState()
+    const chars = this.board.gridChars()
+    const isOp = ({ r, c }) => ['+', '−', '×', '÷'].includes(chars[r]?.[c])
     const cands = []
     for (let r = 0; r < this.board.rows; r++)
       for (let c = 0; c < this.board.cols; c++) if (!blocked.has(r + ',' + c)) cands.push({ r, c })
     // barajar (Fisher-Yates; fuera de workflow, Math.random OK)
     for (let i = cands.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[cands[i], cands[j]] = [cands[j], cands[i]] }
     const toFreeze = cands.slice(0, BOSS_FREEZE_N)
+    // SIEMPRE congelar al menos 1 OPERADOR (si hay libre): así el ataque estorba de verdad
+    // (sin operadores no se pueden armar cuentas en esa zona), no sólo dígitos sueltos.
+    if (toFreeze.length && !toFreeze.some(isOp)) {
+      const op = cands.find(isOp)
+      if (op) toFreeze[toFreeze.length - 1] = op
+    }
     if (toFreeze.length) {
       this.board.applyState(toFreeze, 'frozen')
       this.board.shake(8)
       this.hooks.toast?.('❄️ ¡El jefe congeló ' + toFreeze.length + ' ficha' + (toFreeze.length > 1 ? 's' : '') + '!')
+      // Primera congelada del juego: explicá el ataque (una sola vez).
+      if (!this.ended && !this._alreadyCoached('math_coached_freeze')) {
+        this._coach([{ text: 'El jefe CONGELA fichas ❄️. Las que tienen hielo no se pueden usar ni mover. Formá una cuenta al lado para romper el hielo 💥.' }])
+      }
     }
     this._bossCheckStuck()   // ¿te dejó sin movimientos? → perdés
   }
@@ -686,7 +703,7 @@ export class Controller {
     const maxTries = this.level.tries ?? MAX_TRIES
     const stars = (!this.timed || this.relax)
       ? (completed ? (this.tries >= maxTries ? 3 : this.tries >= maxTries - 3 ? 2 : 1) : 0)
-      : starsFor(this.level, { completed, timeLeft: this.timeLeft, totalTime: START_TIME })
+      : starsFor(this.level, { completed, timeLeft: this.timeLeft, totalTime: this.startTime })
     this._pushInventory()
     this.hooks.onLevelEnd({
       index: this.levelIndex, completed, reason, stars,

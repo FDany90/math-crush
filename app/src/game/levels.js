@@ -38,8 +38,11 @@ export const LEVELS = [
   { name: 'Amigos del 5',     size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 5,        quota: 10 },
   { name: 'Media docena',     size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 6,        quota: 10 },
   { name: 'Solo pares',       size: 5, digits: ['2', '4', '6'], ops: ['+'], eq: false, maxDigits: 1, target: 8,   quota: 10, goal: 150 },  // solo pares → 2+6, 4+4
-  { name: 'Doble objetivo',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [4, 8],   quota: 10, goal: 150 },  // 🎁 twist: 4 y 8 a la vez
-  { name: 'Ponete la 10',     size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 10,       quota: 10, goal: 200 },
+  // 🎁 CONTRARRELOJ (nivel 5 de cada mundo: 5/15/25/35): nivel ESPECIAL con RELOJ (1 min) y
+  // tablero un poco más grande. Objetivo único. Si se acaba el tiempo → "+1 minuto" (reintento).
+  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 8,       timed: true, time: 60, goal: 64 },
+  // 🎁 TABLERO GRANDE + doble objetivo (sin reloj): más espacio, dos números a la vez.
+  { name: 'Doble en grande',  size: 7, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 10],  goal: 200 },
   { name: 'Impares 7 y 9',    size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [7, 9],   quota: 10, goal: 200 },  // 🎁 doble de impares (más difícil: menos pares)
   { name: 'Una docena',       size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12,       quota: 10, goal: 200 },
   { name: 'De 3 en 3',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [3, 6, 9], quota: 10, comboFever: true, goal: 250 },  // 🎁 triple múltiplos de 3 + combos DOBLE
@@ -58,14 +61,14 @@ export const LEVELS = [
   { name: 'Doble resta',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 5],  quota: 10, goal: 150 },  // 🎁 doble
   { name: 'Diferencia 6',     size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 6,       quota: 10, goal: 200 },  // menos pares (7−1,8−2,9−3)
   { name: 'Resta doble',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 6],  quota: 10, goal: 200 },  // 🎁 doble
-  { name: 'Fiebre de restas', size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 5,       quota: 10, goal: 250, comboFever: true },  // 🎁 combos x2
+  { name: 'Contrarreloj ⏱',   size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 5,       timed: true, time: 60, goal: 50 },  // ⏱ nivel 15 = contrarreloj (grande + reloj)
   // --- desde acá la rampa aprieta: 7×7, impares/altos, triples y MENOS intentos ---
   { name: 'Resta difícil',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [5, 7],  quota: 15, goal: 250, tries: 4 },  // 7×7, 7 = solo 8−1,9−2
   { name: 'Doble combos',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7],  quota: 15, goal: 300, comboFever: true, tries: 4 },  // 🎁 combos x2, 7×7
   { name: 'Triple resta',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 4, 6], quota: 15, goal: 300, tries: 4 },  // 🎁 triple
   { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 350, tries: 3 },  // 🎁 triple, solo 3 intentos
   // Nivel 20 = ACUMULATIVO resta: arrancás en 40 y cada resta BAJA el total; ganás al llegar a 0.
-  { name: 'Bajá a 0',       size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3, 4, 5], accum: { start: 40, goal: 0 }, quota: 99 },  // 🏁 acumulativo
+  { name: 'Jefe: el signo −', size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3, 4, 5], boss: { hp: 180 }, quota: 99 },  // 👹 JEFE resta (daño = diferencia formada)
 
   // ================= MUNDO MULTIPLICACIÓN (21-30, objetivo fijo) =================
   // Productos de 1 cifra. Empieza con tablas chicas (2×3=6) y sube. Dobles intercalados.
@@ -74,13 +77,13 @@ export const LEVELS = [
   { name: 'Por cuatro',     size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 8,        quota: 10 },  // 2×4
   { name: 'La docena',      size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 12,       quota: 10 },  // 3×4, 2×6
   { name: 'Doble por',      size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: [6, 12],  quota: 10 },  // 🎁 doble
-  { name: 'Más grande',     size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 18,       quota: 10 },  // 3×6, 2×9
+  { name: 'Contrarreloj ⏱', size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 12,       timed: true, time: 60, goal: 60 },  // ⏱ nivel 25 = contrarreloj (12 = 3×4,2×6, más pares)
   { name: 'Por seis',       size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 24,       quota: 10 },  // 4×6, 3×8
   { name: 'Relax por',      size: 6, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 16,       quota: 10, relax: true },       // 🎁 sin reloj (4×4, 2×8)
   { name: 'Doble grande',   size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: [8, 24],  quota: 15 },  // 🎁 doble
   { name: 'Fiebre por',     size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 12,       quota: 15, comboFever: true },  // 🎁 combos x2
   // Nivel 30 = ACUMULATIVO multiplicación: sumá los productos hasta llegar a 100.
-  { name: 'Multiplicá a 100', size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: [6, 8, 12], accum: { start: 0, goal: 100 }, quota: 99 },  // 🏁 acumulativo
+  { name: 'Jefe: el signo ×', size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: [6, 8, 12], boss: { hp: 440 }, quota: 99 },  // 👹 JEFE multiplicación (daño = producto formado)
 
   // ================= MUNDO DIVISIÓN (31-40, objetivo fijo, ÷ exacta) =================
   // División exacta de 1 cifra. Cocientes CHICOS (2,3,4): los altos casi no tienen pares
@@ -89,13 +92,13 @@ export const LEVELS = [
   { name: 'Dividí en 3',    size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 3,        quota: 10 },  // 6÷2, 9÷3
   { name: 'Doble división', size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3],   quota: 10 },  // 🎁 doble
   { name: 'A la mitad',     size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 2,        quota: 10, relax: true },       // 🎁 sin reloj
-  { name: 'Por cuatro ÷',   size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 4,        quota: 10 },  // 8÷2, 4÷1
+  { name: 'Contrarreloj ⏱', size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 4,        timed: true, time: 60, goal: 40 },  // ⏱ nivel 35 = contrarreloj (8÷2, 4÷1)
   { name: 'Doble ÷',        size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 4],   quota: 10 },  // 🎁 doble
   { name: 'Fiebre ÷',       size: 6, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 3,        quota: 10, comboFever: true },  // 🎁 combos x2
   { name: 'División difícil', size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 2,      quota: 15 },  // tablero 7×7
   { name: 'Doble maestro',  size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3],   quota: 15 },  // 🎁 doble
   // Nivel 40 = ACUMULATIVO división: arrancás en 24 y cada división BAJA el total hasta 0.
-  { name: 'Dividí a 0',     size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3, 4], accum: { start: 24, goal: 0 }, quota: 99 },  // 🏁 acumulativo
+  { name: 'Jefe: el signo ÷', size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3, 4], boss: { hp: 160 }, quota: 99 },  // 👹 JEFE división (daño = cociente formado)
 ];
 
 export const LEVEL_COUNT = LEVELS.length;

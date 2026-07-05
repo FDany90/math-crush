@@ -372,6 +372,7 @@ export function countTargetMoves(grid, targets, maxDigits = Infinity, maxOps = 1
   for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
     for (const [r2, c2] of [[r, c + 1], [r + 1, c]]) {
       if (r2 >= R || c2 >= C) continue;
+      if (grid[r][c] === '#' || grid[r2][c2] === '#') continue;   // ficha con estado (hielo): no se puede mover
       const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
       const ok =
         lineHasMatch(getRow(grid, r), set, maxDigits, maxOps) ||
@@ -568,6 +569,7 @@ export function findHintFallback(grid, targets, maxDigits = Infinity, maxOps = 1
     for (let c = 0; c < COLS; c++) {
       for (const [r2, c2] of [[r, c + 1], [r + 1, c]]) {
         if (r2 >= ROWS || c2 >= COLS) continue;
+        if (grid[r][c] === '#' || grid[r2][c2] === '#') continue;   // ficha con estado (hielo): no sugerir moverla
         const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
         const ok =
           lineHasMatch(getRow(grid, r), targetSet, maxDigits, maxOps) ||

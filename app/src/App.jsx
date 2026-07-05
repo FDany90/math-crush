@@ -151,7 +151,7 @@ const PROGRESS_KEY = 'math_progress'
 // niveles. Al cargar, si la versión guardada no coincide, se borra el progreso una
 // sola vez → TODOS los que ya jugaron empiezan de cero en su próxima visita (no hay
 // que tocar nada en su dispositivo). Ver DISEÑO_PROGRESION.md.
-const PROGRESS_VERSION = '6'
+const PROGRESS_VERSION = '8'
 const PROGRESS_VERSION_KEY = 'math_progress_version'
 try {
   if (localStorage.getItem(PROGRESS_VERSION_KEY) !== PROGRESS_VERSION) {
@@ -195,6 +195,7 @@ function levelBrief(lv) {
   if (lv.tutorial) return 'Arrastrá fichas y formá el número de arriba 👆'
   if (lv.boss) return 'Formá los resultados para atacar al jefe. ¡Bajale todo el HP! 👹'
   if (lv.accum) return 'Formá los resultados y llená la barra hasta la meta'
+  if (lv.timed) return '⏱ ¡Contrarreloj! Llená la barra antes de que se acabe el tiempo'
   return Array.isArray(lv.target)
     ? 'Formá cualquiera de los resultados y llená la barra'
     : 'Formá el resultado una y otra vez para llenar la barra'
@@ -742,12 +743,21 @@ export default function App() {
             {/* carteles de SECTOR (un mundo cada 10 niveles): símbolo grande + nombre */}
             {WORLDS.map((w) => {
               const p = mapGeo.pts[w.at]
-              return p ? (
-                <div key={w.at} className="sector" style={{ top: (p.y - 52) + 'px', '--sc': w.color }}>
+              if (!p) return null
+              // Si el nodo del mundo es el nivel ACTUAL (nodo grande + "¡Acá!" + mascota), el
+              // cartel arriba choca → lo mandamos al COSTADO (lado opuesto a la mascota). Para
+              // los demás mundos (nodo lejano) va arriba del nodo, en el hueco del camino.
+              const atCurrent = w.at === currentLevel
+              const side = p.x / MAP_W < 0.5 ? 'right' : 'left'   // mascota va al lado contrario
+              const style = atCurrent
+                ? { top: p.y + 'px', [side]: '4%', transform: 'translateY(-50%)', '--sc': w.color }
+                : { top: (p.y - 96) + 'px', '--sc': w.color }
+              return (
+                <div key={w.at} className={'sector' + (atCurrent ? ' sector-side' : '')} style={style}>
                   <span className="sector-sym">{w.sym}</span>
                   <span className="sector-name">{w.name}</span>
                 </div>
-              ) : null
+              )
             })}
             {/* mascota de tiza junto al nivel actual */}
             {mapGeo.pts[currentLevel] && (() => {
@@ -766,14 +776,20 @@ export default function App() {
               const stars = progress.stars[i] || 0
               const p = mapGeo.pts[i]
               const done = stars >= 1 && i !== currentLevel
+              const isBoss = !!lv.boss
+              const isTimed = !!lv.timed && !isBoss
               return (
                 <button key={i}
-                  className={'node' + (unlocked ? '' : ' locked') + (i === currentLevel ? ' current' : '') + (done ? ' done' : '')}
+                  className={'node' + (unlocked ? '' : ' locked') + (i === currentLevel ? ' current' : '') + (done ? ' done' : '') + (isBoss ? ' boss-node' : '') + (isTimed ? ' timed-node' : '')}
                   style={{ top: p.y + 'px', left: (p.x / MAP_W * 100) + '%', '--nc': zoneColor(i) }}
                   onClick={() => handleNode(i)}>
                   {i === currentLevel && <span className="node-here">¡Acá!</span>}
                   {unlocked && i === currentLevel && <span className="node-name">{lv.name}</span>}
-                  <span className="node-num">{unlocked ? i + 1 : '🔒'}</span>
+                  {isBoss && <span className="node-crown" aria-hidden="true">👹</span>}
+                  {isTimed && <span className="node-clock" aria-hidden="true">⏱</span>}
+                  {/* el número SIEMPRE se ve (aunque esté bloqueado); el candado va como chapita */}
+                  <span className="node-num">{i + 1}</span>
+                  {!unlocked && <span className="node-lock" aria-hidden="true">🔒</span>}
                   {unlocked && <Stars n={stars} size={11} />}
                 </button>
               )
@@ -829,7 +845,7 @@ export default function App() {
             {/* Reintentar cuesta 1 CORAZÓN. Sin corazones: se recargan solos (o futuro: ad). */}
             {hearts.n > 0 ? (
               <button className="continue-btn" onClick={() => { spendHeart(); ctrlRef.current?.resumeWithBonus() }}>
-                {result.boss ? '🧊 Descongelar todo' : 'Reintentar'} <span className="cost">❤️ 1</span>
+                {result.boss ? '🧊 Descongelar todo' : result.timed ? '+1 minuto' : 'Reintentar'} <span className="cost">❤️ 1</span>
               </button>
             ) : (
               <div className="no-hearts">💔 Sin corazones. Se recargan solos — próximo en {fmtMMSS(heartsNextInSec(hearts))}.</div>

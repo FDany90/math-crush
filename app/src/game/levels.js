@@ -45,7 +45,7 @@ export const LEVELS = [
   { name: 'Fiebre de combos', size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 7,        quota: 10, comboFever: true },  // 🎁 twist: los combos cuentan DOBLE
   // Nivel 10 = ACUMULATIVO (hito de fin de mundo): formá cualquiera de estos resultados y su
   // VALOR se suma a un total; ganás al llegar a 100. Ver DISEÑO §7.5 / PLAN_SESION_AUTONOMA.
-  { name: 'Sumá hasta 100',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 6, 8, 10], accum: { start: 0, goal: 100 }, quota: 99 },  // 🏁 acumulativo
+  { name: 'Jefe: el signo +', size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 6, 8, 10], boss: { hp: 500 }, quota: 99 },  // 👹 BATALLA DE JEFE (base): 500 HP, daño = valor formado
 
   // ================= MUNDO RESTA (niveles 11-15, objetivo fijo, mecánica nueva) =================
   // Resta de 1 cifra, resultados CHICOS y fáciles (≥0, sin negativos aún). Mismo motor

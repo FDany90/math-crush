@@ -103,6 +103,24 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .goalbars { flex: 1; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
 .goalbars .accum-targets { justify-content: center; }
 .goalbars .accum-bar { height: 34px; }
+
+/* BATALLA DE JEFE (base): signo grande + barra de HP que baja. Sin animaciones aún. */
+.boss { flex: 1; display: flex; align-items: center; gap: 14px; }
+.boss-sign { flex-shrink: 0; font-family: var(--font-tiza); font-weight: 700; font-size: 76px; line-height: 1;
+  width: 92px; height: 92px; display: flex; align-items: center; justify-content: center; border-radius: 20px;
+  color: #5a4500; background: linear-gradient(160deg, var(--eq2), var(--eq));
+  box-shadow: 0 5px 0 rgba(0,0,0,.32), 0 0 22px #ffd23f66; transition: filter .5s ease, transform .5s ease; }
+.boss-sign.defeated { filter: grayscale(1) brightness(.6); transform: rotate(-8deg) scale(.9); box-shadow: 0 3px 0 rgba(0,0,0,.3); }
+.boss-side { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.boss-hpbar { position: relative; height: 30px; background: #00000055; border-radius: 15px; overflow: hidden; border: 2px solid #ffffff22; }
+.boss-hpfill { position: absolute; top: 0; left: 0; bottom: 0; border-radius: 15px;
+  background: linear-gradient(90deg, #b8324a, #ff6b6b); box-shadow: 0 0 12px #ff6b6b88;
+  transition: width .45s cubic-bezier(.34, 1.2, .64, 1); }
+.boss-hpnum { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-tiza); font-size: 17px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px #000a; }
+.boss-atk { display: flex; align-items: center; justify-content: center; gap: 7px; }
+.boss-atk .obj-label.sm { font-size: 13px; }
+.tchip.mini { font-size: 20px; padding: 2px 9px; min-width: 0; border-radius: 12px; box-shadow: 0 2px 0 rgba(0,0,0,.3); }
 /* El chip PULSA (escala + brillo/glow dorado) al ABSORBER cada ficha: se anima por WAAPI
    en flyTokens (App.jsx), NO por clase CSS, para no reiniciar chipIn al re-renderizar.
    Sin estado verde persistente: el chip queda dorado y solo titila mientras absorbe. */

@@ -26,8 +26,48 @@ function tween(target, props, dur = 0.2, ease = 'power2.out') {
   return new Promise((res) => gsap.to(target, { ...props, duration: dur, ease, onComplete: res }));
 }
 
+// ---------- ESTADOS de casillero (efectos del tablero, estilo Candy Crush) ----------
+// Cada estado define su overlay visual y su comportamiento. Agregar un estado nuevo (jelly,
+// candado, cajón, bomba, etc.) = una entrada acá; el resto del motor ya lo soporta genéricamente.
+//   blocksUse : la ficha NO se puede usar en una cuenta (se ve como pared en la detección)
+//   blocksDrag: la ficha NO se puede agarrar ni recibir un intercambio
+//   overlay   : (s, rad) => Container con el dibujo encima de la ficha
+//   breakFx   : color del "burst" al quitarse el estado
+const CELL_STATES = {
+  frozen: {
+    blocksUse: true, blocksDrag: true, breakFx: 0xbfefff,
+    overlay: (s, rad) => {
+      const ice = new Container();
+      const g = new Graphics();
+      g.roundRect(-s / 2, -s / 2, s, s, rad).fill({ color: 0x8fe4ff, alpha: 0.42 });
+      g.roundRect(-s / 2, -s / 2, s, s, rad).stroke({ color: 0xe8faff, width: 3, alpha: 0.95 });
+      g.moveTo(-s / 4, -s / 2).lineTo(0, 0).lineTo(s / 4, s / 3).stroke({ color: 0xffffff, width: 1.5, alpha: 0.7 });
+      ice.addChild(g);
+      const fl = new Text({ text: '❄', style: { fontFamily: 'sans-serif', fontSize: 24, fill: 0xffffff } });
+      fl.anchor.set(0.5); ice.addChild(fl);
+      return ice;
+    },
+  },
+  // futuros: jelly (N golpes), lock (candado), crate (cajón que se rompe al lado), etc.
+};
+
 class Tile extends Container {
-  constructor(ch) { super(); this.r = 0; this.c = 0; this.setChar(ch); }
+  constructor(ch) { super(); this.r = 0; this.c = 0; this.state = null; this._overlay = null; this.setChar(ch); }
+  // aplica el overlay visual del estado actual (si tiene). setChar borra los hijos, así que
+  // esto se vuelve a llamar tras cada setChar para conservar el efecto.
+  _applyOverlay() {
+    const def = CELL_STATES[this.state];
+    if (!def) return;
+    this._overlay = def.overlay(TILE - 8, 13);
+    this.addChild(this._overlay);
+  }
+  setState(key) {
+    this.state = key || null;
+    if (this._overlay) { this._overlay.destroy(); this._overlay = null; }
+    if (this.state) this._applyOverlay();
+  }
+  get blocksUse() { return !!(this.state && CELL_STATES[this.state].blocksUse); }
+  get blocksDrag() { return !!(this.state && CELL_STATES[this.state].blocksDrag); }
   setChar(ch) {
     this.ch = ch;
     this.removeChildren();
@@ -86,6 +126,9 @@ class Tile extends Container {
     // el glifo '−' de la fuente Tiza cae bajo (parece guión bajo): subirlo para centrarlo
     t.y = ch === '−' ? -10 : -1;
     this.addChild(t);
+    // setChar borra los hijos: si la ficha tenía un estado (hielo, etc.), re-pintar el overlay
+    this._overlay = null;
+    if (this.state) this._applyOverlay();
   }
 }
 
@@ -117,7 +160,13 @@ export class Board {
 
   _startDrag(r, c, e) {
     if (this.locked) return;
+    if (this.tiles[r]?.[c]?.blocksDrag) { this._shakeTile(r, c); return; }   // estado que bloquea (hielo, etc.)
     this.drag = { r, c, x: e.global.x, y: e.global.y, done: false };
+  }
+  _shakeTile(r, c) {
+    const t = this.tiles[r]?.[c];
+    if (!t) return;
+    gsap.fromTo(t, { x: this.px(c) - 4 }, { x: this.px(c), duration: 0.25, ease: 'elastic.out(1.5,0.3)' });
   }
   _onDragMove(e) {
     const d = this.drag;
@@ -132,6 +181,7 @@ export class Board {
     const from = { r: d.r, c: d.c };
     this.drag = null;
     if (nr < 0 || nc < 0 || nr >= this.rows || nc >= this.cols) return;
+    if (this.tiles[nr]?.[nc]?.blocksDrag) { this._shakeTile(nr, nc); return; }   // destino bloqueado (hielo, etc.)
     this.onDrag(from, { r: nr, c: nc });
   }
   _endDrag() {
@@ -173,6 +223,41 @@ export class Board {
   }
 
   gridChars() { return this.tiles.map((row) => row.map((t) => (t ? t.ch : null))); }
+
+  // ---------- estados de casillero (efectos del tablero, genérico) ----------
+  // Grilla para DETECCIÓN de cuentas/pistas: las fichas con un estado que bloquea el uso se ven
+  // como pared ('#'), así no se pueden usar ni sugerir en pistas. `extra` = celdas a tratar como
+  // bloqueadas hipotéticamente (para que el jefe pruebe si un ataque dejaría al menos una jugada).
+  gridCharsMasked(extra) {
+    return this.tiles.map((row, r) => row.map((t, c) =>
+      (t ? ((t.blocksUse || extra?.has(r + ',' + c)) ? '#' : t.ch) : null)));
+  }
+  // celdas con un estado dado (o con CUALQUIER estado si key es null)
+  cellsWithState(key = null) {
+    const s = new Set();
+    for (let r = 0; r < this.rows; r++)
+      for (let c = 0; c < this.cols; c++) {
+        const t = this.tiles[r]?.[c];
+        if (t?.state && (key == null || t.state === key)) s.add(r + ',' + c);
+      }
+    return s;
+  }
+  applyState(cells, key) {
+    for (const { r, c } of cells) {
+      const t = this.tiles[r]?.[c];
+      if (t && !t.state) { t.setState(key); gsap.fromTo(t.scale, { x: 1.25, y: 1.25 }, { x: 1, y: 1, duration: 0.35, ease: 'back.out(2)' }); }
+    }
+  }
+  clearState(cells) {
+    for (const { r, c } of cells) {
+      const t = this.tiles[r]?.[c];
+      if (t?.state) {
+        const fx = CELL_STATES[t.state]?.breakFx ?? 0xffffff;
+        t.setState(null); this.burst(t.x, t.y, fx);
+        gsap.fromTo(t.scale, { x: 0.7, y: 0.7 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(2.5)' });
+      }
+    }
+  }
 
   select(cell) {
     if (this.selTile && !this.selTile.destroyed) {

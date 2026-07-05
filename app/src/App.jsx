@@ -167,6 +167,7 @@ function loadProgress() {
 // Descripción corta del nivel para el pop-up de inicio (estilo Candy Crush)
 function levelBrief(lv) {
   if (lv.tutorial) return 'Arrastrá fichas y formá el número de arriba 👆'
+  if (lv.boss) return 'Formá los resultados para atacar al jefe. ¡Bajale todo el HP! 👹'
   if (lv.accum) return 'Formá los resultados y llená la barra hasta la meta'
   return Array.isArray(lv.target)
     ? 'Formá cualquiera de los resultados y llená la barra'
@@ -249,13 +250,15 @@ export default function App() {
   const flyTokens = useCallback((cells, rows, cols, value, bar) => {
     // El LLENADO de la barra (números + progreso) se aplica cuando las fichas LLEGAN
     // (absorción), no antes, para que coincidan. `bar` = nuevo estado de la barra.
-    const applyBar = bar ? () => { if (bar.goal) setGoal(bar.goal); if (bar.accum) setAccum(bar.accum) } : null
+    const applyBar = bar ? () => { if (bar.goal) setGoal(bar.goal); if (bar.accum) setAccum(bar.accum); if (bar.boss) setBoss((b) => b && { ...b, ...bar.boss }) } : null
     const canvas = mountRef.current?.querySelector('canvas')
     const overlay = overlayRef.current
     if (!canvas || !overlay || !cells?.length) { applyBar?.(); return }
     const cr = canvas.getBoundingClientRect()
+    // en batalla de jefe las fichas van al signo (el jefe recibe el golpe); si no, al chip objetivo
+    const bossSign = document.querySelector('.boss-sign')
     const chipSel = value != null ? `[data-val="${value}"]` : null
-    const chip = (chipSel && document.querySelector(chipSel)) || document.querySelector('.tchip')
+    const chip = bossSign || (chipSel && document.querySelector(chipSel)) || document.querySelector('.tchip')
     const chipRect = chip?.getBoundingClientRect()
     const tx = chipRect ? chipRect.left + chipRect.width / 2 : cr.left + cr.width / 2
     const ty = chipRect ? chipRect.top + chipRect.height / 2 : cr.top
@@ -317,6 +320,7 @@ export default function App() {
   const [timeLeft, setTimeLeft] = useState(120)
   const [mode, setMode] = useState({ relax: false })   // modo de juego (relax = sin reloj)
   const [accum, setAccum] = useState(null)             // modo acumulativo: { total, start, goal } | null
+  const [boss, setBoss] = useState(null)               // batalla de jefe: { hp, max, sign } | null
   const [target, setTarget] = useState({ level: 1, name: '', list: [10], flash: false })
   const [goal, setGoal] = useState({ need: 0, done: 0 })   // barra de objetivo: progreso/total
   const [tries, setTries] = useState(0)                           // intentos restantes
@@ -367,6 +371,7 @@ export default function App() {
         setTime: setTimeLeft, setInventory, setHints,
         setMode: (m) => setMode(m),
         setAccum: (a) => setAccum(a),
+        setBoss: (b) => setBoss(b),
         coach: (steps) => setCoach(steps),
         onHintUsed: (index) => trackEvent('hint', index),
         onAddMinute: (index) => trackEvent('continue', index),
@@ -385,7 +390,7 @@ export default function App() {
         addTime: (sec) => showTimeBonus(sec),
         setConfig: () => {},
         setOverlay: (o) => { if (!o.show) setResult(null) },
-        onLevelEnd: ({ index, completed, reason, stars, quota, left, timeLeft, continuesLeft }) => {
+        onLevelEnd: ({ index, completed, reason, stars, quota, left, timeLeft, continuesLeft, boss, timed }) => {
           trackEvent(completed ? 'win' : 'lose', index, { stars, reason, left, timeLeft: Math.round(timeLeft) })
           if (stars >= 1) {
             setProgress((p) => {
@@ -405,7 +410,7 @@ export default function App() {
             winTimer.current = setTimeout(() => advanceFromWin(index), 3400)
           } else {
             // perdió: tarjeta con opción de "+1 min" (limitada).
-            setResult({ index, completed, reason, stars, quota, left, timeLeft, win: false, continuesLeft })
+            setResult({ index, completed, reason, stars, quota, left, timeLeft, win: false, continuesLeft, boss, timed })
           }
         },
         // Notificación de arriba desactivada: molestaba y desacomodaba el layout en mobile.
@@ -523,7 +528,28 @@ export default function App() {
         {/* Objetivo. En modo ACUMULATIVO: barra de total hacia la meta. Si no: "Formá [N]" +
             los palitos que se van tachando (contador pegado al objetivo, tipo Candy Crush). */}
         <div className={'obj-card' + (coach?.[0]?.highlight === 'target' ? ' coach-hl' : '')}>
-          {accum ? (
+          {boss ? (
+            /* BATALLA DE JEFE (base): el signo grande + barra de HP que baja. Formá cualquiera
+               de los resultados para golpearlo; a 0 HP se derrota. */
+            <div className="boss">
+              <div className={'boss-sign' + (boss.hp <= 0 ? ' defeated' : '')}>{boss.sign}</div>
+              <div className="boss-side">
+                <div className="boss-hpbar">
+                  <div className="boss-hpfill" style={{ width: (boss.max ? Math.max(0, Math.min(100, (100 * boss.hp) / boss.max)) : 0) + '%' }} />
+                  <span className="boss-hpnum">{boss.hp} / {boss.max}</span>
+                </div>
+                <div className="boss-atk">
+                  <span className="obj-label sm">Atacá con</span>
+                  {(target.list || []).map((t, i) => (
+                    <React.Fragment key={t}>
+                      {i > 0 && <span className="tor">·</span>}
+                      <span className="tchip mini">{t}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : accum ? (
             <div className="accum">
               {/* qué cuentas valen (set fijo) → se muestran para que la regla sea clara */}
               <div className="obj-top accum-targets">
@@ -724,12 +750,15 @@ export default function App() {
       {result && !result.win && (
         <div className="overlay">
           <div className="card">
-            <div className="ot">{result.reason === 'moves' ? '¡Te quedaste sin intentos!' : '¡Se acabó el tiempo!'}</div>
-            <div className="ok">Cuentas que faltaron</div>
+            <div className="ot">{
+              result.reason === 'frozen' ? '🧊 ¡El jefe te congeló el tablero!'
+                : result.reason === 'time' ? '¡Se acabó el tiempo!'
+                  : '¡Te quedaste sin intentos!'}</div>
+            <div className="ok">{result.boss ? 'HP restante del jefe' : 'Cuentas que faltaron'}</div>
             <div className="os">{result.left}</div>
             {result.continuesLeft > 0 && (
               <button className="continue-btn" onClick={() => ctrlRef.current?.resumeWithBonus()}>
-                +1 minuto
+                {result.boss ? '🧊 Descongelar todo y seguir' : result.timed ? '+1 minuto' : 'Reintentar'}
               </button>
             )}
             <div className="card-btns">

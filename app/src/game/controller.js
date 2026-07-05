@@ -28,6 +28,8 @@ const HINTS_KEY = 'math_hints'
 const MAX_CONTINUES = 2  // veces que se puede "seguir con +1 min" al perder
 const CONTINUE_TIME = 60 // segundos que da cada "+1 min"
 const NEAR_MOVES = 3     // cuentas fáciles que se siembran (visibles) alrededor de donde jugás
+const BOSS_FREEZE_MS = 10000 // cada cuánto ataca el jefe (congela fichas)
+const BOSS_FREEZE_N = 3       // cuántas fichas congela por ataque
 const GOAL_NORMAL = 1000 // meta de la barra en niveles normales: sumando el VALOR formado
                          // (contás de N en N) hasta 1000. SIN reloj (se pierde sólo por intentos).
                          // Tuneable por nivel con el campo `goal`.
@@ -76,16 +78,24 @@ export class Controller {
     this.accum = this.level.accum || null
     this.accumTotal = this.accum ? this.accum.start : 0
     this.accumDir = this.accum ? (this.accum.goal >= this.accum.start ? 1 : -1) : 0
+    // BATALLA DE JEFE (hitos, versión base): el objetivo es un JEFE con HP que arranca lleno
+    // y baja por el VALOR formado (daño = valor). Se gana al dejarlo en 0. `boss: { hp }`.
+    this.boss = this.level.boss || null
+    this.bossHpMax = this.boss ? this.boss.hp : 0
+    this.bossHp = this.bossHpMax
     this.ended = false
     this.busy = false
     this.started = false
     // BARRA de objetivo: en modo normal hay UNA sola barra que suma el VALOR del resultado
     // formado (contás "de N en N", ej sumar 5 → 5,10,15…) hasta GOAL_NORMAL (1000). Cualquier
     // objetivo (en el doble) cuenta al mismo total. Override por nivel con `goal`.
-    // El acumulativo (hitos 10/20/30/40) tiene su propia barra (start→goal).
-    this.goalNeed = this.accum ? 0 : (this.level.goal ?? GOAL_NORMAL)
+    // El acumulativo/jefe (hitos 10/20/30/40) tienen su propia barra.
+    this.goalNeed = (this.accum || this.boss) ? 0 : (this.level.goal ?? GOAL_NORMAL)
     this.goalDone = 0
-    this.left = this.accum ? (this.level.quota ?? 6) : this.goalNeed   // lo que falta para llenar
+    this.left = this.boss ? this.bossHp                       // jefe: HP restante
+      : this.accum ? (this.level.quota ?? 6)
+      : this.goalNeed                                         // barra normal: lo que falta
+
     this.tries = this.level.tries ?? MAX_TRIES   // intentos restantes
     this.hintsLeft = getHintPool()         // pistas del POOL GLOBAL (persiste entre niveles)
     this.continues = 0                     // veces que ya usó "+1 min"
@@ -99,6 +109,7 @@ export class Controller {
     this.deadline = 0
     this.timerOn = false
     if (this.timerId) clearTimeout(this.timerId)
+    if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }   // ataques del jefe
     this._clearAutoHint()
     this.selected = null
     this.activeBooster = null
@@ -129,6 +140,7 @@ export class Controller {
     if (this.started || this.ended) return
     this.started = true
     this.board.hideHandGuide()              // el jugador ya tomó el control: fuera la manito
+    if (this.boss) this._startBossAttacks() // el jefe empieza a atacar (congelar) cada 5s
     if (this.relax || !this.timed) return   // sin reloj (por defecto): se gana llenando la barra
     this.deadline = Date.now() + START_TIME * 1000
     this.timerOn = true
@@ -260,11 +272,15 @@ export class Controller {
       ? seedTargetMovesNear(grid, this.gen, this.targets, [...nearCols], this.md, this.mo, NEAR_MOVES)
       : []
     const seededKeys = new Set(seeded.map(([r, c]) => r + ',' + c))
+    // NUNCA modificar fichas con estado (hielo, etc.): el mantenimiento las saltea (si no,
+    // setChar borraría el overlay y se cambiaría una ficha que el jugador no puede tocar).
+    const stateKeys = this.board.cellsWithState()
     // mantenimiento de fondo: escondido en el temblor (sin animación), excluyendo lo sembrado
     const bg = [...new Map(changed.map(([r, c]) => [r + ',' + c, [r, c]])).values()]
-      .filter(([r, c]) => !seededKeys.has(r + ',' + c))
+      .filter(([r, c]) => !seededKeys.has(r + ',' + c) && !stateKeys.has(r + ',' + c))
     if (bg.length) this.board.applyCharsPlain(bg, grid)
-    if (seeded.length) this.board.applyChars(seeded, grid)   // pop VISIBLE de la siembra
+    const seededFree = seeded.filter(([r, c]) => !stateKeys.has(r + ',' + c))
+    if (seededFree.length) this.board.applyChars(seededFree, grid)   // pop VISIBLE de la siembra
   }
 
   _pickTargets(consumed = new Set()) {
@@ -315,7 +331,7 @@ export class Controller {
     if (this.busy || this.ended) { this._startAutoHint(); return }
     this.autoHintCount++
     if (this.tutorial) {
-      const h = findHintFallback(this.board.gridChars(), this.targets, this.md, this.mo)
+      const h = findHintFallback(this.board.gridCharsMasked(), this.targets, this.md, this.mo)
       if (h) this.board.showHandGuide(h.a, h.b)      // nivel 1: manito guía sobre la jugada
     } else {
       this.hint(false)                               // pista automática: NO gasta el cupo manual
@@ -357,8 +373,9 @@ export class Controller {
     this.moves++                           // cuenta el movimiento (para el límite de pistas)
     this.busy = true; this.board.locked = true
     await this.board.swap(a, b)
-    // si no forma cuenta, vuelve para atrás y cuesta un intento (anti prueba-y-error)
-    if (!findMatchesMulti(this.board.gridChars(), this.targets, this.md, this.mo).size) {
+    // si no forma cuenta, vuelve para atrás y cuesta un intento (anti prueba-y-error).
+    // gridCharsMasked ignora fichas con estado bloqueante (hielo, etc.): no cuentan en cuentas.
+    if (!findMatchesMulti(this.board.gridCharsMasked(), this.targets, this.md, this.mo).size) {
       await this.board.swap(b, a)
       this.busy = false; this.board.locked = false
       this._failMove()
@@ -394,6 +411,7 @@ export class Controller {
     // cambia las fichas necesarias de forma sutil (sin un segundo temblor), como parte
     // del mismo momento en que el tablero se asienta.
     this._pickTargets(consumed)
+    this._bossCheckStuck()          // ¿el hielo dejó el tablero sin jugadas? → perdés
     if (consumed.size > 0 && this._maybeSwitchTarget()) return   // el objetivo cambió: coach + pausa
     // Tutorial (nivel 1): 2do paso, recién DESPUÉS del primer acierto (no todo junto al arrancar).
     if (this.tutorial && consumed.size > 0 && !this.coachedTutorialFirst) {
@@ -443,9 +461,10 @@ export class Controller {
     let playedCols = null                 // columnas donde el jugador hizo su jugada (para sembrar cerca)
     const consumed = new Set()
     while (!this.ended) {
-      const grid = this.board.gridChars()
-      const eq = findEquationCells(grid, this.md)
-      const tg = findTargetCellsMulti(grid, this.targets, this.md, this.mo)
+      const grid = this.board.gridChars()               // chars reales (para volar fichas)
+      const mgrid = this.board.gridCharsMasked()         // enmascarada: fichas con estado = pared
+      const eq = findEquationCells(mgrid, this.md)
+      const tg = findTargetCellsMulti(mgrid, this.targets, this.md, this.mo)
       const all = new Set([...eq, ...tg.cells])
       if (all.size === 0) break
 
@@ -464,7 +483,8 @@ export class Controller {
       if (cuentas > 0) {
         // Se actualiza el total INTERNO (para la victoria); el llenado VISIBLE de la barra
         // se sincroniza con la absorción de las fichas (ver onCuenta → bar, más abajo).
-        if (this.accum) this._addAccum(tg.sum)      // acumulativo: suma/resta el VALOR formado
+        if (this.boss) this._addBoss(barAdd)        // jefe: el VALOR formado le baja HP
+        else if (this.accum) this._addAccum(tg.sum) // acumulativo: suma/resta el VALOR formado
         else this._addGoal(barAdd)                  // barra normal: suma el VALOR formado
         if (!deliberate) this.hooks.toast?.(this.level.comboFever
           ? '¡Combo DOBLE! +' + dec + ' cuentas 🔥'
@@ -483,10 +503,15 @@ export class Controller {
       if (cuentas > 0) this.hooks.onCuenta?.({
         cells: cells.map(({ r, c }) => ({ r, c, ch: grid[r]?.[c] })),
         rows: this.board.rows, cols: this.board.cols, value: [...tg.hit][0],
-        bar: this.accum
-          ? { accum: { total: this.accumTotal, start: this.accum.start, goal: this.accum.goal } }
-          : { goal: { need: this.goalNeed, done: this.goalDone } },
+        bar: this.boss
+          ? { boss: { hp: this.bossHp, max: this.bossHpMax } }
+          : this.accum
+            ? { accum: { total: this.accumTotal, start: this.accum.start, goal: this.accum.goal } }
+            : { goal: { need: this.goalNeed, done: this.goalDone } },
       })
+      // ROMPER estados por CONTACTO: una cuenta descongela las fichas adyacentes (antes de
+      // colapsar, con las posiciones aún válidas). Así se destraba el tablero jugando cerca.
+      if (this.boss) this._breakStatesNear(cells)
       await this.board.clear(cells)
       await this.board.collapse(this.gen.randTile)
       this._applyTidy()
@@ -511,6 +536,69 @@ export class Controller {
   _addGoal(v) {
     this.goalDone = Math.min(this.goalNeed, this.goalDone + v)
     this.left = Math.max(0, this.goalNeed - this.goalDone)
+  }
+
+  // BATALLA DE JEFE: el valor formado le baja HP al jefe; se gana al dejarlo en 0. El
+  // movimiento VISIBLE de la barra de HP lo dispara onCuenta al llegar las fichas (absorción).
+  _addBoss(value) {
+    this.bossHp = Math.max(0, this.bossHp - value)
+    this.left = this.bossHp   // dispara la victoria por los checks existentes de left<=0
+  }
+
+  // ---------- ataques del jefe (estados de casillero) ----------
+  // Loop propio del jefe (no es el reloj del jugador): cada BOSS_FREEZE_MS intenta un ataque.
+  _startBossAttacks() {
+    if (!this.boss || this._bossAtkId) return
+    this._bossAtkId = setTimeout(() => this._bossTick(), BOSS_FREEZE_MS)
+  }
+  _bossTick() {
+    this._bossAtkId = null
+    if (this.ended) return
+    // no atacar si el tablero está ocupado (cascada) o hay un mensaje del coach: se reprograma
+    if (this.started && !this.busy && !this.coachActive) this._bossAttack()
+    this._bossAtkId = setTimeout(() => this._bossTick(), BOSS_FREEZE_MS)
+  }
+  // ATAQUE "congelar": congela hasta BOSS_FREEZE_N fichas libres AL AZAR. SIN guardrail: el
+  // jefe PUEDE congelar todo. Si te deja sin ninguna jugada, perdés (→ "descongelar todo").
+  _bossAttack() {
+    const blocked = this.board.cellsWithState()
+    const cands = []
+    for (let r = 0; r < this.board.rows; r++)
+      for (let c = 0; c < this.board.cols; c++) if (!blocked.has(r + ',' + c)) cands.push({ r, c })
+    // barajar (Fisher-Yates; fuera de workflow, Math.random OK)
+    for (let i = cands.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[cands[i], cands[j]] = [cands[j], cands[i]] }
+    const toFreeze = cands.slice(0, BOSS_FREEZE_N)
+    if (toFreeze.length) {
+      this.board.applyState(toFreeze, 'frozen')
+      this.board.shake(8)
+      this.hooks.toast?.('❄️ ¡El jefe congeló ' + toFreeze.length + ' ficha' + (toFreeze.length > 1 ? 's' : '') + '!')
+    }
+    this._bossCheckStuck()   // ¿te dejó sin movimientos? → perdés
+  }
+  // si el jefe te dejó SIN ninguna jugada usable, perdés (reason 'frozen'); el reintento
+  // ("descongelar todo") rompe el hielo y seguís.
+  _bossCheckStuck() {
+    if (!this.boss || this.ended || this.busy) return
+    if (!countTargetMoves(this.board.gridCharsMasked(), this.targets, this.md, this.mo, 1)) {
+      this._endLevel(false, 'frozen')
+    }
+  }
+  // rompe TODOS los estados del tablero (para el reintento: "romper el hielo")
+  _breakAllStates() {
+    const cells = [...this.board.cellsWithState()].map((k) => { const [r, c] = k.split(',').map(Number); return { r, c } })
+    if (cells.length) this.board.clearState(cells)
+  }
+  // una cuenta descongela (rompe el estado de) las fichas ortogonalmente adyacentes a sus celdas
+  _breakStatesNear(cells) {
+    const blocked = this.board.cellsWithState()
+    if (!blocked.size) return
+    const toBreak = []
+    for (const { r, c } of cells)
+      for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const k = (r + dr) + ',' + (c + dc)
+        if (blocked.has(k)) { toBreak.push({ r: r + dr, c: c + dc }); blocked.delete(k) }
+      }
+    if (toBreak.length) this.board.clearState(toBreak)
   }
 
   // MODO ACUMULATIVO: suma (o resta) el valor formado al total; gana al alcanzar la meta.
@@ -596,6 +684,7 @@ export class Controller {
     this.board.hideHandGuide()
     this._clearAutoHint()
     if (this.timerId) clearTimeout(this.timerId)
+    if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }
     // Sin reloj (por defecto o relax): las estrellas premian la PRECISIÓN (movimientos
     // fallados = intentos gastados). 3★ sin fallar, 2★ hasta 3, 1★ completar. Con reloj:
     // por velocidad (timeLeft).
@@ -608,12 +697,14 @@ export class Controller {
       index: this.levelIndex, completed, reason, stars,
       quota: this.level.quota ?? 6, left: this.left,
       timeLeft: Math.max(0, this.timeLeft),
-      continuesLeft: MAX_CONTINUES - this.continues,   // cuántos "+1 min" quedan
+      continuesLeft: MAX_CONTINUES - this.continues,   // cuántos reintentos quedan
+      boss: !!this.boss, timed: this.timed,            // para el texto del reintento (romper hielo / +1 min)
     })
   }
 
-  // "+1 min": el jugador perdió pero elige seguir. Reponemos tiempo (y intentos
-  // si se habían agotado) y reanudamos el mismo nivel. Máximo MAX_CONTINUES veces.
+  // REINTENTO: el jugador perdió pero elige seguir. Repone intentos y reanuda el nivel.
+  // En el JEFE, el reintento ROMPE TODO EL HIELO (no da tiempo). En niveles con reloj, suma
+  // tiempo (legacy). En niveles sin reloj, sólo repone intentos. Máximo MAX_CONTINUES veces.
   resumeWithBonus() {
     if (!this.ended || this.continues >= MAX_CONTINUES) return
     this.continues++
@@ -624,13 +715,20 @@ export class Controller {
     if (this.tries <= 0) this.tries = this.level.tries ?? MAX_TRIES   // reponer intentos
     this.hooks.setTries?.({ left: this.tries, dec: false })
     this.started = true
-    this.timerOn = true
-    this.timeLeft = Math.max(0, this.timeLeft) + CONTINUE_TIME
-    this.deadline = Date.now() + this.timeLeft * 1000
-    this.hooks.setTime(this.timeLeft)
-    this.hooks.addTime?.(CONTINUE_TIME)
     this.hooks.setOverlay({ show: false })             // cierra el pop-up de resultado
-    this._tick()
+    if (this.boss) {
+      this._breakAllStates()                           // el reintento ROMPE todo el hielo
+      this.hooks.toast?.('¡Hielo roto! Seguí atacando al jefe ❄️💥')
+      this._startBossAttacks()
+    }
+    if (this.timed && !this.relax) {                   // sólo niveles con reloj: sumar tiempo
+      this.timerOn = true
+      this.timeLeft = Math.max(0, this.timeLeft) + CONTINUE_TIME
+      this.deadline = Date.now() + this.timeLeft * 1000
+      this.hooks.setTime(this.timeLeft)
+      this.hooks.addTime?.(CONTINUE_TIME)
+      this._tick()
+    }
     this._startAutoHint()
   }
 
@@ -640,7 +738,7 @@ export class Controller {
   hint(manual = true) {
     if (this.busy || this.ended) return
     if (manual && this.hintsLeft <= 0) return       // sin pistas disponibles
-    const grid = this.board.gridChars()
+    const grid = this.board.gridCharsMasked()       // no sugerir fichas con estado (hielo, etc.)
     const h = findHintFallback(grid, this.targets, this.md, this.mo)
     if (!h) return                                  // sin jugadas (no gasta pista)
     // simular el swap para saber qué celdas forman la cuenta (en el tablero YA intercambiado)
@@ -684,8 +782,9 @@ export class Controller {
     })
   }
   _pushHud() {
-    this.hooks.setMode?.({ relax: this.relax, accum: !!this.accum, timed: this.timed })
+    this.hooks.setMode?.({ relax: this.relax, accum: !!this.accum, boss: !!this.boss, timed: this.timed })
     this.hooks.setAccum?.(this.accum ? { total: this.accumTotal, start: this.accum.start, goal: this.accum.goal } : null)
+    this.hooks.setBoss?.(this.boss ? { hp: this.bossHp, max: this.bossHpMax, sign: this.level.ops?.[0] ?? '+' } : null)
     this.hooks.setTime(this.timeLeft)
     this.hooks.setGoal?.({ need: this.goalNeed, done: this.goalDone })
     this.hooks.setTries?.({ left: this.tries, dec: false })

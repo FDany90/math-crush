@@ -11,8 +11,18 @@ Flujo de deploy con dos ambientes en Vercel. Objetivo: probar en **QA** antes de
 | **QA / Preview** | `qa` | Preview (automático al pushear) | URL de preview de la rama `qa` |
 
 Vercel genera el deploy solo con el push: `main` → producción, `qa` (o cualquier otra rama) → preview.
-La URL de QA se ve en **Vercel → Deployments → deploy de la rama `qa`** (conviene fijarle un alias
-estable, ej. `mathcrush-qa.vercel.app`, en Vercel → Settings → Domains, para no buscarla cada vez).
+
+### URLs de QA — usar la ESTABLE por rama
+Cada deploy tiene una URL **única** (`math-crush-<hash>.vercel.app`) que **cambia en cada push**.
+Pero Vercel también da una **URL estable por rama** que SIEMPRE apunta al último deploy de esa rama:
+
+```
+math-crush-git-qa-<scope>.vercel.app     ← estable, no cambia entre deploys de qa
+```
+
+(`<scope>` = tu usuario/equipo de Vercel, ej. `fdany90`). **Esa es la que va a favoritos en el celu.**
+Se ve en **Vercel → el deploy de `qa` → sección "Domains"** (aparecen las dos: la única y la `-git-qa-`).
+Opcional: un dominio más corto/lindo (`mathcrush-qa.vercel.app`) en Settings → Domains apuntando a `qa`.
 
 ## Flujo de trabajo (día a día)
 

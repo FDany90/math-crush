@@ -6,6 +6,7 @@ import {
   newGrid, tidyBoard, ensureMinOperators, findEquationCells, findTargetCellsMulti,
   findMatchesMulti, findHintFallback, pickTargets, adjacent, breakFormedTargets, plantTargetMove,
   countTargetMoves, addTargetMovesSubtle, destrandOperators, seedTargetMovesNear,
+  findTargetSegments, countComboMoves, plantComboMove,
 } from './logic.js'
 import { getLevel, makeGen, randTarget, starsFor, symbolAllowed } from './levels.js'
 
@@ -126,7 +127,7 @@ export class Controller {
     // va indicando MIENTRAS jugás (después del primer acierto), no todo junto.
     // Como el reloj arranca recién en el primer movimiento, no consume tiempo.
     if (this.tutorial) {
-      this._coach([{ text: 'Arrastrá una ficha hacia su vecina para formar el número de arriba.', highlight: 'target' }])
+      this._coach([{ text: 'Mové las fichas para formar el número de arriba.', highlight: 'target' }])
     } else if (this.boss && !this._alreadyCoached('math_coached_boss')) {
       // Llegaste al JEFE: explicá qué hacer (formar los resultados que marca = daño) y que
       // va a atacar. El detalle del ataque CONGELAR se explica en la primera congelada.
@@ -273,19 +274,29 @@ export class Controller {
     if (!findHintFallback(grid, this.targets, this.md, this.mo)) {
       changed.push(...plantTargetMove(grid, this.gen))
     }
+    // SÚPER FICHA: garantizar al menos 1 jugada de 2 OPERADORES disponible, así el jugador
+    // SIEMPRE puede generar una súper ficha (arma la cuenta 2+1+3 en vez de 2+4). Sólo suma.
+    if (this.level.superTile && this.mo >= 2) {
+      let g = 0
+      while (!countComboMoves(grid, this.targets, this.md, 1) && g++ < 3) {
+        changed.push(...plantComboMove(grid, this.gen, this.targets[0], this.level.digits))
+        changed.push(...breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo))
+      }
+    }
     // SIEMBRA local: cuentas fáciles alrededor de donde jugó el jugador (se muestran con pop).
     const seeded = nearCols
       ? seedTargetMovesNear(grid, this.gen, this.targets, [...nearCols], this.md, this.mo, NEAR_MOVES)
       : []
     const seededKeys = new Set(seeded.map(([r, c]) => r + ',' + c))
-    // NUNCA modificar fichas con estado (hielo, etc.): el mantenimiento las saltea (si no,
-    // setChar borraría el overlay y se cambiaría una ficha que el jugador no puede tocar).
+    // NUNCA modificar fichas con estado (hielo) NI súper fichas: el mantenimiento las saltea
+    // (si no, setChar borraría su look y se cambiaría una ficha especial del jugador).
     const stateKeys = this.board.cellsWithState()
+    const protectedK = new Set([...stateKeys, ...this.board.superCells()])
     // mantenimiento de fondo: escondido en el temblor (sin animación), excluyendo lo sembrado
     const bg = [...new Map(changed.map(([r, c]) => [r + ',' + c, [r, c]])).values()]
-      .filter(([r, c]) => !seededKeys.has(r + ',' + c) && !stateKeys.has(r + ',' + c))
+      .filter(([r, c]) => !seededKeys.has(r + ',' + c) && !protectedK.has(r + ',' + c))
     if (bg.length) this.board.applyCharsPlain(bg, grid)
-    const seededFree = seeded.filter(([r, c]) => !stateKeys.has(r + ',' + c))
+    const seededFree = seeded.filter(([r, c]) => !protectedK.has(r + ',' + c))
     if (seededFree.length) this.board.applyChars(seededFree, grid)   // pop VISIBLE de la siembra
   }
 
@@ -468,6 +479,28 @@ export class Controller {
       const all = new Set([...eq, ...tg.cells])
       if (all.size === 0) break
 
+      // ---- SÚPER FICHA (mecánica tipo Candy Crush; ver _resolve más abajo makeSuper) ----
+      let superSpawn = []
+      if (this.level.superTile) {
+        // DETONAR: si una súper ficha participa de esta cuenta, explota en CRUZ (fila + columna).
+        for (const key of [...all]) {
+          const [r, c] = key.split(',').map(Number)
+          if (this.board.isSuper(r, c)) {
+            this.board.superCross(r, c)
+            this.hooks.toast?.('💥 ¡Súper ficha en cruz!')
+            for (let cc = 0; cc < this.board.cols; cc++) all.add(r + ',' + cc)
+            for (let rr = 0; rr < this.board.rows; rr++) all.add(rr + ',' + c)
+          }
+        }
+        // GENERAR: una cuenta con 2 operadores deja una súper ficha '+' (se conserva 1 operador).
+        for (const seg of findTargetSegments(mgrid, this.targets, this.md, this.mo)) {
+          if (seg.ops < 2) continue
+          const opCell = seg.cells.find(({ r, c }) => ['+', '−', '×', '÷'].includes(grid[r]?.[c]) && !this.board.isSuper(r, c))
+          if (opCell) superSpawn.push(opCell)
+        }
+        for (const { r, c } of superSpawn) all.delete(r + ',' + c)   // no limpiar: se vuelve súper
+      }
+
       combo++; this.combo = combo
       // cuentas por SEGMENTO (no por valor distinto): formar el objetivo 2 veces en un
       // movimiento cuenta 2.
@@ -513,6 +546,12 @@ export class Controller {
       // colapsar, con las posiciones aún válidas). Así se destraba el tablero jugando cerca.
       if (this.boss) this._breakStatesNear(cells)
       await this.board.clear(cells)
+      // GENERAR súper ficha: convertir el operador conservado ANTES del colapso (aún en su celda);
+      // la ficha ya súper cae con el colapso conservando su estado.
+      if (superSpawn.length) {
+        for (const { r, c } of superSpawn) this.board.makeSuper(r, c)
+        this.hooks.toast?.('✨ ¡Súper ficha +! Usala en una cuenta para explotar en cruz')
+      }
       await this.board.collapse(this.gen.randTile)
       this._applyTidy()
       if (this.left <= 0) break          // ¡completó las cuentas del nivel!
@@ -639,7 +678,7 @@ export class Controller {
     try {
       if (!localStorage.getItem('math_coached_wrongmove')) {
         localStorage.setItem('math_coached_wrongmove', '1')
-        this._coach([{ text: '¡Ups! Ese movimiento no formó una cuenta. Cada error gasta una tiza ✏️. Te quedan ' + this.tries + ' — ¡pensá bien antes de mover!', highlight: 'lives' }])
+        this._coach([{ text: '¡Ups! Ese movimiento no formó una cuenta. Cada error gasta una barra. Te quedan ' + this.tries + ' — ¡pensá bien antes de mover!', highlight: 'lives' }])
       }
     } catch { /* sin localStorage: no avisar */ }
   }

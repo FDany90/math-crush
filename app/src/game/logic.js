@@ -539,6 +539,104 @@ export function breakFormedTargets(grid, gen, targets, maxDigits = Infinity, max
   return changed;
 }
 
+// ====================================================================
+// SÚPER FICHA (mecánica tipo Candy Crush) — arranca en SUMA.
+// Formar una cuenta con 2 OPERADORES (ej. 2+1+3=6) genera una súper ficha '+'.
+// Al usarla en una cuenta, explota en CRUZ (fila + columna). Ver DISEÑO §16.
+// Pendiente: −, ×, ÷ (por ahora la siembra de cuentas de 2 operadores es sólo suma).
+// ====================================================================
+
+// Segmentos (celdas + valor + nº de operadores) que forman ALGÚN objetivo. Sirve para
+// detectar qué cuentas usaron 2 operadores (→ generan súper ficha).
+export function findTargetSegments(grid, targets, maxDigits = Infinity, maxOps = 1) {
+  const [ROWS, COLS] = dimsOf(grid);
+  const targetSet = new Set(targets);
+  const out = [];
+  const scan = (cells) => {
+    let start = 0;
+    while (start < cells.length) {
+      let bestEnd = -1, bestVal = null;
+      for (let end = cells.length; end > start + 2; end--) {
+        const seg = cells.slice(start, end).map((x) => x.ch);
+        if (seg.includes(EQ)) continue;
+        const ops = opCount(seg);
+        if (ops < 1 || ops > maxOps) continue;
+        const v = evalExpr(seg, maxDigits);
+        if (v !== null && targetSet.has(v)) { bestEnd = end; bestVal = v; break; }
+      }
+      if (bestEnd !== -1) {
+        const segCells = cells.slice(start, bestEnd);
+        out.push({ cells: segCells.map(({ r, c }) => ({ r, c })), value: bestVal, ops: opCount(segCells.map((x) => x.ch)) });
+        start = bestEnd;
+      } else start++;
+    }
+  };
+  for (let r = 0; r < ROWS; r++) { const line = []; for (let c = 0; c < COLS; c++) line.push({ r, c, ch: grid[r][c] }); scan(line); }
+  for (let c = 0; c < COLS; c++) { const line = []; for (let r = 0; r < ROWS; r++) line.push({ r, c, ch: grid[r][c] }); scan(line); }
+  return out;
+}
+
+// ¿alguna sub-línea forma un objetivo usando EXACTAMENTE 2 operadores? (para súper ficha)
+function lineHasComboMatch(chars, targetSet, maxDigits) {
+  const n = chars.length;
+  for (let s = 0; s < n; s++) for (let e = n; e > s + 2; e--) {
+    const seg = chars.slice(s, e);
+    if (seg.includes(EQ)) continue;
+    if (opCount(seg) !== 2) continue;
+    const v = evalExpr(seg, maxDigits);
+    if (v !== null && targetSet.has(v)) return true;
+  }
+  return false;
+}
+
+// Cuenta swaps adyacentes que forman una cuenta de 2 OPERADORES (corta al llegar a `cap`).
+export function countComboMoves(grid, targets, maxDigits = Infinity, cap = Infinity) {
+  const [R, C] = dimsOf(grid);
+  const set = new Set(targets);
+  let n = 0;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    for (const [r2, c2] of [[r, c + 1], [r + 1, c]]) {
+      if (r2 >= R || c2 >= C) continue;
+      if (grid[r][c] === '#' || grid[r2][c2] === '#') continue;
+      const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
+      const ok =
+        lineHasComboMatch(getRow(grid, r), set, maxDigits) ||
+        lineHasComboMatch(getCol(grid, c), set, maxDigits) ||
+        (r2 !== r && lineHasComboMatch(getRow(grid, r2), set, maxDigits)) ||
+        (c2 !== c && lineHasComboMatch(getCol(grid, c2), set, maxDigits));
+      grid[r2][c2] = grid[r][c]; grid[r][c] = t;
+      if (ok && ++n >= cap) return n;
+    }
+  }
+  return n;
+}
+
+// Tríos [a,b,c] de una cifra con a+b+c == target (SÓLO SUMA por ahora).
+export function targetTriosTwoOps(target, digits) {
+  const ds = digits.map(Number);
+  const out = [];
+  for (const a of ds) for (const b of ds) for (const c of ds) if (a + b + c === target) out.push([a, b, c]);
+  return out;
+}
+
+// Planta una cuenta de 2 operadores a UN swap: en una fila deja `a + b + filler` y justo
+// debajo del filler pone `c`, así un swap vertical forma `a+b+c == target`. filler se elige
+// para no dejar nada ya formado (ni a+b+filler, ni b+filler). Devuelve celdas. (SÓLO SUMA.)
+export function plantComboMove(grid, gen, target, digits) {
+  const trios = targetTriosTwoOps(target, digits);
+  const [R, C] = dimsOf(grid);
+  if (!trios.length || R < 2 || C < 5) return [];
+  const [a, b, c] = trios[Math.floor(Math.random() * trios.length)];
+  const r = Math.floor(Math.random() * (R - 1));
+  const cc = Math.floor(Math.random() * (C - 4));
+  let filler = c, guard = 0;
+  do { filler = gen.randDigit(); guard++; }
+  while (guard < 40 && (Number(filler) === c || a + b + Number(filler) === target || b + Number(filler) === target));
+  grid[r][cc] = String(a); grid[r][cc + 1] = '+'; grid[r][cc + 2] = String(b); grid[r][cc + 3] = '+'; grid[r][cc + 4] = String(filler);
+  grid[r + 1][cc + 4] = String(c);
+  return [[r, cc], [r, cc + 1], [r, cc + 2], [r, cc + 3], [r, cc + 4], [r + 1, cc + 4]];
+}
+
 // ¿alguna sub-línea (len>=3) forma una ecuación válida o alcanza un objetivo?
 function lineHasMatch(chars, targetSet, maxDigits, maxOps = 1) {
   const n = chars.length;

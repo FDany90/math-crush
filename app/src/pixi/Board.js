@@ -52,7 +52,22 @@ const CELL_STATES = {
 };
 
 class Tile extends Container {
-  constructor(ch) { super(); this.r = 0; this.c = 0; this.state = null; this._overlay = null; this.setChar(ch); }
+  constructor(ch) { super(); this.r = 0; this.c = 0; this.state = null; this._overlay = null; this.super = false; this.setChar(ch); }
+  // SÚPER FICHA (mecánica tipo Candy Crush): un operador "cargado". Se ve especial (dorado + ✨
+  // + aura). setChar re-dibuja la ficha, así que esto se re-aplica después de cada setChar.
+  _applySuper() {
+    const s = TILE - 8, rad = 13;
+    const aura = new Graphics();
+    aura.roundRect(-s / 2, -s / 2, s, s, rad).fill({ color: 0xffd23f, alpha: 0.18 });
+    aura.roundRect(-s / 2 - 3, -s / 2 - 3, s + 6, s + 6, rad + 3).stroke({ color: 0xffe07a, width: 3, alpha: 0.95 });
+    aura.roundRect(-s / 2 - 1, -s / 2 - 1, s + 2, s + 2, rad + 1).stroke({ color: 0xffffff, width: 1.5, alpha: 0.7 });
+    this.addChild(aura);
+    for (const [sx, sy] of [[s / 2 - 7, -s / 2 + 7], [-s / 2 + 7, s / 2 - 8]]) {
+      const spark = new Text({ text: '✨', style: { fontFamily: 'sans-serif', fontSize: 15 } });
+      spark.anchor.set(0.5); spark.x = sx; spark.y = sy; this.addChild(spark);
+    }
+  }
+  setSuper(v) { this.super = !!v; this.setChar(this.ch); }
   // aplica el overlay visual del estado actual (si tiene). setChar borra los hijos, así que
   // esto se vuelve a llamar tras cada setChar para conservar el efecto.
   _applyOverlay() {
@@ -117,16 +132,17 @@ class Tile extends Container {
     outline.roundRect(-s / 2 + 1, -s / 2 - 1.5, s, s, rad).stroke({ color: 0xffffff, width: 1, alpha: 0.3, alignment: 0.5 });
     this.addChild(outline);
 
-    // número/símbolo en tiza blanca (sobre el fondo oscuro de la ficha)
+    // número/símbolo en tiza blanca (sobre el fondo oscuro de la ficha); dorado si es súper
     const t = new Text({
       text: ch,
-      style: { fontFamily: 'Tiza, "Patrick Hand", cursive', fontSize: 42, fill: 0xffffff },
+      style: { fontFamily: 'Tiza, "Patrick Hand", cursive', fontSize: 42, fill: this.super ? 0xffe07a : 0xffffff },
     });
     t.anchor.set(0.5);
     // el glifo '−' de la fuente Tiza cae bajo (parece guión bajo): subirlo para centrarlo
     t.y = ch === '−' ? -10 : -1;
     this.addChild(t);
-    // setChar borra los hijos: si la ficha tenía un estado (hielo, etc.), re-pintar el overlay
+    // setChar borra los hijos: re-pintar decoraciones (súper ficha y/o estado como el hielo)
+    if (this.super) this._applySuper();
     this._overlay = null;
     if (this.state) this._applyOverlay();
   }
@@ -257,6 +273,34 @@ export class Board {
         gsap.fromTo(t.scale, { x: 0.7, y: 0.7 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(2.5)' });
       }
     }
+  }
+
+  // ---------- súper fichas (mecánica tipo Candy Crush) ----------
+  makeSuper(r, c) {
+    const t = this.tiles[r]?.[c];
+    if (!t || t.super) return;
+    t.setSuper(true);
+    gsap.fromTo(t.scale, { x: 1.35, y: 1.35 }, { x: 1, y: 1, duration: 0.45, ease: 'back.out(2.2)' });
+    this.burst(t.x, t.y, 0xffe07a);
+  }
+  isSuper(r, c) { return !!this.tiles[r]?.[c]?.super; }
+  superCells() {
+    const s = new Set();
+    for (let r = 0; r < this.rows; r++)
+      for (let c = 0; c < this.cols; c++) if (this.tiles[r]?.[c]?.super) s.add(r + ',' + c);
+    return s;
+  }
+  // destello en CRUZ (fila + columna) al detonar una súper ficha
+  superCross(r, c) {
+    const w = this.cols * TILE, h = this.rows * TILE;
+    const row = new Graphics();
+    row.roundRect(-w / 2, -TILE * 0.32, w, TILE * 0.64, 8).fill({ color: 0xffe98f, alpha: 0.55 });
+    row.x = w / 2; row.y = this.py(r);
+    const col = new Graphics();
+    col.roundRect(-TILE * 0.32, -h / 2, TILE * 0.64, h, 8).fill({ color: 0xffe98f, alpha: 0.55 });
+    col.x = this.px(c); col.y = h / 2;
+    this.fx.addChild(row); this.fx.addChild(col);
+    for (const g of [row, col]) gsap.to(g, { alpha: 0, duration: 0.5, ease: 'power2.out', onComplete: () => { if (!g.destroyed) g.destroy(); } });
   }
 
   select(cell) {

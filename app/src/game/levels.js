@@ -34,17 +34,20 @@ export const LEVELS = [
   // teach→test→twist: se enseñan 4,5,6,8 sueltos (1-4) y desde el nivel 5 los twists
   // aparecen intercalados (un giro sí / uno no) para cortar la monotonía. La suma sigue
   // siendo de 1 cifra; los twists cambian la EXPERIENCIA, no la carga matemática.
-  { name: 'Primeros pasos',   size: 4, digits: range(1, 3), ops: ['+'], eq: false, maxDigits: 1, target: 4,        quota: 10, tutorial: true },
+  { name: 'Primeros pasos',   size: 4, digits: range(1, 3), ops: ['+'], eq: false, maxDigits: 1, target: 4,        quota: 10, tutorial: true, goal: 50 },  // tutorial corto: barra a 50 (~13 cuentas)
   { name: 'Amigos del 5',     size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 5,        quota: 10 },
   { name: 'Media docena',     size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 6,        quota: 10 },
   { name: 'Solo pares',       size: 5, digits: ['2', '4', '6'], ops: ['+'], eq: false, maxDigits: 1, target: 8,   quota: 10, goal: 150 },  // solo pares → 2+6, 4+4
   // 🎁 CONTRARRELOJ (nivel 5 de cada mundo: 5/15/25/35): nivel ESPECIAL con RELOJ (1 min) y
   // tablero un poco más grande. Objetivo único. Si se acaba el tiempo → "+1 minuto" (reintento).
-  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 8,       timed: true, time: 60, goal: 64 },
+  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 8,       timed: true, time: 60, goal: 200 },
   // 🎁 TABLERO GRANDE + doble objetivo (sin reloj): más espacio, dos números a la vez.
   { name: 'Doble en grande',  size: 7, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 10],  goal: 200 },
   { name: 'Impares 7 y 9',    size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [7, 9],   quota: 10, goal: 200 },  // 🎁 doble de impares (más difícil: menos pares)
-  { name: 'Una docena',       size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12,       quota: 10, goal: 200 },
+  // ✨ SÚPER FICHA (mecánica tipo Candy Crush): formar 12 con DOS operadores (ej. 3+4+5) deja
+  // una súper ficha '+'; usarla en una cuenta explota en CRUZ. Tablero grande (7×7) porque la
+  // cuenta de 2 operadores necesita espacio; el motor garantiza siempre ≥1 jugada así. Ver DISEÑO §16.
+  { name: 'Súper ficha ✨',    size: 7, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12,       maxOps: 2, superTile: true, goal: 200 },
   { name: 'De 3 en 3',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [3, 6, 9], quota: 10, comboFever: true, goal: 250 },  // 🎁 triple múltiplos de 3 + combos DOBLE
   // Nivel 10 = ACUMULATIVO (hito de fin de mundo): formá cualquiera de estos resultados y su
   // VALOR se suma a un total; ganás al llegar a 100. Ver DISEÑO §7.5 / PLAN_SESION_AUTONOMA.

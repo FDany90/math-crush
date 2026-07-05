@@ -788,3 +788,47 @@ Diseño base cerrado. Reemplazaría la mecánica `accum` de los niveles
 10/20/30/40 (hoy: barra `{start,goal}`). Montado sobre el motor de barra/absorción ya sincronizado
 (ver [[equa-crush-project]]). Modelo base: `boss: true` + `target: [set]`; HP[n]=n·10; daño=valor;
 win al derrotar a todos. El **jefe-signo animado con ataques al tablero** es la fase 2 (a futuro).
+
+## 16. Súper Ficha (mecánica tipo Candy Crush) — IMPLEMENTADA en SUMA (2026-07-05)
+
+Idea del usuario: como en Candy Crush combinar 4/5 caramelos genera una pieza especial, acá
+formar una cuenta con **2 operadores** (ej. `2+1+3=6` en vez de `2+4`) genera una **SÚPER FICHA**
+del signo (arranca con `+`). Es un premio por armar una cuenta más elaborada.
+
+**Reglas (v1, sólo SUMA):**
+- **Generar:** una cuenta que use 2 operadores deja una súper ficha `+` (se conserva 1 de los
+  operadores del segmento; el resto de la cuenta explota normal y cuenta su valor a la barra).
+- **Ver:** la súper ficha se ve cargada/especial (dorada + ✨ + aura). Pendiente: pulso animado
+  (se dejó estático por lifecycle de tweens en Pixi al destruir la ficha).
+- **Usar:** cuando la súper `+` participa de una cuenta (ej. `2+4` usándola como el `+`), además
+  de contar la cuenta **explota en CRUZ** = fila + columna completas (decisión: cruz completa,
+  más satisfactoria que "sólo arriba+costados"; fácil de restringir). Los destruidos generan
+  cascada (combos que sí cuentan).
+- **Validación/generación:** como armar una cuenta de 2 operadores es difícil (necesita
+  `[a][+][b][+][c]` alineados), el motor **garantiza siempre ≥1 jugada de 2 operadores** en el
+  tablero (`countComboMoves`/`plantComboMove` en logic.js; el heal reintenta hasta 3 veces). Por
+  eso el nivel es **grande (7×7)**: la cuenta de 2 operadores necesita espacio.
+
+**Implementación (archivos):**
+- `logic.js`: `findTargetSegments` (segmentos con nº de operadores → detectar cuentas de 2 ops),
+  `countComboMoves`/`lineHasComboMatch` (jugadas de exactamente 2 ops), `targetTriosTwoOps`
+  (tríos a+b+c=target, SÓLO suma), `plantComboMove` (siembra una cuenta de 2 ops a un swap).
+- `Board.js`: `Tile.super` + `_applySuper` (look), `makeSuper`/`isSuper`/`superCells`/`superCross`.
+- `controller.js` `_resolve`: detona la cruz de las súper usadas + genera súper de cuentas de 2 ops
+  (conserva 1 operador antes del colapso). `_healFixedBoard`: protege súper fichas del
+  mantenimiento + garantiza ≥1 jugada de 2 ops.
+- `levels.js`: **nivel 8 "Súper ficha ✨"** = 7×7, target 12, `maxOps: 2`, `superTile: true`, goal 200.
+- Flags de nivel nuevos: `superTile: true` y `maxOps: 2`.
+
+**Verificado (sim 4000 tableros):** 0 cuentas ya formadas, 0 deadlocks, 0 tableros sin jugada de 2
+operadores. Falta probar en runtime (visual de la súper + detonación en cruz).
+
+**PENDIENTE (documentado, no implementado):**
+- **Otras operaciones (−, ×, ÷):** `targetTriosTwoOps` y `plantComboMove` son SÓLO suma (a+b+c).
+  Para resta/mult/div hay que generalizar los tríos con la operación (y decidir qué signo tiene la
+  súper: la del mundo). El resto del motor (detección por `opCount`, detonación, protección) ya es
+  operación-agnóstico.
+- **Pulso animado** de la súper ficha (hoy estático).
+- **Balance:** ¿cuántas súper por partida? ¿la cruz debería ser sólo fila, o cruz+área (tipo
+  envuelto)? ¿combinar dos súper? ¿la súper debería poder generarse también en niveles normales?
+- **Telegrafía/tutorial:** un coach la primera vez que se genera una súper explicando cómo usarla.

@@ -460,12 +460,13 @@ export default function App() {
   }
   // ---- REWARD DIARIO: da pistas 1 vez por día. Celebratorio, NO coercitivo (sin castigo
   // por faltar). Ver DISEÑO §7.6 / PLAN_SESION_AUTONOMA D4. ----
-  const DAILY_HINTS = 3
+  const DAILY_HINTS = 5
+  const DAILY_UNLIMITED = true   // TEST: reclamar SIEMPRE (sin límite 1/día). Poner false para producción.
   const dayKey = () => { try { return 'math_daily_' + new Date().toISOString().slice(0, 10) } catch { return 'math_daily_x' } }
-  const dailyClaimed = () => { try { return !!localStorage.getItem(dayKey()) } catch { return false } }
+  const dailyClaimed = () => { if (DAILY_UNLIMITED) return false; try { return !!localStorage.getItem(dayKey()) } catch { return false } }
   const claimDaily = () => {
     if (dailyClaimed()) return
-    try { localStorage.setItem(dayKey(), '1') } catch { /* sin localStorage */ }
+    if (!DAILY_UNLIMITED) { try { localStorage.setItem(dayKey(), '1') } catch { /* sin localStorage */ } }
     setHintPoolState(setHintPool(getHintPool() + DAILY_HINTS))   // repone (tope HINTS_MAX)
   }
   // fin de la pantalla de victoria: al mapa (se deja ver un momento) y RECIÉN

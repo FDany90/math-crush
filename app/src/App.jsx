@@ -66,6 +66,18 @@ const WORLDS = [
 ]
 const worldOf = (i) => WORLDS[Math.min(WORLDS.length - 1, Math.floor(i / 10))]
 const zoneColor = (i) => worldOf(i).color
+// Sumas de tiza blanca repartidas por la fase de Suma del mapa (decorativas, simples, pocas).
+// Cada una coincide con el objetivo del nivel cercano; L8/L9 muestran sumas de 2 OPERADORES
+// (la mecánica de súper ficha). `at` = índice de nivel de referencia (para la altura).
+const SUMA_DOODLES = [
+  { at: 1, text: '2+3' },     // nivel 2 → 5
+  { at: 2, text: '2+4' },     // nivel 3 → 6
+  { at: 3, text: '4+4' },     // nivel 4 → 8
+  { at: 5, text: '4+6' },     // nivel 6 → 10
+  { at: 6, text: '5+7' },     // nivel 7 → 12
+  { at: 7, text: '3+4+5' },   // nivel 8 → 12 (2 operadores)
+  { at: 8, text: '4+5+6' },   // nivel 9 → 15 (2 operadores)
+]
 const CHALK_COLORS = ['#7fdfff', '#ff79b8', '#ffd23f', '#b98cff', '#7bed9f', '#f4f1e8']
 const DOODLE_TYPES = ['star', 'house', 'tree', 'planet', 'book', 'spark', 'heart', 'triangle', 'bulb']
 
@@ -734,6 +746,14 @@ export default function App() {
                 </span>
               ))}
             </div>
+            {/* sumas de tiza blanca (fase Suma): decorativas, del lado opuesto al nodo */}
+            {SUMA_DOODLES.map((d, k) => {
+              const p = mapGeo.pts[d.at]
+              if (!p) return null
+              const onLeft = p.x / MAP_W < 0.5
+              const style = { top: p.y + 'px', [onLeft ? 'right' : 'left']: (8 + (k % 2) * 7) + '%', ['--rot']: ((k % 2 ? 1 : -1) * (3 + k)) + 'deg' }
+              return <span key={'sum' + k} className="map-sum" style={style} aria-hidden="true">{d.text}</span>
+            })}
             {/* puentes: cruzan el hueco del camino al cambiar de mundo (cada 10 niveles) */}
             {mapGeo.bridges.map((b) => (
               <div key={b.key} className="map-bridge"
@@ -749,7 +769,9 @@ export default function App() {
               // cartel arriba choca → lo mandamos al COSTADO (lado opuesto a la mascota). Para
               // los demás mundos (nodo lejano) va arriba del nodo, en el hueco del camino.
               const atCurrent = w.at === currentLevel
-              const side = p.x / MAP_W < 0.5 ? 'right' : 'left'   // mascota va al lado contrario
+              // la mascota va a la RIGHT si el nodo está a la izquierda (x<0.5) y viceversa;
+              // el cartel va al lado CONTRARIO a la mascota para no taparla.
+              const side = p.x / MAP_W < 0.5 ? 'left' : 'right'
               const style = atCurrent
                 ? { top: p.y + 'px', [side]: '4%', transform: 'translateY(-50%)', '--sc': w.color }
                 : { top: (p.y - 96) + 'px', '--sc': w.color }

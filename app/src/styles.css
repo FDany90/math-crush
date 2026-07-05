@@ -257,6 +257,10 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 /* garabatos SVG de tiza flotando a los costados */
 .map-doodles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
 .doodle-svg { position: absolute; opacity: .55; transform: rotate(var(--rot)); animation-name: floatDoodle; animation-timing-function: ease-in-out; animation-iteration-count: infinite; animation-direction: alternate; }
+/* sumas de tiza blanca decorativas (fase Suma del mapa) */
+.map-sum { position: absolute; z-index: 1; pointer-events: none; white-space: nowrap;
+  transform: translateY(-50%) rotate(var(--rot)); font-family: var(--font-chalk); font-size: 26px;
+  color: #f4f1e8; opacity: .5; letter-spacing: 2px; filter: url(#chalkRough); text-shadow: 0 1px 2px #0006; }
 @keyframes floatDoodle { from { transform: rotate(var(--rot)) translateY(0); } to { transform: rotate(var(--rot)) translateY(-10px); } }
 
 .node { position: absolute; transform: translate(-50%, -50%); width: 58px; height: 58px; border-radius: 50%; z-index: 3;

@@ -93,6 +93,10 @@ export class Controller {
     // JEFE SUMA de 2 fases: contadores de expansión + arranque de la infestación (fase 2).
     this._grownCount = 0                   // cuántas veces creció el tablero (fase 1)
     this._infestStarted = false            // ya arrancó la infestación (fase 2)
+    // coaches del jefe (una vez POR PARTIDA, se muestran al ocurrir cada etapa)
+    this._coachedScatter = false           // aviso del 1er + esparcido (fase 1)
+    this._coachedExpand = false            // aviso de la 1ra expansión (fase 1)
+    this._coachedInfest = false            // aviso del arranque de la fase 2
     this.ended = false
     this.busy = false
     this.started = false
@@ -660,6 +664,10 @@ export class Controller {
           this.board.shake(8)
           this.hooks.toast?.('🟩 ¡El tablero crece!')
           if (this.fixedTargets != null) this._healFixedBoard()      // re-saneo target-rich en el nuevo tamaño
+          if (!this._coachedExpand) {
+            this._coachedExpand = true
+            this._coach([{ text: '¡El jefe agranda el tablero! 🟩 Va sumando filas y columnas para complicarla. Seguí bajándole la vida.' }])
+          }
         }
       }
     }
@@ -667,9 +675,12 @@ export class Controller {
     if (b.infestAt != null && frac <= b.infestAt && !this._infestStarted) {
       this._infestStarted = true
       this.infest = true
-      this.hooks.toast?.('🌿 ¡FASE 2! Los + empiezan a invadir…')
       this._infestRise()      // la PRIMERA fila apenas llega al 50%
       this._startInfest()     // y sigue subiendo una fila cada INFEST_MS (15s)
+      if (!this._coachedInfest) {
+        this._coachedInfest = true
+        this._coach([{ text: '¡El + se cansó y quiere hacerte perder! 🌿 Ahora sube FILAS enteras cada 15s. ¡Apurate a dejarlo en 0 antes de que tape el tablero!' }])
+      }
     }
   }
 
@@ -799,7 +810,13 @@ export class Controller {
     }
     for (let i = cands.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[cands[i], cands[j]] = [cands[j], cands[i]] }
     const pick = cands.slice(0, n)
-    if (pick.length) this.board.applyInfest(pick)
+    if (pick.length) {
+      this.board.applyInfest(pick)
+      if (!this._coachedScatter) {
+        this._coachedScatter = true
+        this._coach([{ text: 'El jefe empieza a ensuciar el tablero con signos + 🌿. Se van acumulando… ¡usalos en tus sumas!' }])
+      }
+    }
   }
   // perdés cuando la fila de arriba (row 0) queda TODA infestada (la marea de + llegó al techo)
   _infestCheckLoss() {

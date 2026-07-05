@@ -121,7 +121,7 @@ Cada nivel es un objeto con estos campos:
 - [x] **Mascota** (búho profe de tiza) — hecha en el mapa (§9). Falta llevarla al menú/juego si se quiere.
 - [ ] Doodles en el **fondo del juego** (ya están en menú y mapa).
 - [ ] Más juice: partículas al ganar, wiggle idle de fichas, trail al arrastrar.
-- [ ] **Performance render:** cachear texturas de fichas (`Board.Tile.setChar` redibuja ~70 trazos de tiza + `Text` por ficha; en cascadas 8×8 puede tironear). Candidato: pre-render a textura + `Sprite`, o `BitmapText` para los números. (Ya se optimizó el motor, ver §12.)
+- [x] **Performance render:** cachear texturas de fichas — **HECHO** (2026-07-05, ver §22). `Tile` pasó a `Sprite` con textura pre-renderizada por carácter.
 
 **Ideas de niveles nuevas:**
 - [ ] **Niveles de resultados negativos** (ej. "Hacé −3"). Hoy `targetPool` filtra `v > 0`; habría que permitir un rango negativo (`tMin`/`tMax` negativos) y dejar pasar `v < 0` en el pool. `isTargetExpr` ya compara con `===`, así que matchea negativos sin cambios. Mostrar el chip "Hacé −3".
@@ -223,7 +223,7 @@ Cada nivel es un objeto con estos campos:
 - **`logic.js` `targetPool` / `findHintFallback`:** hacían **clone de toda la grilla** por cada swap candidato (hasta ~128/llamada) → ahora **swap in-place** sobre la copia descartable y se deshace (menos GC tras cada movimiento).
 - **`findHintFallback`:** antes re-escaneaba **todo el tablero** (`findMatchesMulti`) por candidato (~160k evals en 8×8). Como el tablero está resuelto, ahora solo chequea las **4 líneas afectadas** por el swap (`lineHasMatch`) con early-exit → pista casi instantánea.
 - **`App.jsx`:** `mapGeometry` y `currentLevel` **memoizados** (`useMemo`) para no recalcularse en cada tick del reloj (5×/seg).
-- **Pendiente (mayor):** cachear texturas de fichas en `Board.js` (ver §6).
+- **Pendiente (mayor):** cachear texturas de fichas en `Board.js` — **HECHO** el 2026-07-05 (ver §22).
 
 ---
 
@@ -607,3 +607,36 @@ peor caso de churn visible; bajar a 3 objetivos + no-re-sanear-al-achicar lo red
 3. Catálogo de estados de ficha (jelly/candado/cajón/bomba/niebla) para niveles normales — DISEÑO §18.4.
 4. **Antes de release:** quitar nivel de prueba 41; `DAILY_UNLIMITED=false`; **rehabilitar Mult/Div
    (quitar `wip`)**; separar Supabase QA.
+
+## 22. Performance: texturas de ficha pre-renderizadas (2026-07-05)
+
+Deployado a **QA y PROD**. Arregla el tirón al caer muchas fichas juntas (cascada grande: resolvés
+abajo y cae toda la columna). Resuelve el pendiente que estaba en §6 y §12.
+
+**El problema:** el arte de una ficha (fondo pizarrón + ~70 trazos de tiza garabateados + contorno +
+un `Text`) se **redibujaba entero en cada `Tile.setChar`**. Como cada ficha nueva es un `new Tile`,
+al reponer media columna se creaban **decenas de `Graphics` + `Text` en el mismo frame** (el `Text` es
+lo más caro: Pixi lo rasteriza a canvas). Eso tironeaba, sobre todo en tableros 7×7/8×8 y en mobile.
+
+**La solución (pre-render + Sprite):**
+- **Nuevo `pixi/tileTextures.js`:** dibuja cada glifo (`0-9 + − × ÷ =`) **una sola vez** a una textura
+  (`renderer.generateTexture`, frame `TILE×TILE` centrado, `resolution: 2`) y las cachea en un `Map`
+  por clave `ch`/`ch_s` (variante súper = número dorado). `buildTileTextures(renderer)` pre-calienta las
+  ~15 comunes al arrancar; `getTileTexture(ch, súper)` sirve y crea en caliente cualquier rara (ej. si
+  algún día hay fichas de 2 cifras).
+- **`Board.Tile`:** ahora es un **`Sprite`** que apunta a la textura cacheada. `setChar` sólo cambia
+  `sprite.texture` (crear/recambiar una ficha cuesta ~0). Las decoraciones (aura de súper ficha, hielo
+  y demás overlays de estado) se siguen agregando **encima** del sprite, sin tocarlo.
+- **`App.jsx`:** llama `buildTileTextures(app.renderer)` **después** de cargar la fuente Tiza (para que
+  el número se rasterice con la fuente correcta) y **antes** de crear el `Board`.
+
+**Trade-off (decisión del usuario, a favor del rendimiento):** se pierde el garabato único por ficha
+(todos los "5" quedan idénticos). Visualmente imperceptible; a cambio, mucha más fluidez (confirmado en
+playtest). El costo del dibujo se paga **una vez al inicio** (unos ms) en lugar de por ficha.
+
+**Nota de import circular (a propósito, es seguro):** `tileTextures.js` importa `TILE` de `Board.js` y
+`Board.js` importa `getTileTexture` de `tileTextures.js`. Funciona porque `TILE` sólo se lee **dentro de
+funciones en runtime**, nunca al evaluar el módulo (no hay acceso en TDZ).
+
+**Futuro (si hiciera falta aún más):** `BitmapText` para los números, o pre-warm de más glifos. Hoy no
+es necesario.

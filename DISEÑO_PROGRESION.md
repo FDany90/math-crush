@@ -1012,3 +1012,49 @@ Dimensiones por mecánica: **qué hace · temática/dónde encaja · tipo de pre
 **Ideas extra (semilla, sin desarrollar):** viento/gravedad lateral (cae de costado un turno), comodín/wild (ficha que vale cualquier número), espejo (invierte una fila), portal (dos celdas conectadas). Evaluar más adelante.
 
 **Criterio para elegir la próxima:** que sea (1) temáticamente clara, (2) distinta a lo ya hecho, (3) barata de implementar sobre `CELL_STATES`, (4) sin riesgo de deadlock. Ranking de arranque: **Cajón 📦 (plantilla barata) → Contagio × y Mezclar ÷ (jefes) → Bomba 💣 (tensión) → Niebla/Jelly (variedad).**
+
+### 18.5 Repensar la mecánica de SUMA (2026-07-05) — el congelar no es tema de suma
+**Observación del usuario:** el CONGELAR ❄️ (hoy ataque del jefe + en L10) encaja con un ESCENARIO
+de hielo/montaña nevada, NO con la temática de SUMA. Suma = **más / agregar / acumular / crecer**.
+- **Decisión de diseño:** RESERVAR el congelar para un **escenario/mundo de hielo** (temático) y darle
+  al jefe + un ataque de tema "sumar/agregar". El L10 seguiría con freeze hasta que implementemos el nuevo.
+- **Pregunta central (del usuario):** si el tema es "agregar/crecer", ¿cómo se PIERDE la partida?
+  (Agregar espacio solo, no es amenaza.) → la amenaza tiene que ser ACUMULACIÓN que DESBORDA o SATURA.
+
+**Opciones para el jefe/mundo SUMA (a analizar; ninguna implementada):**
+
+1. **"Torre / marea que sube" → DESBORDE** 🌊 (recomendada, la más temática)
+   - Qué: el + AGREGA fichas desde abajo (o una pila que crece) cada X s, empujando todo hacia ARRIBA.
+   - Cómo se pierde: si una columna llega al **TOPE del tablero** (desborda), perdés. Sobrevivís
+     limpiando rápido (cada cuenta baja la pila).
+   - Tema: acumular/más → desbordar. Es el "contrario" del hielo: el hielo BLOQUEA, esto es VOLUMEN.
+   - Impl: nivel de TABLERO (agregar filas, chequear overflow), esfuerzo medio-alto. No es un CELL_STATE.
+
+2. **"Sumar basura" → SATURACIÓN/DEADLOCK** 🧱 (versión barata, tipo estado)
+   - Qué: el + agrega fichas BASURA/bloqueantes en celdas al azar cada X s; se ACUMULAN.
+   - Cómo se pierde: si la basura llena el tablero y te deja **sin jugadas** (reusa el check de stuck).
+   - Tema: agregar de más hasta tapar. Mecánicamente cerca del hielo pero SIN romperse (se juntan).
+   - Impl: `CELL_STATES.junk` + timer; barato. Riesgo: parecido al freeze si no se diferencia bien.
+
+3. **"Tablero que se EXPANDE" (idea del usuario) + amenaza** ⬛→⬜
+   - Qué: arranca 5×5 y CRECE (agrega filas/columnas). Solo crecer = más fácil → necesita amenaza:
+     variante a) las celdas nuevas vienen con BASURA/bloqueadas (crece pero con obstáculos);
+     variante b) tenés que LLENAR/mantener limpio todo el tablero creciente antes de que crezca de más
+     (si no le seguís el ritmo, perdés).
+   - Tema: agregar espacio (literal "más").
+   - Impl: cambiar `size` en vivo + recolocar; medio-alto. Combinable con opción 1 o 2 como amenaza.
+
+4. **"Objetivo que CRECE"** 🔢 (dinámica de objetivo, no de fichas)
+   - Qué: el número objetivo del jefe sube solo (5→6→7…), "el jefe se suma a sí mismo".
+   - Cómo se pierde: si no llegás al objetivo creciente en X turnos/tiempo.
+   - Tema: sumar. Impl: barato (subir target), pero menos "visual" que las de fichas.
+
+5. **"Bola de nieve / que crece"** ⚪ (snowball; primo del contagio × pero LINEAL)
+   - Qué: una ficha "blob" se AGREGA a 1 vecina por turno (crece +1, no se duplica).
+   - Cómo se pierde: si cubre todo el tablero. Se corta limpiándola con cuentas.
+   - Tema: crecer/sumar. Impl: CELL_STATE + crecimiento; medio. (Reservar el DUPLICAR para el jefe ×.)
+
+**Recomendación:** para que se sienta genuinamente "suma", **opción 1 (torre/desborde)** es la más
+icónica y da un loss claro; **opción 2 (basura que satura)** es la barata para un primer paso. La
+**opción 3 (expandir)** es linda como TWIST visual y se combina con 1/2 para la amenaza.
+**Acción:** mover el freeze a un escenario de hielo; elegir 1 o 2 para el jefe +. (Pendiente decidir.)

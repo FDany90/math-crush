@@ -54,7 +54,10 @@ export const LEVELS = [
   { name: 'Súper triple ✨',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [9, 12, 15], maxOps: 2, superTile: true, goal: 250 },
   // Nivel 10 = ACUMULATIVO (hito de fin de mundo): formá cualquiera de estos resultados y su
   // VALOR se suma a un total; ganás al llegar a 100. Ver DISEÑO §7.5 / PLAN_SESION_AUTONOMA.
-  { name: 'Jefe: el signo +', size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 6, 8, 10], boss: { hp: 500 }, quota: 99 },  // 👹 BATALLA DE JEFE (base): 500 HP, daño = valor formado
+  // 👹 JEFE SUMA de 2 FASES (DISEÑO §18.6.2): FASE 1 (100%→50% HP) el tablero CRECE 5×5→7×7;
+  // FASE 2 (desde 50%) arranca la INFESTACIÓN de + (suben hasta tapar = perdés). `expandTo` = tamaño
+  // final; `infestAt` = fracción de HP donde empieza la fase 2. Este jefe NO usa el freeze.
+  { name: 'Jefe: el signo +', size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 6, 8, 10], boss: { hp: 500, expandTo: 7, infestAt: 0.5 }, quota: 99 },
 
   // ================= MUNDO RESTA (niveles 11-19 + hito) — RAMPA DE DIFICULTAD =================
   // Mundo 2: acá EMPIEZA la fricción real (primeras pérdidas). Resta de 1 cifra, resultados ≥0.

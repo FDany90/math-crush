@@ -89,6 +89,9 @@ export class Controller {
     // INFESTACIÓN de + (escenario/jefe Suma): los + suben desde abajo hasta tapar el tablero.
     // Reutilizable en cualquier nivel con `infest: true`. Ver DISEÑO §18.6.
     this.infest = !!this.level.infest
+    // JEFE SUMA de 2 fases: contadores de expansión + arranque de la infestación (fase 2).
+    this._grownCount = 0                   // cuántas veces creció el tablero (fase 1)
+    this._infestStarted = false            // ya arrancó la infestación (fase 2)
     this.ended = false
     this.busy = false
     this.started = false
@@ -161,8 +164,9 @@ export class Controller {
     if (this.started || this.ended) return
     this.started = true
     this.board.hideHandGuide()              // el jugador ya tomó el control: fuera la manito
-    if (this.boss) this._startBossAttacks() // el jefe empieza a atacar (congelar) cada 5s
-    if (this.infest) this._startInfest()    // arranca a subir el frente de + (escenario Suma)
+    // El jefe Suma (con `infestAt`) NO congela: usa expansión + infestación por fases. El resto sí.
+    if (this.boss && !this.boss.infestAt) this._startBossAttacks()
+    if (this.infest) this._startInfest()    // arranca a subir el frente de + (escenario Suma standalone)
     if (this.relax || !this.timed) return   // sin reloj (por defecto): se gana llenando la barra
     this.deadline = Date.now() + this.startTime * 1000
     this.timerOn = true
@@ -246,7 +250,7 @@ export class Controller {
     const grid = this.board.gridChars()
     const changed = []
     // 1) operadores: sacar los varados + reponer hasta el piso con buena distribución
-    const min = Math.ceil(this.level.size * 1.2)
+    const min = Math.ceil(this.board.cols * 1.2)
     changed.push(...destrandOperators(grid, this.gen))
     changed.push(...ensureMinOperators(grid, this.gen, min))
     // 2) romper cuentas YA formadas (el paso 1 pudo dejar un '+' entre dos dígitos que
@@ -259,7 +263,7 @@ export class Controller {
     //      fácil (ej. 10) no se come el tablero dejando al otro (ej. 5) casi sin salida.
     //    Se itera porque reforzar uno puede reducir levemente al otro; `avoid`=TODOS los
     //    objetivos evita que al reforzar uno quede formado otro.
-    const MIN_MOVES = this.level.minMoves ?? (this.level.size <= 5 ? 3 : this.level.size - 1)
+    const MIN_MOVES = this.level.minMoves ?? (this.board.cols <= 5 ? 3 : this.board.cols - 1)
     const eachMin = this.level.minMovesEach ?? 2
     // Garantía POR OBJETIVO: cada objetivo tiene al menos `eachMin` jugadas propias, así el
     // más fácil no acapara el tablero. Aplica al doble y al acumulativo (set chico 5,6,8,10).
@@ -454,6 +458,7 @@ export class Controller {
     // del mismo momento en que el tablero se asienta.
     this._pickTargets(consumed)
     this._bossCheckStuck()          // ¿el hielo dejó el tablero sin jugadas? → perdés
+    if (this.boss) this._bossPhaseCheck()   // jefe Suma: expansión (fase 1) / infestación (fase 2)
     // SÚPER FICHA recién generada: la primera vez, marcarla y explicar cómo usarla.
     if (this._madeSuper) {
       this._madeSuper = false
@@ -631,6 +636,37 @@ export class Controller {
     this.left = this.bossHp   // dispara la victoria por los checks existentes de left<=0
   }
 
+  // JEFE SUMA de 2 fases (se llama en _afterMove, con el tablero ya asentado): según el % de HP,
+  // FASE 1 hace crecer el tablero por umbrales (5×5→expandTo, repartidos entre 100% e infestAt) y
+  // FASE 2 arranca la infestación al cruzar infestAt. Ver DISEÑO §18.6.2.
+  _bossPhaseCheck() {
+    const b = this.boss
+    if (!b || this.ended) return
+    const frac = this.bossHpMax ? this.bossHp / this.bossHpMax : 0
+    const infestAt = b.infestAt ?? 0
+    // FASE 1 — EXPANSIÓN: crecer hasta `expandTo`, umbrales repartidos en (infestAt, 1].
+    if (b.expandTo) {
+      const grows = Math.max(0, b.expandTo - this.level.size)
+      for (let k = 1; k <= grows; k++) {
+        const thr = 1 - (1 - infestAt) * (k / (grows + 1))
+        if (frac <= thr && this._grownCount < k) {
+          this._grownCount = k
+          this.board.grow(this.gen.randTile)
+          this.board.shake(9)
+          this.hooks.toast?.('🟩 ¡El tablero crece!')
+          if (this.fixedTargets != null) this._healFixedBoard()   // re-saneo target-rich en el nuevo tamaño
+        }
+      }
+    }
+    // FASE 2 — INFESTACIÓN: al cruzar infestAt (ej. 50% HP) empiezan a subir los +.
+    if (b.infestAt != null && frac <= b.infestAt && !this._infestStarted) {
+      this._infestStarted = true
+      this.infest = true
+      this.hooks.toast?.('🌿 ¡FASE 2! Los + empiezan a invadir…')
+      this._startInfest()
+    }
+  }
+
   // ---------- ataques del jefe (estados de casillero) ----------
   // Loop propio del jefe (no es el reloj del jugador): cada BOSS_FREEZE_MS intenta un ataque.
   _startBossAttacks() {
@@ -779,7 +815,7 @@ export class Controller {
     // 1) sacar operadores varados (esquinas / sin uso posible) → dígitos
     const strand = destrandOperators(grid, this.gen)
     // 2) reponer hasta el piso, con buena distribución (sin amontonar)
-    const min = Math.ceil(this.level.size * 1.2)
+    const min = Math.ceil(this.board.cols * 1.2)
     const add = ensureMinOperators(grid, this.gen, min)
     const changed = [...strand, ...add]
     if (changed.length) this.board.applyChars(changed, grid)
@@ -868,7 +904,7 @@ export class Controller {
     this.hooks.setTries?.({ left: this.tries, dec: false })
     this.started = true
     this.hooks.setOverlay({ show: false })             // cierra el pop-up de resultado
-    if (this.boss) {
+    if (this.boss && !this.boss.infestAt) {            // jefes con freeze (−/×/÷); el Suma NO
       this._breakAllStates()                           // el reintento ROMPE todo el hielo
       this.hooks.toast?.('¡Hielo roto! Seguí atacando al jefe ❄️💥')
       this._startBossAttacks()

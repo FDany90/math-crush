@@ -261,6 +261,20 @@ export class Board {
 
   gridChars() { return this.tiles.map((row) => row.map((t) => (t ? t.ch : null))); }
 
+  // CRECER en vivo (+1 fila abajo, +1 columna derecha) conservando las fichas existentes; mantiene
+  // el tablero cuadrado. refill() aporta el char de las fichas nuevas. Para la fase 1 del jefe Suma.
+  grow(refill) {
+    const oldR = this.rows, oldC = this.cols;
+    this.cols = oldC + 1;
+    this.rows = oldR + 1;
+    const fresh = [];
+    for (let r = 0; r < oldR; r++) fresh.push(this._newTile(r, oldC, refill()));   // nueva columna derecha
+    this.tiles.push([]);                                                            // nueva fila abajo
+    for (let c = 0; c < this.cols; c++) fresh.push(this._newTile(oldR, c, refill()));
+    if (this.onResize) this.onResize(this.cols * TILE);                             // canvas cuadrado nuevo
+    for (const t of fresh) { t.scale.set(0, 0); gsap.to(t.scale, { x: 1, y: 1, duration: 0.36, ease: 'back.out(2)' }); }
+  }
+
   // ---------- estados de casillero (efectos del tablero, genérico) ----------
   // Grilla para DETECCIÓN de cuentas/pistas: las fichas con un estado que bloquea el uso se ven
   // como pared ('#'), así no se pueden usar ni sugerir en pistas. `extra` = celdas a tratar como

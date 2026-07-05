@@ -373,8 +373,8 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .card.start { position: relative; }
 .card-x { position: absolute; top: -14px; right: -14px; width: 34px; height: 34px; border-radius: 50%; background: var(--red); color: #fff; font-size: 16px; font-weight: 800; border: 3px solid #f4f1e8; box-shadow: 0 3px 0 rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; }
 .card-x:active { transform: translateY(2px); }
-.start-lvl { font-family: var(--font-tiza); font-size: 22px; color: var(--eq); text-shadow: 0 2px 0 #00000040; }
-.start-name { font-family: var(--font-tiza); font-size: clamp(22px, 6.2vw, 32px); font-weight: 700; color: var(--chalk); margin: 2px 0 10px; line-height: 1.15; padding-top: 4px; max-width: 100%; overflow-wrap: break-word; }
+.start-lvl { font-family: var(--font-tiza); font-size: 32px; color: var(--eq); text-shadow: 0 2px 0 #00000040; }
+.start-name { font-family: var(--font-tiza); font-size: clamp(18px, 5vw, 24px); font-weight: 700; color: var(--chalk); margin: 2px 0 10px; line-height: 1.15; padding-top: 2px; max-width: 100%; overflow-wrap: break-word; }
 .start-desc { font-family: var(--font-chalk); font-size: 18px; color: var(--chalk-dim); margin: 0 auto 22px; max-width: 15em; }
 .start-play { font-family: var(--font-tiza); font-weight: 700; font-size: 25px; letter-spacing: 1px; padding: 11px 36px; border-radius: 14px; color: #4a3a00; background: linear-gradient(160deg, var(--eq2), var(--eq)); border: 3px solid #f4f1e8; box-shadow: 0 6px 0 #b8860b, 0 0 22px #ffd23f77; animation: btnPulse 1.8s ease-in-out infinite; }
 .start-play:active { animation: none; transform: translateY(3px); box-shadow: 0 3px 0 #b8860b; }

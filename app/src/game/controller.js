@@ -814,7 +814,7 @@ export class Controller {
       this.board.applyInfest(pick)
       if (!this._coachedScatter) {
         this._coachedScatter = true
-        this._coach([{ text: 'El Rey + empieza a ensuciar el tablero con signos + 🌿. Se van acumulando… ¡usalos en tus sumas!' }])
+        this._coach([{ text: 'El Rey + empieza a ensuciar el tablero con signos +. Se van acumulando… ¡usalos en tus sumas!' }])
       }
     }
   }
@@ -966,7 +966,7 @@ export class Controller {
     }
     if (this.infest) {
       this._breakAllStates()                           // limpia TODA la infestación de +
-      this.hooks.toast?.('🌿 ¡Limpiaste la invasión! Seguí sumando')
+      this.hooks.toast?.('¡Limpiaste la invasión! Seguí sumando')
       this._startInfest()
     }
     if (this.timed && !this.relax) {                   // sólo niveles con reloj: sumar tiempo

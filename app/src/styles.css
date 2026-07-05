@@ -220,12 +220,15 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .map-bg .b3 { width: 70%; height: 14%; left: -10%; top: 74%; background: #b0a0d8; }
 
 /* carteles de SECTOR (mundo) sobre el camino: símbolo grande + nombre */
+/* cartel de mundo = "escrito a mano en el pizarrón": operador + nombre en tiza, con un contorno
+   dibujado a mano (filtro chalkSector ondula borde y texto). Sin chip sólido de UI. */
 .sector { position: absolute; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 10px;
-  padding: 5px 16px 5px 8px; border-radius: 30px; background: #1a241fdd; border: 1.5px solid var(--sc); box-shadow: 0 3px 10px #0007, inset 0 0 18px color-mix(in srgb, var(--sc) 22%, transparent); white-space: nowrap; }
+  padding: 5px 18px; border-radius: 34px; background: color-mix(in srgb, var(--sc) 8%, #0d130f66); border: 2.6px solid var(--sc);
+  filter: url(#chalkSector); white-space: nowrap; }
 /* cartel de mundo al COSTADO (cuando su nodo es el nivel actual): anula el centrado horizontal */
 .sector-side { left: auto; right: auto; max-width: 46%; }
-.sector-sym { font-family: var(--font-tiza); font-size: 30px; font-weight: 700; line-height: 1; color: var(--sc); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: color-mix(in srgb, var(--sc) 16%, #0d130f); }
-.sector-name { font-family: var(--font-display); font-size: 15px; font-weight: 800; letter-spacing: 2px; color: var(--chalk); }
+.sector-sym { font-family: var(--font-tiza); font-size: 30px; font-weight: 700; line-height: 1; color: var(--sc); }
+.sector-name { font-family: var(--font-chalk); font-size: 17px; font-weight: 700; letter-spacing: 2px; color: var(--chalk); }
 
 /* barra de opciones del mapa (fija arriba a la derecha): pistas + regalo diario */
 .map-top { position: fixed; top: 10px; right: 12px; z-index: 20; display: flex; align-items: center; gap: 10px; }

@@ -733,6 +733,11 @@ export default function App() {
                 <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="n" />
                 <feDisplacementMap in="SourceGraphic" in2="n" scale="1.7" />
               </filter>
+              {/* trazo a mano para el cartel de mundo: ondas más grandes y visibles (borde + texto) */}
+              <filter id="chalkSector" x="-15%" y="-15%" width="130%" height="130%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="4" result="n" />
+                <feDisplacementMap in="SourceGraphic" in2="n" scale="3.6" />
+              </filter>
             </defs>
           </svg>
           <div className="map-path" style={{ height: mapGeo.H + 'px' }}>

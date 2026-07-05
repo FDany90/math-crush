@@ -31,7 +31,7 @@ const CONTINUE_TIME = 60 // segundos que da cada "+1 min"
 const NEAR_MOVES = 3     // cuentas fáciles que se siembran (visibles) alrededor de donde jugás
 const BOSS_FREEZE_MS = 10000 // cada cuánto ataca el jefe (congela fichas)
 const BOSS_FREEZE_N = 3       // cuántas fichas congela por ataque
-const INFEST_MS = 3500       // cada cuánto sube el frente de la infestación de + (escenario Suma)
+const INFEST_MS = 20000      // cada cuánto sube el frente de la infestación de + (escenario Suma)
 const GOAL_NORMAL = 100  // meta de la barra en niveles normales: sumando el VALOR formado
                          // (contás de N en N) hasta 100. SIN reloj (se pierde sólo por intentos).
                          // Los JEFES usan su propio HP (no esto). Tuneable por nivel con `goal`.
@@ -590,7 +590,7 @@ export class Controller {
       })
       // ROMPER estados por CONTACTO: una cuenta descongela las fichas adyacentes (antes de
       // colapsar, con las posiciones aún válidas). Así se destraba el tablero jugando cerca.
-      if (this.boss || this.infest) this._breakStatesNear(cells)   // jugar cerca rompe hielo/infestación
+      if (this.boss) this._breakStatesNear(cells)   // jugar cerca rompe el hielo del jefe (la infestación NO se rompe)
       await this.board.clear(cells)
       // GENERAR súper ficha: convertir el operador conservado ANTES del colapso (aún en su celda);
       // la ficha ya súper cae con el colapso conservando su estado.

@@ -52,7 +52,11 @@ const CELL_STATES = {
 };
 
 class Tile extends Container {
-  constructor(ch) { super(); this.r = 0; this.c = 0; this.state = null; this._overlay = null; this.super = false; this.setChar(ch); }
+  constructor(ch) { super(); this.r = 0; this.c = 0; this.state = null; this._overlay = null; this.super = false; this._superTl = null; this.setChar(ch); }
+  // matar el latido de la súper (al re-dibujar la ficha o al destruirla) para no dejar
+  // tweens corriendo sobre gráficos ya borrados.
+  _killSuperPulse() { if (this._superTl) { this._superTl.kill(); this._superTl = null; } }
+  destroy(opts) { this._killSuperPulse(); super.destroy(opts); }
   // SÚPER FICHA (mecánica tipo Candy Crush): un operador "cargado". Se ve especial (dorado + ✨
   // + aura). setChar re-dibuja la ficha, así que esto se re-aplica después de cada setChar.
   _applySuper() {
@@ -62,10 +66,18 @@ class Tile extends Container {
     aura.roundRect(-s / 2 - 3, -s / 2 - 3, s + 6, s + 6, rad + 3).stroke({ color: 0xffe07a, width: 3, alpha: 0.95 });
     aura.roundRect(-s / 2 - 1, -s / 2 - 1, s + 2, s + 2, rad + 1).stroke({ color: 0xffffff, width: 1.5, alpha: 0.7 });
     this.addChild(aura);
+    const sparks = [];
     for (const [sx, sy] of [[s / 2 - 7, -s / 2 + 7], [-s / 2 + 7, s / 2 - 8]]) {
       const spark = new Text({ text: '✨', style: { fontFamily: 'sans-serif', fontSize: 15 } });
-      spark.anchor.set(0.5); spark.x = sx; spark.y = sy; this.addChild(spark);
+      spark.anchor.set(0.5); spark.x = sx; spark.y = sy; this.addChild(spark); sparks.push(spark);
     }
+    // LATIDO/CARGA permanente: la súper "respira" todo el tiempo (glow y escala sutil de la
+    // aura + destello de los ✨). Se ve SIEMPRE que está cargada. _killSuperPulse lo corta.
+    this._killSuperPulse();
+    this._superTl = gsap.timeline({ repeat: -1, yoyo: true });
+    this._superTl.to(aura.scale, { x: 1.08, y: 1.08, duration: 0.68, ease: 'sine.inOut' }, 0)
+      .to(aura, { alpha: 0.5, duration: 0.68, ease: 'sine.inOut' }, 0);
+    for (const sp of sparks) this._superTl.to(sp.scale, { x: 1.35, y: 1.35, duration: 0.68, ease: 'sine.inOut' }, 0);
   }
   setSuper(v) { this.super = !!v; this.setChar(this.ch); }
   // aplica el overlay visual del estado actual (si tiene). setChar borra los hijos, así que
@@ -85,6 +97,7 @@ class Tile extends Container {
   get blocksDrag() { return !!(this.state && CELL_STATES[this.state].blocksDrag); }
   setChar(ch) {
     this.ch = ch;
+    this._killSuperPulse();     // corta el latido viejo antes de re-dibujar (se recrea en _applySuper)
     this.removeChildren();
     const col = colorFor(ch);
     const s = TILE - 8, rad = 13;
@@ -284,23 +297,46 @@ export class Board {
     this.burst(t.x, t.y, 0xffe07a);
   }
   isSuper(r, c) { return !!this.tiles[r]?.[c]?.super; }
+  // resalta (anillo pulsante) todas las súper fichas — para el coach "¡súper ficha creada!"
+  markSupers() {
+    for (const key of this.superCells()) {
+      const [r, c] = key.split(',').map(Number);
+      const t = this.tiles[r]?.[c];
+      if (!t) continue;
+      const ring = this._ring(t, 0xffe07a, TILE - 2);
+      gsap.fromTo(ring, { alpha: 0 }, { alpha: 1, duration: 0.32, yoyo: true, repeat: 7, ease: 'sine.inOut', onComplete: () => { if (!ring.destroyed) ring.destroy(); } });
+      gsap.fromTo(t.scale, { x: 1, y: 1 }, { x: 1.12, y: 1.12, duration: 0.32, yoyo: true, repeat: 7, ease: 'sine.inOut' });
+    }
+  }
   superCells() {
     const s = new Set();
     for (let r = 0; r < this.rows; r++)
       for (let c = 0; c < this.cols; c++) if (this.tiles[r]?.[c]?.super) s.add(r + ',' + c);
     return s;
   }
-  // destello en CRUZ (fila + columna) al detonar una súper ficha
+  // destello en CRUZ (fila + columna) al detonar una súper ficha: haces dorados que se
+  // ensanchan + onda expansiva + burst dorado en el centro. Épico pero sin exagerar.
   superCross(r, c) {
     const w = this.cols * TILE, h = this.rows * TILE;
     const row = new Graphics();
-    row.roundRect(-w / 2, -TILE * 0.32, w, TILE * 0.64, 8).fill({ color: 0xffe98f, alpha: 0.55 });
+    row.roundRect(-w / 2, -TILE * 0.38, w, TILE * 0.76, 10).fill({ color: 0xffe98f, alpha: 0.6 });
     row.x = w / 2; row.y = this.py(r);
     const col = new Graphics();
-    col.roundRect(-TILE * 0.32, -h / 2, TILE * 0.64, h, 8).fill({ color: 0xffe98f, alpha: 0.55 });
+    col.roundRect(-TILE * 0.38, -h / 2, TILE * 0.76, h, 10).fill({ color: 0xffe98f, alpha: 0.6 });
     col.x = this.px(c); col.y = h / 2;
     this.fx.addChild(row); this.fx.addChild(col);
-    for (const g of [row, col]) gsap.to(g, { alpha: 0, duration: 0.5, ease: 'power2.out', onComplete: () => { if (!g.destroyed) g.destroy(); } });
+    // los haces "nacen" finitos y se ensanchan de golpe, después se apagan
+    gsap.fromTo(row.scale, { y: 0.4 }, { y: 1, duration: 0.16, ease: 'power2.out' });
+    gsap.fromTo(col.scale, { x: 0.4 }, { x: 1, duration: 0.16, ease: 'power2.out' });
+    for (const g of [row, col]) gsap.to(g, { alpha: 0, duration: 0.55, ease: 'power2.out', onComplete: () => { if (!g.destroyed) g.destroy(); } });
+    // onda expansiva (anillo) desde el centro
+    const wave = new Graphics();
+    wave.circle(0, 0, TILE * 0.5).stroke({ color: 0xffffff, width: 5, alpha: 0.9 });
+    wave.x = this.px(c); wave.y = this.py(r);
+    this.fx.addChild(wave);
+    gsap.fromTo(wave.scale, { x: 0.35, y: 0.35 }, { x: 3.2, y: 3.2, duration: 0.5, ease: 'power2.out' });
+    gsap.to(wave, { alpha: 0, duration: 0.5, ease: 'power2.out', onComplete: () => { if (!wave.destroyed) wave.destroy(); } });
+    this.burst(this.px(c), this.py(r), 0xffe07a);   // chispas doradas en el centro
   }
 
   select(cell) {
@@ -382,29 +418,35 @@ export class Board {
     }
   }
 
-  // resalta las fichas que formaron la combinación, para que se vean los números
-  async highlight(cells) {
+  // resalta las fichas que formaron la combinación, para que se vean los números.
+  // epic = true (detonación de súper ficha): más largo, dorado y con más pulsos.
+  async highlight(cells, epic = false) {
     const rings = [];
-    // bloom central: un destello de luz que se expande y se apaga
+    // bloom central: un destello de luz que se expande y se apaga (más grande/dorado si es épico)
     const ctr = this.cellsCenter(cells);
     const bloom = new Graphics();
-    bloom.circle(0, 0, TILE * 0.55).fill({ color: 0xffffff, alpha: 0.45 });
+    bloom.circle(0, 0, TILE * (epic ? 0.72 : 0.55)).fill({ color: epic ? 0xffe07a : 0xffffff, alpha: epic ? 0.55 : 0.45 });
     bloom.x = ctr.x; bloom.y = ctr.y;
     this.fx.addChild(bloom);
-    gsap.fromTo(bloom.scale, { x: 0.3, y: 0.3 }, { x: 2.4, y: 2.4, duration: 0.55, ease: 'power2.out' });
-    gsap.to(bloom, { alpha: 0, duration: 0.55, ease: 'power2.out', onComplete: () => { if (!bloom.destroyed) bloom.destroy(); } });
+    const bDur = epic ? 0.8 : 0.55;
+    gsap.fromTo(bloom.scale, { x: 0.3, y: 0.3 }, { x: epic ? 3.2 : 2.4, y: epic ? 3.2 : 2.4, duration: bDur, ease: 'power2.out' });
+    gsap.to(bloom, { alpha: 0, duration: bDur, ease: 'power2.out', onComplete: () => { if (!bloom.destroyed) bloom.destroy(); } });
+    const ringCol = epic ? 0xffe07a : 0xfff3c4;
+    const reps = epic ? 5 : 3;
+    const pop = epic ? 1.22 : 1.16;
+    const pd = epic ? 0.3 : 0.26;
     for (const { r, c } of cells) {
       const t = this.tiles[r][c];
       if (!t) continue;
       const s = TILE - 6;
       const ring = new Graphics();
-      ring.roundRect(-s / 2, -s / 2, s, s, 13).stroke({ color: 0xfff3c4, width: 5, alignment: 0.5 });
+      ring.roundRect(-s / 2, -s / 2, s, s, 13).stroke({ color: ringCol, width: epic ? 6 : 5, alignment: 0.5 });
       t.addChild(ring);
       rings.push(ring);
-      gsap.to(t.scale, { x: 1.16, y: 1.16, duration: 0.26, yoyo: true, repeat: 1, ease: 'sine.inOut' });
-      gsap.fromTo(ring, { alpha: 0.15 }, { alpha: 1, duration: 0.26, yoyo: true, repeat: 3, ease: 'sine.inOut' });
+      gsap.to(t.scale, { x: pop, y: pop, duration: pd, yoyo: true, repeat: 1, ease: 'sine.inOut' });
+      gsap.fromTo(ring, { alpha: 0.15 }, { alpha: 1, duration: pd, yoyo: true, repeat: reps, ease: 'sine.inOut' });
     }
-    await new Promise((res) => setTimeout(res, 620));
+    await new Promise((res) => setTimeout(res, epic ? 950 : 620));
     for (const ring of rings) if (ring && !ring.destroyed) ring.destroy();
   }
 

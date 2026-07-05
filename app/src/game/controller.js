@@ -6,7 +6,7 @@ import {
   newGrid, tidyBoard, ensureMinOperators, findEquationCells, findTargetCellsMulti,
   findMatchesMulti, findHintFallback, pickTargets, adjacent, breakFormedTargets, plantTargetMove,
   countTargetMoves, addTargetMovesSubtle, destrandOperators, seedTargetMovesNear,
-  findTargetSegments, countComboMoves, plantComboMove,
+  findTargetSegments, countComboMoves, plantComboMove, findComboMove,
 } from './logic.js'
 import { getLevel, makeGen, randTarget, starsFor, symbolAllowed } from './levels.js'
 
@@ -104,6 +104,8 @@ export class Controller {
     this.coachedFirstCuenta = false        // ya se mostró el coach de "cuentas restantes" (nivel 2)
     this.coachedTutorialFirst = false      // ya se mostró el 2do paso del tutorial (nivel 1)
     this.coachActive = false               // hay un mensaje del coach en pantalla (pausa pistas/manito)
+    this._madeSuper = false                // se acaba de generar una súper ficha (para su coach)
+    this._pendingComboGuide = false        // hay que telegrafiar una jugada de 2 operadores (tutorial súper)
     this.moves = 0                         // movimientos hechos (para límite de pistas)
     this.autoHintCount = 0                 // pistas automáticas ya mostradas
     this.combo = 0
@@ -132,6 +134,14 @@ export class Controller {
       // Llegaste al JEFE: explicá qué hacer (formar los resultados que marca = daño) y que
       // va a atacar. El detalle del ataque CONGELAR se explica en la primera congelada.
       this._coach([{ text: '¡Llegaste al JEFE! 👹 Formá los resultados que marca arriba: cada cuenta le baja la vida. ¡Dejalo en 0 para ganar!' }])
+    } else if (this.level.superTile && !this._alreadyCoached('math_coached_super')) {
+      // TUTORIAL de SÚPER FICHA (primera vez): explicá la cuenta de 2 operadores y, al cerrar
+      // el coach, dejá la manito guía sobre una jugada de 2 operadores YA preparada.
+      this._pendingComboGuide = true
+      this._coach([
+        { text: 'Nuevo truco: podés formar el número con DOS operadores. En vez de 4+8, probá 3+4+5 = 12.', highlight: 'target' },
+        { text: 'Una cuenta de 2 operadores crea una SÚPER FICHA ✨. Te muestro una jugada preparada 👇' },
+      ])
     } else if (this.level.ops.some((o) => o === '−' || o === '÷') && !this._alreadyCoached('math_coached_dir')) {
       // Primera vez en un nivel de resta/división: el ORDEN importa (no da igual como en la
       // suma). Aclaramos la DIRECCIÓN —no el tamaño—, porque más adelante habrá resultados
@@ -181,6 +191,14 @@ export class Controller {
     this.coachActive = false
     this.resume()
     this._startAutoHint()
+    // tras cerrar el coach del tutorial de súper ficha: dejar la manito sobre una jugada de 2 operadores
+    if (this._pendingComboGuide) this._showComboGuide()
+  }
+  // manito guía sobre una jugada de 2 OPERADORES ya preparada (tutorial de súper ficha)
+  _showComboGuide() {
+    if (this.ended) return
+    const h = findComboMove(this.board.gridCharsMasked(), this.targets, this.md)
+    if (h) this.board.showHandGuide(h.a, h.b)
   }
   // ¿ya se mostró este coach de UNA sola vez (en todo el juego)? Si no, lo marca y devuelve false.
   _alreadyCoached(key) {
@@ -359,6 +377,7 @@ export class Controller {
   _playerActed() {
     this.board.hideHandGuide()
     this._clearAutoHint()
+    this._pendingComboGuide = false   // ya interactuó: no volver a telegrafiar la jugada de 2 operadores
   }
 
   // ---------- interacción ----------
@@ -429,6 +448,15 @@ export class Controller {
     // del mismo momento en que el tablero se asienta.
     this._pickTargets(consumed)
     this._bossCheckStuck()          // ¿el hielo dejó el tablero sin jugadas? → perdés
+    // SÚPER FICHA recién generada: la primera vez, marcarla y explicar cómo usarla.
+    if (this._madeSuper) {
+      this._madeSuper = false
+      if (!this._alreadyCoached('math_coached_supermade')) {
+        this.board.markSupers()
+        this._coach([{ text: '¡Súper ficha creada! ✨ Es el + dorado brillante. Usalo en cualquier cuenta y explota en CRUZ: rompe toda la fila y la columna.' }])
+        return
+      }
+    }
     if (consumed.size > 0 && this._maybeSwitchTarget()) return   // el objetivo cambió: coach + pausa
     // Tutorial (nivel 1): 2do paso, recién DESPUÉS del primer acierto (no todo junto al arrancar).
     if (this.tutorial && consumed.size > 0 && !this.coachedTutorialFirst) {
@@ -481,17 +509,28 @@ export class Controller {
 
       // ---- SÚPER FICHA (mecánica tipo Candy Crush; ver _resolve más abajo makeSuper) ----
       let superSpawn = []
+      let crossSum = 0
+      let detonated = false
       if (this.level.superTile) {
         // DETONAR: si una súper ficha participa de esta cuenta, explota en CRUZ (fila + columna).
+        const crossKeys = new Set()   // celdas NUEVAS que rompe la cruz (no las de la cuenta)
         for (const key of [...all]) {
           const [r, c] = key.split(',').map(Number)
           if (this.board.isSuper(r, c)) {
+            detonated = true
             this.board.superCross(r, c)
-            this.hooks.toast?.('💥 ¡Súper ficha en cruz!')
-            for (let cc = 0; cc < this.board.cols; cc++) all.add(r + ',' + cc)
-            for (let rr = 0; rr < this.board.rows; rr++) all.add(rr + ',' + c)
+            for (let cc = 0; cc < this.board.cols; cc++) { const k = r + ',' + cc; if (!all.has(k)) crossKeys.add(k); all.add(k) }
+            for (let rr = 0; rr < this.board.rows; rr++) { const k = rr + ',' + c; if (!all.has(k)) crossKeys.add(k); all.add(k) }
           }
         }
+        if (detonated) this.board.shake(11)   // sacudida de la explosión en cruz
+        // BONUS: la cruz SUMA el valor de TODOS los números que rompe (fila + columna enteras).
+        for (const key of crossKeys) {
+          const [r, c] = key.split(',').map(Number)
+          const ch = grid[r]?.[c]
+          if (ch && ch >= '0' && ch <= '9') crossSum += Number(ch)   // sólo números (no operadores)
+        }
+        if (crossSum > 0) this.hooks.toast?.('💥 ¡Cruz! +' + crossSum + ' puntos')
         // GENERAR: una cuenta con 2 operadores deja una súper ficha '+' (se conserva 1 operador).
         for (const seg of findTargetSegments(mgrid, this.targets, this.md, this.mo)) {
           if (seg.ops < 2) continue
@@ -511,7 +550,8 @@ export class Controller {
       // TODA cuenta suma al PROGRESO (la barra sube por el VALOR formado), sea jugada del
       // jugador o combo. Ya NO se suma tiempo por cuenta (el reloj sólo cuenta hacia atrás).
       // En "Fiebre de combos" (comboFever) el combo suma DOBLE valor.
-      const barAdd = (!deliberate && this.level.comboFever) ? tg.sum * 2 : tg.sum
+      // barra = valor de la cuenta (+ x2 en comboFever) + BONUS de la cruz (súper ficha).
+      const barAdd = ((!deliberate && this.level.comboFever) ? tg.sum * 2 : tg.sum) + crossSum
       const dec = (!deliberate && this.level.comboFever) ? cuentas * 2 : cuentas
       if (cuentas > 0) {
         // Se actualiza el total INTERNO (para la victoria); el llenado VISIBLE de la barra
@@ -529,8 +569,8 @@ export class Controller {
       if (deliberate) playedCols = new Set(cells.flatMap(({ c }) => [c - 1, c, c + 1]))
       const ctr = this.board.cellsCenter(cells)
 
-      await this.board.highlight(cells)   // resaltar la combinación antes de explotar
-      this.board.popup(ctr.x, ctr.y, combo > 1 ? '¡combo x' + combo + '! +' + barAdd : '+' + tg.sum)
+      await this.board.highlight(cells, detonated)   // resaltar antes de explotar (épico si detonó súper)
+      this.board.popup(ctr.x, ctr.y, combo > 1 ? '¡combo x' + combo + '! +' + barAdd : '+' + barAdd)
       // TODA cuenta vuela a la barra; el LLENADO (números + barra) se aplica al llegar las
       // fichas (absorción), pasando el nuevo estado en `bar` para que la UI lo sincronice.
       if (cuentas > 0) this.hooks.onCuenta?.({
@@ -550,6 +590,7 @@ export class Controller {
       // la ficha ya súper cae con el colapso conservando su estado.
       if (superSpawn.length) {
         for (const { r, c } of superSpawn) this.board.makeSuper(r, c)
+        this._madeSuper = true                            // para el coach "¡súper ficha creada!" en _afterMove
         this.hooks.toast?.('✨ ¡Súper ficha +! Usala en una cuenta para explotar en cruz')
       }
       await this.board.collapse(this.gen.randTile)

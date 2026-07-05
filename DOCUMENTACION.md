@@ -434,3 +434,53 @@ flujo de deploy en **DEPLOY.md**.
   pantallas (salvo el jefe: "Atacá con").
 - **DEPLOY.md**: dos ambientes Vercel (`main`=prod, `qa`=preview). Flujo local-first: probar en local,
   push a QA/PROD **bajo pedido**. URL estable de QA = `math-crush-git-qa-<scope>.vercel.app`.
+
+## 19. Correcciones playtest, contrarreloj, todos los hitos = jefes, SÚPER FICHA (2026-07-05)
+
+Sesión de correcciones de playtest + una mecánica nueva grande. Parte se pusheó a QA (commits
+`23530ac` y `7e0a951`); lo último (súper ficha + efectos + ajustes) puede quedar sin pushear —
+verificar `git log`.
+
+### 19.1 Niveles contrarreloj (5/15/25/35)
+El "nivel 5 de cada mundo" pasó a ser un **nivel especial CON RELOJ** (`timed: true, time: 60`),
+tablero un poco más grande y objetivo único. Al perder por tiempo → botón **"+1 minuto"**
+(`resumeWithBonus`, cuesta 1 corazón). Soporte nuevo `level.time` en el controller
+(`this.startTime = level.time ?? START_TIME`). En el mapa el nodo es un poco más grande + ⏱
+(`timed-node`/`.node-clock`). Nivel 5 con `goal: 200` (sprint duro, red del +1 min). Nivel 8
+NO es contrarreloj (es súper ficha).
+
+### 19.2 Todos los hitos = JEFES
+Los hitos 20/30/40 dejaron de ser `accum` y pasaron a **jefes** (`boss: { hp }`) como el nivel 10:
+20 = "−" (hp 180, 7×7), 30 = "×" (hp 440), 40 = "÷" (hp 160). El signo sale de `level.ops[0]`,
+daño = valor formado, reusan el ataque de congelar. Nodo de jefe en el mapa para todos
+(`boss-node`). El nodo del jefe quedó **del mismo color que el resto** (usa `--nc`, no dorado —
+el usuario dijo que el dorado llamaba demasiado) + glow blanco pulsante suave + 👹.
+
+### 19.3 Mapa: número siempre visible + coach del jefe
+- Los nodos **bloqueados muestran el número** del nivel (antes 🔒 en lugar del número) + una
+  chapita 🔒 chica (`.node-lock`).
+- **Coach del jefe** al llegar (qué hacer) + en la **primera congelada** (explica el hielo);
+  cada congelada incluye **al menos 1 operador**. Fixes: cartel de mundo (SUMA) que tapaba el
+  nodo actual → va al costado; pop-up regalo diario (botón/espaciado); pista/deadlock ya NO usa
+  fichas congeladas (`findHintFallback`/`countTargetMoves` saltean `'#'`).
+- Textos: 1ª instrucción del tutorial → "Mové las fichas para formar el número de arriba";
+  mensaje de error → "Cada error gasta una barra". Nivel 1 → `goal: 50` (tutorial más corto).
+
+### 19.4 SÚPER FICHA (mecánica tipo Candy Crush) — SÓLO SUMA por ahora
+Formar una cuenta con **2 operadores** (ej. `3+4+5=12`) genera una **súper ficha `+`** cargada;
+usarla en una cuenta explota en **CRUZ** (fila + columna) y **suma a los puntos el valor de todos
+los números que rompe**. El motor **garantiza siempre ≥1 jugada de 2 operadores**. Diseño completo,
+archivos, efectos (latido permanente, resaltado épico, explosión épica), tutorial y PENDIENTES
+(generalizar a −/×/÷) en **DISEÑO_PROGRESION.md §16 + §16.b**. Nivel de prueba = **nivel 8
+"Súper ficha ✨"** (6×6, target 12, `maxOps: 2`, `superTile: true`). Flags de nivel nuevos:
+`superTile: true` y `maxOps: 2`. Verificado por sim (0 formadas / 0 deadlocks / 0 sin-jugada-2ops);
+FALTA prueba en runtime del visual.
+
+### 19.5 Notas migración mobile + ads
+Ver **DISEÑO_PROGRESION.md §17**: Capacitor migra la lógica sin errores (se ajusta la capa
+visual/shell); ads no se prueban en web (usar capa `ads.js` + stub); plataforma sugerida
+**AppLovin MAX** (mediación, no 100% Google) o Unity LevelPlay.
+
+### 19.6 Reset de progreso
+`PROGRESS_VERSION` subió a `'8'` (cambió contenido de varios niveles). Triple-clic en un nodo
+bloqueado sigue sirviendo para saltar a cualquier nivel a probar.

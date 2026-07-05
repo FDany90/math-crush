@@ -611,6 +611,28 @@ export function countComboMoves(grid, targets, maxDigits = Infinity, cap = Infin
   return n;
 }
 
+// Busca un swap adyacente que forme una cuenta de 2 OPERADORES (para la manito guía del
+// tutorial de súper ficha). Devuelve {a,b} o null. Ignora fichas con estado ('#').
+export function findComboMove(grid, targets, maxDigits = Infinity) {
+  const [R, C] = dimsOf(grid);
+  const set = new Set(targets);
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    for (const [r2, c2] of [[r, c + 1], [r + 1, c]]) {
+      if (r2 >= R || c2 >= C) continue;
+      if (grid[r][c] === '#' || grid[r2][c2] === '#') continue;
+      const t = grid[r][c]; grid[r][c] = grid[r2][c2]; grid[r2][c2] = t;
+      const ok =
+        lineHasComboMatch(getRow(grid, r), set, maxDigits) ||
+        lineHasComboMatch(getCol(grid, c), set, maxDigits) ||
+        (r2 !== r && lineHasComboMatch(getRow(grid, r2), set, maxDigits)) ||
+        (c2 !== c && lineHasComboMatch(getCol(grid, c2), set, maxDigits));
+      grid[r2][c2] = grid[r][c]; grid[r][c] = t;
+      if (ok) return { a: { r, c }, b: { r: r2, c: c2 } };
+    }
+  }
+  return null;
+}
+
 // Tríos [a,b,c] de una cifra con a+b+c == target (SÓLO SUMA por ahora).
 export function targetTriosTwoOps(target, digits) {
   const ds = digits.map(Number);

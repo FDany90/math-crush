@@ -832,3 +832,43 @@ operadores. Falta probar en runtime (visual de la súper + detonación en cruz).
 - **Balance:** ¿cuántas súper por partida? ¿la cruz debería ser sólo fila, o cruz+área (tipo
   envuelto)? ¿combinar dos súper? ¿la súper debería poder generarse también en niveles normales?
 - **Telegrafía/tutorial:** un coach la primera vez que se genera una súper explicando cómo usarla.
+
+### 16.b Actualización (2026-07-05): bonus de la cruz, efectos y tutorial
+
+- **Bonus de la cruz (pedido del usuario):** al detonar la súper ficha, la explosión en cruz SUMA
+  a los puntos el **valor de TODOS los números que rompe** (fila + columna enteras), además de la
+  cuenta que la disparó. No doble-cuenta las celdas de la propia cuenta. Toast "💥 ¡Cruz! +N puntos".
+  Implementado en `controller._resolve` (`crossSum` → `barAdd`).
+- **Efectos (pedido: "que sea especial, sin exagerar"):**
+  - **Latido/carga permanente** de la súper ficha: la aura dorada + ✨ "respiran" todo el tiempo
+    (`Tile._superTl`, timeline repeat/yoyo; `_killSuperPulse` en `setChar`/`destroy` para no dejar
+    tweens sobre gráficos borrados).
+  - **Resaltado épico** cuando detona (`Board.highlight(cells, epic)`): dura más (~950 ms), dorado,
+    más pulsos y bloom más grande.
+  - **Explosión más épica** (`Board.superCross`): haces que se ensanchan de golpe + onda expansiva
+    (anillo) + chispas doradas centrales + `board.shake(11)`.
+- **Tutorial (primera vez, gates `math_coached_super`/`math_coached_supermade`):** al entrar al
+  nivel 8, coach de 2 pasos explicando la cuenta de 2 operadores + manito guía sobre una jugada de
+  2 operadores preparada (`findComboMove`/`_showComboGuide`). Al generar la 1ª súper, coach + la
+  ficha se resalta con anillo pulsante (`Board.markSupers`).
+
+## 17. Migración a mobile (Capacitor) + estrategia de ads — NOTAS (2026-07-05, no implementado)
+
+**Migración (Capacitor = web app en WebView nativo):**
+- **Lógica/niveles/mecánicas** (`logic.js`/`controller.js`/`levels.js`) son JS puro → corren idéntico
+  en el WebView, **sin errores** al migrar. Lo que se ajusta es la capa visual/shell, NO las mecánicas:
+  safe areas (notch/status bar), touch (sin hover), viewport, performance en Android gama baja
+  (Pixi/WebGL pide FPS → se optimiza, no se reescribe), bundlear assets (fuente `tiza.ttf`, íconos,
+  splash). `localStorage` funciona (más adelante conviene el plugin Preferences). Supabase = fetch, anda.
+
+**Ads / rewarded video:**
+- **No se prueban en web** (SDK nativos → device/emulador). Solución: **capa de abstracción `ads.js`**
+  (`showRewarded(): Promise<bool>`) con **stub en web** (simula "vio el ad → recompensa") para probar
+  toda la LÓGICA de recompensa local; el ad real solo en device. Además desacopla el juego de la red.
+- **Plataforma recomendada (no 100% Google, migrable):** **AppLovin MAX** (mediación; buen fill de
+  rewarded en LATAM/AR; gratis; se puede meter AdMob como una red más adentro → diversificado desde
+  el día 1). Alternativa: **Unity LevelPlay (ex-ironSource)**. Tradeoff Capacitor: el plugin más pulido
+  es `@capacitor-community/admob` (solo AdMob, integración más rápida); AppLovin/Unity requieren puente
+  nativo o plugin Cordova. Plan: armar `ads.js` ya (stub web) → arrancar con AdMob si se quiere rapidez
+  → migrar a MAX sin tocar el juego. Coherente con estrategia: rewarded opt-in, 1-5/día, recargar
+  vidas/pistas, nunca intrusivo (ver retención/monetización en memoria).

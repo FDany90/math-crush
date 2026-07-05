@@ -78,7 +78,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .chalk.used { opacity: .16; filter: grayscale(1); transform: scaleX(.93); box-shadow: none; }
 .chalk.danger { background: linear-gradient(180deg, #ffd2d2, #ff8f8f); animation: lowpulse .8s infinite; }
 .chalk.danger::after { background: linear-gradient(180deg, #ffc0c0, #f07a7a); }
-.time-big { font-family: var(--font-tiza); font-size: 48px; font-weight: 700; line-height: 1; letter-spacing: 1px; text-align: center; text-shadow: 0 3px 0 #00000040; display: inline-block; }
+.time-big { font-family: var(--font-tiza); font-size: 48px; font-weight: 700; line-height: 1.28; padding-top: 6px; letter-spacing: 1px; text-align: center; text-shadow: 0 3px 0 #00000040; display: inline-block; }
 .time-big.low { color: var(--red); animation: lowpulse .7s infinite; }
 .time-big.bump { animation: timeBump .35s ease; }
 .time-big.relax { font-size: 26px; color: #7bed9f; letter-spacing: 0; white-space: nowrap; }
@@ -364,7 +364,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .card-x { position: absolute; top: -14px; right: -14px; width: 34px; height: 34px; border-radius: 50%; background: var(--red); color: #fff; font-size: 16px; font-weight: 800; border: 3px solid #f4f1e8; box-shadow: 0 3px 0 rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; }
 .card-x:active { transform: translateY(2px); }
 .start-lvl { font-family: var(--font-tiza); font-size: 26px; color: var(--eq); text-shadow: 0 2px 0 #00000040; }
-.start-name { font-family: var(--font-tiza); font-size: 40px; font-weight: 700; color: var(--chalk); margin: 2px 0 10px; line-height: 1; }
+.start-name { font-family: var(--font-tiza); font-size: clamp(26px, 7.5vw, 40px); font-weight: 700; color: var(--chalk); margin: 2px 0 10px; line-height: 1.15; padding-top: 4px; max-width: 100%; overflow-wrap: break-word; }
 .start-desc { font-family: var(--font-chalk); font-size: 18px; color: var(--chalk-dim); margin: 0 auto 22px; max-width: 15em; }
 .start-play { font-family: var(--font-tiza); font-weight: 700; font-size: 30px; letter-spacing: 1px; padding: 12px 44px; border-radius: 16px; color: #4a3a00; background: linear-gradient(160deg, var(--eq2), var(--eq)); border: 3px solid #f4f1e8; box-shadow: 0 6px 0 #b8860b, 0 0 22px #ffd23f77; animation: btnPulse 1.8s ease-in-out infinite; }
 .start-play:active { animation: none; transform: translateY(3px); box-shadow: 0 3px 0 #b8860b; }
@@ -392,7 +392,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
   animation: winGlow 2.4s ease-in-out infinite;
 }
 @keyframes winGlow { 0%, 100% { opacity: .55; transform: translate(-50%,-50%) scale(1); } 50% { opacity: .9; transform: translate(-50%,-50%) scale(1.12); } }
-.win-title { font-family: var(--font-tiza); font-size: 50px; font-weight: 700; color: var(--eq); text-shadow: 0 3px 0 #00000045; animation: winTitle .5s cubic-bezier(.2,1.5,.4,1) both; }
+.win-title { font-family: var(--font-tiza); font-size: 50px; font-weight: 700; line-height: 1.18; padding-top: 10px; color: var(--eq); text-shadow: 0 3px 0 #00000045; animation: winTitle .5s cubic-bezier(.2,1.5,.4,1) both; }
 @keyframes winTitle { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .win-sub { font-family: var(--font-chalk); font-size: 20px; color: var(--chalk); opacity: .9; margin: 8px 0 22px; animation: winFade .5s ease .2s both; }
 .win-stars { display: inline-block; }

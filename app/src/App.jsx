@@ -527,6 +527,7 @@ export default function App() {
     if (dailyClaimed()) return
     if (!DAILY_UNLIMITED) { try { localStorage.setItem(dayKey(), '1') } catch { /* sin localStorage */ } }
     setHintPoolState(setHintPool(getHintPool() + DAILY_HINTS))   // repone (tope HINTS_MAX)
+    setDailyOpen(false)                                          // cerrar el pop-up al reclamar
   }
   // fin de la pantalla de victoria: al mapa (se deja ver un momento) y RECIÉN
   // después el pop-up de inicio del siguiente nivel — no aparecen pegados.
@@ -840,7 +841,7 @@ export default function App() {
               result.reason === 'frozen' ? '🧊 ¡El jefe te congeló el tablero!'
                 : result.reason === 'time' ? '¡Se acabó el tiempo!'
                   : '¡Te quedaste sin intentos!'}</div>
-            <div className="ok">{result.boss ? 'HP restante del jefe' : 'Cuentas que faltaron'}</div>
+            <div className="ok">{result.boss ? 'HP restante del jefe' : 'Puntos que faltaron'}</div>
             <div className="os">{result.left}</div>
             {/* Reintentar cuesta 1 CORAZÓN. Sin corazones: se recargan solos (o futuro: ad). */}
             {hearts.n > 0 ? (

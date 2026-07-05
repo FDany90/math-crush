@@ -57,7 +57,9 @@ export const LEVELS = [
   // 👹 JEFE SUMA de 2 FASES (DISEÑO §18.6.2): FASE 1 (100%→50% HP) el tablero CRECE 5×5→7×7;
   // FASE 2 (desde 50%) arranca la INFESTACIÓN de + (suben hasta tapar = perdés). `expandTo` = tamaño
   // final; `infestAt` = fracción de HP donde empieza la fase 2. Este jefe NO usa el freeze.
-  { name: 'El Rey +', size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 6, 8, 10], boss: { hp: 500, expandTo: 7, infestAt: 0.5 }, quota: 99 },
+  // 3 objetivos [8,10,12] (misma cantidad que todos los jefes): se apoyan en lo recién visto
+  // (12 = nivel 8, 10/8 previos); no retrocede a números tempranos → acompaña el progreso.
+  { name: 'El Rey +', size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [8, 10, 12], boss: { hp: 500, expandTo: 7, infestAt: 0.5 }, quota: 99 },
 
   // ================= MUNDO RESTA (niveles 11-19 + hito) — RAMPA DE DIFICULTAD =================
   // Mundo 2: acá EMPIEZA la fricción real (primeras pérdidas). Resta de 1 cifra, resultados ≥0.
@@ -79,8 +81,9 @@ export const LEVELS = [
   { name: 'Doble combos',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7],  quota: 15, goal: 175, comboFever: true, tries: 4 },  // 🎁 combos x2, 7×7
   { name: 'Triple resta',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 4, 6], quota: 15, goal: 190, tries: 4 },  // 🎁 triple
   { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 200, tries: 3 },  // 🎁 triple, solo 3 intentos
-  // Nivel 20 = ACUMULATIVO resta: arrancás en 40 y cada resta BAJA el total; ganás al llegar a 0.
-  { name: 'El Rey −', size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3, 4, 5], boss: { hp: 180 }, quota: 99 },  // 👹 JEFE resta (daño = diferencia formada)
+  // 👹 EL REY − (opuesto del Rey +): FASE 1 el tablero ENCOGE 7×7→5×5 (shrinkTo); FASE 2 (desde
+  // eraseAt=50% HP) BORRA signos − (tachados permanentes → si te quedás sin jugadas, perdés). Daño = diferencia formada.
+  { name: 'El Rey −', size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 5, 6], boss: { hp: 200, shrinkTo: 5, eraseAt: 0.5 }, quota: 99 },
 
   // ================= MUNDO MULTIPLICACIÓN (21-30, objetivo fijo) =================
   // Productos de 1 cifra. Empieza con tablas chicas (2×3=6) y sube. Dobles intercalados.

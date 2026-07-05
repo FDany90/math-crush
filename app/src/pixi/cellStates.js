@@ -32,5 +32,26 @@ export const CELL_STATES = {
     blocksUse: false, blocksDrag: false,
     overlay: () => new Container(),   // + común: sin marca visual
   },
+  // BORRÓN de − (jefe Resta): el Rey − TACHA un signo −. La ficha queda inutilizable (mancha de
+  // tiza + cruz encima) y es PERMANENTE: NO se rompe jugando al lado (se excluye de _breakStatesNear),
+  // sólo el reintento la restaura. Como bloquea el uso, la detección la ve como pared → acumula
+  // presión hasta que te quedás sin jugadas (= perdés). Ver DISEÑO §18.1.
+  erased: {
+    blocksUse: true, blocksDrag: true, breakFx: 0xf4f1e8,
+    // MANCHA borroneada: varias elipses de tiza translúcida superpuestas + rayas de arrastre del
+    // borrador. Tapa el signo (queda "todo borrado"), sin cruz. La animación de barrido del borrador
+    // la hace Board.applyErase al aplicarse.
+    overlay: (s, rad) => {
+      const g = new Graphics();
+      g.roundRect(-s / 2, -s / 2, s, s, rad).fill({ color: 0x141d19, alpha: 0.46 });   // "limpia" el fondo (un poco más oscuro)
+      const blobs = [[0, 0, 0.74, 0.62, 0.36], [-0.13, -0.09, 0.5, 0.42, 0.28], [0.15, 0.1, 0.46, 0.38, 0.28], [0.06, -0.16, 0.36, 0.3, 0.24], [-0.18, 0.15, 0.34, 0.28, 0.24]];
+      for (const [ox, oy, rx, ry, a] of blobs)
+        g.ellipse(ox * s, oy * s, (rx * s) / 2, (ry * s) / 2).fill({ color: 0xeae6da, alpha: a });
+      // rayas de arrastre (horizontal, como pasadas de borrador)
+      g.moveTo(-s * 0.32, -s * 0.04).lineTo(s * 0.32, -s * 0.01).stroke({ color: 0xf4f1e8, width: 3, alpha: 0.28 });
+      g.moveTo(-s * 0.3, s * 0.13).lineTo(s * 0.32, s * 0.11).stroke({ color: 0xf4f1e8, width: 3, alpha: 0.22 });
+      return g;
+    },
+  },
   // futuros: jelly (N golpes), lock (candado), crate (cajón que se rompe al lado), etc.
 };

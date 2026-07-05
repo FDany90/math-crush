@@ -71,14 +71,15 @@ export function ResultCard({ result, hearts, onRetry, onExit }) {
       <div className="card">
         <div className="ot">{
           result.reason === 'frozen' ? '🧊 ¡El jefe te congeló el tablero!'
-            : result.reason === 'flooded' ? '¡Los + invadieron el tablero!'
-              : result.reason === 'time' ? '¡Se acabó el tiempo!'
-                : '¡Te quedaste sin intentos!'}</div>
+            : result.reason === 'erased' ? '🧽 ¡El Rey − borró todos los signos!'
+              : result.reason === 'flooded' ? '¡Los + invadieron el tablero!'
+                : result.reason === 'time' ? '¡Se acabó el tiempo!'
+                  : '¡Te quedaste sin intentos!'}</div>
         <div className="ok">{result.boss ? 'HP restante del Rey' : 'Puntos que faltaron'}</div>
         <div className="os">{result.left}</div>
         {hearts.n > 0 ? (
           <button className="continue-btn" onClick={onRetry}>
-            {result.reason === 'flooded' ? 'Limpiar la invasión' : result.boss ? '🧊 Descongelar todo' : result.timed ? '+1 minuto' : 'Reintentar'} <span className="cost">❤️ 1</span>
+            {result.reason === 'flooded' ? 'Limpiar la invasión' : result.reason === 'erased' ? '✏️ Reponer los signos' : result.boss ? '🧊 Descongelar todo' : result.timed ? '+1 minuto' : 'Reintentar'} <span className="cost">❤️ 1</span>
           </button>
         ) : (
           <div className="no-hearts">💔 Sin corazones. Se recargan solos — próximo en {fmtMMSS(heartsNextInSec(hearts))}.</div>
@@ -117,7 +118,22 @@ export function DailyPopup({ hintPool, claimed, dailyHints, onClose, onClaim }) 
         <div className="daily-hints">Tenés <b>{hintPool}</b> / {HINTS_MAX} pistas 💡</div>
         {claimed
           ? <div className="daily-done">¡Ya lo reclamaste hoy! Volvé mañana 😊</div>
-          : <button className="start-play" onClick={onClaim}>Reclamar +{dailyHints} pistas 💡</button>}
+          : <button className="start-play" onClick={onClaim}>Reclamar +{dailyHints} pistas 💡 y vidas ❤️</button>}
+      </div>
+    </div>
+  )
+}
+
+// pop-up "Mundo en desarrollo" (Mult/Div bloqueados durante el playtest de Suma+Resta)
+export function WipPopup({ worldName, onClose }) {
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="card wip-card" onClick={(e) => e.stopPropagation()}>
+        <button className="card-x" aria-label="Cerrar" onClick={onClose}>✕</button>
+        <div className="daily-emoji">🚧</div>
+        <div className="start-lvl">{worldName}</div>
+        <div className="start-desc">Este mundo está <b>en desarrollo</b>.<br />¡Estará disponible pronto! 🔜</div>
+        <button className="start-play" onClick={onClose}>¡Ya voy!</button>
       </div>
     </div>
   )

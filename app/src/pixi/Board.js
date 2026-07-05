@@ -244,6 +244,35 @@ export class Board {
     this._resizeCanvas(); this._popIn(fresh);
   }
 
+  // ENCOGER en vivo de a UNO (fase 1 del jefe Resta): inverso de addRow/addCol. La fila/columna del
+  // borde se BORRA con efecto de "borrón" (las fichas se disuelven) y recién ahí ajusta el canvas
+  // (así el borrón se ve antes de que achique el tablero). No deja huecos (sólo saca bordes).
+  removeRow() {                 // saca la fila de ABAJO
+    if (this.rows <= 1) return;
+    const r = this.rows - 1;
+    const gone = (this.tiles[r] || []).filter(Boolean);
+    this.tiles.pop(); this.rows = r;
+    this._eraseCells(gone);
+  }
+  removeCol() {                 // saca la columna de la DERECHA
+    if (this.cols <= 1) return;
+    const c = this.cols - 1;
+    const gone = [];
+    for (let r = 0; r < this.rows; r++) { const t = this.tiles[r]?.[c]; if (t) gone.push(t); this.tiles[r]?.pop(); }
+    this.cols = c;
+    this._eraseCells(gone);
+  }
+  _eraseCells(tiles) {
+    if (!tiles.length) { this._resizeCanvas(); return; }
+    let done = 0;
+    for (const t of tiles) {
+      this.burst(t.x, t.y, 0xf4f1e8);
+      gsap.to(t.scale, { x: 0, y: 0, duration: 0.32, ease: 'back.in(2)',
+        onComplete: () => { if (!t.destroyed) t.destroy(); if (++done >= tiles.length) this._resizeCanvas(); } });
+    }
+    this.shake(6);
+  }
+
   // ---------- estados de casillero (efectos del tablero, genérico) ----------
   // Grilla para DETECCIÓN de cuentas/pistas: las fichas con un estado que bloquea el uso se ven
   // como pared ('#'), así no se pueden usar ni sugerir en pistas. `extra` = celdas a tratar como
@@ -281,6 +310,34 @@ export class Board {
     }
   }
   isInfested(r, c) { return this.tiles[r]?.[c]?.state === 'infested'; }
+
+  // BORRAR (Rey −): pone el estado 'erased' (la mancha) y anima un BORRADOR DE PIZARRÓN barriendo
+  // la ficha de izquierda a derecha, con polvo de tiza. La mancha aparece detrás del barrido.
+  applyErase(cells) {
+    for (const { r, c } of cells) {
+      const t = this.tiles[r]?.[c];
+      if (!t || t.state) continue;
+      t.setState('erased');
+      t.scale.set(1);
+      const x = this.px(c), y = this.py(r), s = TILE;
+      // La mancha se revela AL COMPÁS del barrido: misma ventana (~0.55s) → borrador y borrado a la vez.
+      if (t._overlay) gsap.fromTo(t._overlay, { alpha: 0 }, { alpha: 1, duration: 0.55, delay: 0.05, ease: 'power1.in' });
+      // borrador: bloque de fieltro gris con lomo de madera
+      const er = new Graphics();
+      er.roundRect(-s * 0.3, -s * 0.02, s * 0.6, s * 0.34, 5).fill({ color: 0x5b5148 });
+      er.roundRect(-s * 0.3, -s * 0.16, s * 0.6, s * 0.18, 5).fill({ color: 0xcbb289 });
+      er.y = y;
+      this.fx.addChild(er);
+      this.burst(x, y, 0xf4f1e8);
+      // barrido visible pero al mismo ritmo que el borrado (~0.6s)
+      gsap.fromTo(er, { x: x - s * 0.62, alpha: 0 }, {
+        x: x + s * 0.62, alpha: 1, duration: 0.6, ease: 'power1.inOut',
+        onUpdate: () => { if ((er.x - x) > s * 0.42) er.alpha = Math.max(0, er.alpha - 0.12); },  // se desvanece al salir
+        onComplete: () => { if (!er.destroyed) er.destroy(); },
+      });
+    }
+    this.shake(6);
+  }
 
   clearState(cells) {
     for (const { r, c } of cells) {

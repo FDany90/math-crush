@@ -4,10 +4,10 @@ import { Board, MAX_PX } from './pixi/Board.js'
 import { Controller, getHintPool, setHintPool, HINTS_MAX } from './game/controller.js'
 import { LEVELS } from './game/levels.js'
 import { initMetrics, getNick, setNick, trackEvent } from './metrics.js'
-import { WORLDS, zoneColor, MAP_EQS, buildMapDoodles, ChalkDoodle, Mascota, MAP_W, mapGeometry, MapBridge, Stars } from './mapView.jsx'
+import { WORLDS, zoneColor, isWip, worldOf, MAP_EQS, buildMapDoodles, ChalkDoodle, Mascota, MAP_W, mapGeometry, MapBridge, Stars } from './mapView.jsx'
 import { tokenColor, fmtMMSS, buildDoodles, buildConfetti } from './uiHelpers.js'
 import { loadProgress, saveProgress, loadHearts, saveHearts, HEARTS_MAX, heartsNextInSec } from './storage.js'
-import { CoachBubble, WinScreen, StartPopup, ResultCard, SettingsPopup, DailyPopup, NickPopup } from './Popups.jsx'
+import { CoachBubble, WinScreen, StartPopup, ResultCard, SettingsPopup, DailyPopup, NickPopup, WipPopup } from './Popups.jsx'
 
 export default function App() {
   const mountRef = useRef(null)
@@ -101,6 +101,7 @@ export default function App() {
   const [startPopup, setStartPopup] = useState(null)              // índice del nivel a arrancar (pop-up)
   const [winScreen, setWinScreen] = useState(null)                // {index, stars} pantalla de victoria
   const [devUnlocked, setDevUnlocked] = useState(() => new Set()) // MODO TEST (secreto): niveles abiertos a mano
+  const [wipOpen, setWipOpen] = useState(null)                    // pop-up "en desarrollo" (mundo bloqueado del playtest)
   const [dailyOpen, setDailyOpen] = useState(false)               // pop-up del regalo diario
   const [hintPool, setHintPoolState] = useState(() => getHintPool()) // pistas globales (para mostrar en el reward)
   const [hearts, setHearts] = useState(loadHearts)                // corazones (vidas globales) { n, t }
@@ -246,13 +247,18 @@ export default function App() {
     }
   }, [screen])
 
-  const isUnlocked = (i) => i === 0 || devUnlocked.has(i) || (progress.stars[i - 1] || 0) >= 1
+  // Mundos EN DESARROLLO (Mult/Div): bloqueados aunque tengas estrellas, hasta terminar el playtest
+  // de Suma+Resta. El dev triple-clic (abajo) sigue sirviendo para probarlos a mano.
+  const isUnlocked = (i) => i === 0 || devUnlocked.has(i) || (!isWip(i) && (progress.stars[i - 1] || 0) >= 1)
   // tocar un nodo del mapa abre el pop-up de inicio del nivel (estilo Candy Crush)
   const openStart = (i) => { clearTimeout(startPopupTimer.current); if (isUnlocked(i)) setStartPopup(i) }
   // MODO TEST (secreto, solo para desarrollo): TRIPLE clic en un nivel BLOQUEADO lo abre igual.
   // No persiste (se pierde al recargar) → ningún jugador real lo activa sin querer.
   const handleNode = (i) => {
     if (isUnlocked(i)) { openStart(i); return }
+    // mundo en desarrollo: cartel "próximamente" y listo (para testearlo, quitar el flag `wip`
+    // en mapView.jsx). El dev triple-clic sigue disponible para los bloqueados NORMALES.
+    if (isWip(i)) { setWipOpen(worldOf(i).name); return }
     const d = devTap.current
     if (d.i !== i) { d.i = i; d.n = 0 }
     d.n += 1
@@ -274,7 +280,8 @@ export default function App() {
   const claimDaily = () => {
     if (dailyClaimed()) return
     if (!DAILY_UNLIMITED) { try { localStorage.setItem(dayKey(), '1') } catch { /* sin localStorage */ } }
-    setHintPoolState(setHintPool(getHintPool() + DAILY_HINTS))   // repone (tope HINTS_MAX)
+    setHintPoolState(setHintPool(getHintPool() + DAILY_HINTS))   // repone pistas (tope HINTS_MAX)
+    addHearts(HEARTS_MAX)                                        // repone las vidas al máximo (tope HEARTS_MAX)
     setDailyOpen(false)                                          // cerrar el pop-up al reclamar
   }
   // fin de la pantalla de victoria: al mapa (se deja ver un momento) y RECIÉN
@@ -341,7 +348,10 @@ export default function App() {
             /* BATALLA DE JEFE (base): el signo grande + barra de HP que baja. Formá cualquiera
                de los resultados para golpearlo; a 0 HP se derrota. */
             <div className="boss">
-              <div className={'boss-sign' + (boss.hp <= 0 ? ' defeated' : '')}>{boss.sign}</div>
+              {/* el glifo '−' de la fuente tiza queda muy bajo → barra dibujada y centrada */}
+              <div className={'boss-sign' + (boss.hp <= 0 ? ' defeated' : '')}>
+                {boss.sign === '−' ? <span className="minus-bar" /> : boss.sign}
+              </div>
               <div className="boss-side">
                 <div className="boss-hpbar">
                   <div className="boss-hpfill" style={{ width: (boss.max ? Math.max(0, Math.min(100, (100 * boss.hp) / boss.max)) : 0) + '%' }} />
@@ -526,9 +536,10 @@ export default function App() {
                 ? { top: p.y + 'px', [side]: '4%', transform: 'translateY(-50%)', '--sc': w.color }
                 : { top: (p.y - 96) + 'px', '--sc': w.color }
               return (
-                <div key={w.at} className={'sector' + (atCurrent ? ' sector-side' : '')} style={style}>
+                <div key={w.at} className={'sector' + (atCurrent ? ' sector-side' : '') + (w.wip ? ' sector-wip' : '')} style={style}>
                   <span className="sector-sym">{w.sym}</span>
                   <span className="sector-name">{w.name}</span>
+                  {w.wip && <span className="sector-soon">🚧 Próximamente</span>}
                 </div>
               )
             })}
@@ -551,9 +562,10 @@ export default function App() {
               const done = stars >= 1 && i !== currentLevel
               const isBoss = !!lv.boss
               const isTimed = !!lv.timed && !isBoss
+              const wip = isWip(i)
               return (
                 <button key={i}
-                  className={'node' + (unlocked ? '' : ' locked') + (i === currentLevel ? ' current' : '') + (done ? ' done' : '') + (isBoss ? ' boss-node' : '') + (isTimed ? ' timed-node' : '')}
+                  className={'node' + (unlocked ? '' : ' locked') + (wip ? ' wip' : '') + (i === currentLevel ? ' current' : '') + (done ? ' done' : '') + (isBoss ? ' boss-node' : '') + (isTimed ? ' timed-node' : '')}
                   style={{ top: p.y + 'px', left: (p.x / MAP_W * 100) + '%', '--nc': zoneColor(i) }}
                   onClick={() => handleNode(i)}>
                   {i === currentLevel && <span className="node-here">¡Acá!</span>}
@@ -562,7 +574,8 @@ export default function App() {
                   {isTimed && <span className="node-clock" aria-hidden="true">⏱</span>}
                   {/* el número SIEMPRE se ve (aunque esté bloqueado); el candado va como chapita */}
                   <span className="node-num">{i + 1}</span>
-                  {!unlocked && <span className="node-lock" aria-hidden="true">🔒</span>}
+                  {/* mundo en desarrollo → chapita 🚧; bloqueado normal → 🔒 */}
+                  {!unlocked && <span className="node-lock" aria-hidden="true">{wip ? '🚧' : '🔒'}</span>}
                   {unlocked && <Stars n={stars} size={11} />}
                 </button>
               )
@@ -594,6 +607,8 @@ export default function App() {
           onSave={() => { setNick(nickInput); localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) }}
           onSkip={() => { localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) }} />
       )}
+
+      {wipOpen && <WipPopup worldName={wipOpen} onClose={() => setWipOpen(null)} />}
 
       <CoachBubble coach={coach} onDismiss={dismissCoach} />
 

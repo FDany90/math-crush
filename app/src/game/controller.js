@@ -86,13 +86,20 @@ export class Controller {
     // INFESTACIÓN de + (escenario/jefe Suma): los + suben desde abajo hasta tapar el tablero.
     // Reutilizable en cualquier nivel con `infest: true`. Ver DISEÑO §18.6.
     this.infest = !!this.level.infest
-    // JEFE SUMA de 2 fases: contadores de expansión + arranque de la infestación (fase 2).
+    // REY + de 2 fases: contadores de expansión + arranque de la infestación (fase 2).
     this._grownCount = 0                   // cuántas veces creció el tablero (fase 1)
     this._infestStarted = false            // ya arrancó la infestación (fase 2)
+    // REY − de 2 fases: encoge (fase 1) + borrón de signos (fase 2).
+    this._shrunkCount = 0                  // cuántas veces se achicó el tablero (fase 1)
+    this._eraseStarted = false             // ya arrancó el borrón (fase 2)
+    this._erasing = false                  // loop de borrado activo
+    this._noReplenish = false              // deja de reponer signos (fase 2 del Rey −)
     // coaches del jefe (una vez POR PARTIDA, se muestran al ocurrir cada etapa)
-    this._coachedScatter = false           // aviso del 1er + esparcido (fase 1)
-    this._coachedExpand = false            // aviso de la 1ra expansión (fase 1)
-    this._coachedInfest = false            // aviso del arranque de la fase 2
+    this._coachedScatter = false           // aviso del 1er + esparcido (Rey +, fase 1)
+    this._coachedExpand = false            // aviso de la 1ra expansión (Rey +, fase 1)
+    this._coachedInfest = false            // aviso del arranque de la fase 2 (Rey +)
+    this._coachedShrink = false            // aviso del 1er achique (Rey −, fase 1)
+    this._coachedErase = false             // aviso del arranque del borrón (Rey −, fase 2)
     this.ended = false
     this.busy = false
     this.started = false
@@ -123,7 +130,8 @@ export class Controller {
     if (this.timerId) clearTimeout(this.timerId)
     if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }   // ataques del jefe
     if (this._infestId) { clearTimeout(this._infestId); this._infestId = null }      // frente de infestación
-    if (this._scatterId) { clearTimeout(this._scatterId); this._scatterId = null }   // + aislados (fase 1)
+    if (this._scatterId) { clearTimeout(this._scatterId); this._scatterId = null }   // + aislados (Rey +)
+    if (this._eraseId) { clearTimeout(this._eraseId); this._eraseId = null }         // borrón de − (Rey −)
     this._clearAutoHint()
     this.selected = null
     this.activeBooster = null
@@ -166,9 +174,9 @@ export class Controller {
     if (this.started || this.ended) return
     this.started = true
     this.board.hideHandGuide()              // el jugador ya tomó el control: fuera la manito
-    // El jefe Suma (con `infestAt`) NO congela: usa expansión + infestación por fases. El resto sí.
-    if (this.boss && !this.boss.infestAt) this._startBossAttacks()
-    if (this.boss && this.boss.infestAt) this._startScatter()   // fase 1: esparce + aislados cada 10s
+    // Cada jefe arranca su ataque (registro BOSS_KINDS): + esparce, − no arranca loop (encoge por
+    // movimiento), × ÷ congelan. Ver hazards.js.
+    if (this.boss) this._bossStartAttacks()
     if (this.infest) this._startInfest()    // arranca a subir el frente de + (escenario Suma standalone)
     if (this.relax || !this.timed) return   // sin reloj (por defecto): se gana llenando la barra
     this.deadline = Date.now() + this.startTime * 1000
@@ -609,6 +617,7 @@ export class Controller {
     if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }
     if (this._infestId) { clearTimeout(this._infestId); this._infestId = null }
     if (this._scatterId) { clearTimeout(this._scatterId); this._scatterId = null }
+    if (this._eraseId) { clearTimeout(this._eraseId); this._eraseId = null }
     // Sin reloj (por defecto o relax): las estrellas premian la PRECISIÓN (movimientos
     // fallados = intentos gastados). 3★ sin fallar, 2★ hasta 3, 1★ completar. Con reloj:
     // por velocidad (timeLeft).
@@ -637,6 +646,7 @@ export class Controller {
     if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }
     if (this._infestId) { clearTimeout(this._infestId); this._infestId = null }
     if (this._scatterId) { clearTimeout(this._scatterId); this._scatterId = null }
+    if (this._eraseId) { clearTimeout(this._eraseId); this._eraseId = null }
     this._clearAutoHint()
     this.board.hideHandGuide()
     this.board.locked = false
@@ -657,13 +667,10 @@ export class Controller {
     this.hooks.setTries?.({ left: this.tries, dec: false })
     this.started = true
     this.hooks.setOverlay({ show: false })             // cierra el pop-up de resultado
-    if (this.boss && !this.boss.infestAt) {            // jefes con freeze (−/×/÷); el Suma NO
-      this._breakAllStates()                           // el reintento ROMPE todo el hielo
-      this.hooks.toast?.('¡Hielo roto! Seguí atacando al jefe ❄️💥')
-      this._startBossAttacks()
-    }
-    if (this.infest) {
-      this._breakAllStates()                           // limpia TODA la infestación de +
+    if (this.boss) {
+      this._bossRetry()                                // cada jefe repone lo suyo (hielo / infestación / signos)
+    } else if (this.infest) {                          // escenario infest standalone (sin jefe)
+      this._breakAllStates()
       this.hooks.toast?.('¡Limpiaste la invasión! Seguí sumando')
       this._startInfest()
     }

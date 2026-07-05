@@ -6,14 +6,19 @@ import React from 'react'
 
 // ---------- MUNDOS por operación (bloques de 10 niveles) ----------
 // Cada mundo = un sector del mapa con su símbolo, nombre y color de tiza (más sobrio).
+// `wip: true` = mundo EN DESARROLLO: bloqueado y no jugable todavía (cartel "Próximamente").
+// Se usa para aislar el playtest de Suma+Resta sin que Mult/Div rompan nada. Quitar el flag
+// para habilitarlos.
 export const WORLDS = [
   { at: 0,  name: 'SUMA',           sym: '+', color: '#8ecae6' },
   { at: 10, name: 'RESTA',          sym: '−', color: '#e6a0b0' },
-  { at: 20, name: 'MULTIPLICAR',    sym: '×', color: '#e7c86a' },
-  { at: 30, name: 'DIVISIÓN',       sym: '÷', color: '#b0a0d8' },
+  { at: 20, name: 'MULTIPLICAR',    sym: '×', color: '#e7c86a', wip: true },
+  { at: 30, name: 'DIVISIÓN',       sym: '÷', color: '#b0a0d8', wip: true },
 ]
 export const worldOf = (i) => WORLDS[Math.min(WORLDS.length - 1, Math.floor(i / 10))]
 export const zoneColor = (i) => worldOf(i).color
+// ¿el nivel pertenece a un mundo en desarrollo? (bloqueo del playtest)
+export const isWip = (i) => !!worldOf(i).wip
 // Cuentas de tiza blanca repartidas por cada fase del mapa (decorativas, simples, ~7 por mundo).
 // Cada una coincide con el objetivo del nivel cercano. `at` = índice de nivel de referencia
 // (para la altura). Suma: L8/L9 muestran cuentas de 2 OPERADORES (mecánica de súper ficha).

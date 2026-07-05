@@ -19,6 +19,17 @@ export const maintenanceMethods = {
   // cuentas fáciles ahí (mín. NEAR_MOVES) con un pop VISIBLE; el resto va escondido en el temblor.
   _healFixedBoard(nearCols = null) {
     this.targets = [...this.fixedTargets]
+    // Rey − en fase BORRÓN (_noReplenish): NO reponer signos ni garantizar jugadas — si te quedás
+    // sin −, PERDÉS (ese es el objetivo del jefe). Sólo se rompen las cuentas ya formadas (para no
+    // regalar victorias), respetando las fichas con estado (tachadas) y las súper.
+    if (this._noReplenish) {
+      const grid = this.board.gridChars()
+      const changed = breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo)
+      const protectedK = new Set([...this.board.cellsWithState(), ...this.board.superCells()])
+      const bg = changed.filter(([r, c]) => !protectedK.has(r + ',' + c))
+      if (bg.length) this.board.applyCharsPlain(bg, grid)
+      return
+    }
     const grid = this.board.gridChars()
     const changed = []
     // 1) operadores: sacar los varados + reponer hasta el piso con buena distribución

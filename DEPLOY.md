@@ -26,12 +26,14 @@ Opcional: un dominio más corto/lindo (`mathcrush-qa.vercel.app`) en Settings �
 
 ## Flujo de trabajo (día a día)
 
+**Regla: NO se pushea en cada cambio.** Primero se prueba en LOCAL; el push a QA y a PROD
+son SIEMPRE bajo pedido explícito.
+
 ```
-1. Trabajar y commitear en  qa
-2. git push origin qa            → Vercel deploya QA (preview)
+1. Hacer cambios (rama qa) y probar en LOCAL:  cd app && npm run dev   (localhost, HMR)
+2. Cuando está OK en local → push a QA:  commit + git push origin qa   → deploy preview
 3. Probar en la URL de QA (celu incluido)
-4. ¿OK?  → promover a producción (abajo)
-   ¿No?  → seguir en qa y repetir
+4. ¿OK? → promover a producción (abajo, también bajo pedido)
 ```
 
 ## Promover QA → Producción

@@ -1058,3 +1058,35 @@ de hielo/montaña nevada, NO con la temática de SUMA. Suma = **más / agregar /
 icónica y da un loss claro; **opción 2 (basura que satura)** es la barata para un primer paso. La
 **opción 3 (expandir)** es linda como TWIST visual y se combina con 1/2 para la amenaza.
 **Acción:** mover el freeze a un escenario de hielo; elegir 1 o 2 para el jefe +. (Pendiente decidir.)
+
+### 18.6 Jefe SUMA — "Infestación de +" (idea del usuario, 2026-07-05) — FUERTE candidata
+**Idea 1 (núcleo):** el jefe + convierte fichas de ABAJO hacia ARRIBA en signos **+** que se
+EXPANDEN hasta tapar todo el escenario. Si cubre todo → perdés.
+- **Por qué es muy buena:** temáticamente PERFECTA (el + literalmente "agrega más +"); da un loss
+  clarísimo (sin números no se pueden formar cuentas → deadlock); es DIRECCIONAL y legible (un frente
+  que sube, tipo marea/lava) → tensión distinta al hielo (que era aleatorio y estático).
+- **Diseño (a definir):** los + infestados son un ESTADO bloqueante (no un operador usable), con look
+  agresivo (glow). **Se retrocede jugando:** una cuenta adyacente rompe la infestación (reusa
+  `_breakStatesNear`) → el jugador EMPUJA el frente hacia abajo. Carrera: sube vs. lo limpiás.
+- **Cómo se pierde:** si el frente llega a la fila de arriba / cubre todo / te deja sin jugadas
+  (`_bossCheckStuck`). reason nuevo ej. 'flooded'.
+- **Impl (factible, reusa infra):** `CELL_STATES.infested` (blocksUse/blocksDrag, overlay = + glow),
+  spread por tick (avanzar el frente a la fila superior), break por contacto ya existe, el healer ya
+  excluye celdas con estado. Elegir ataque por `level.ops[0]` (+→infestar). Esfuerzo MEDIO.
+- **Balance:** velocidad de avance vs. HP del jefe; el jugador tiene que bajarle el HP antes de que
+  suba el frente. Empezar lento (1 fila cada varios s / avance parcial).
+
+**Idea 2 (combinar):** que AL MISMO TIEMPO el escenario se EXPANDA.
+- **Coherencia temática:** sí, las dos son "agregar/más" → coherentes.
+- **Opinión (cautela):** hacer las DOS a la vez en el mismo jefe puede ser demasiado (dos mecánicas de
+  crecimiento simultáneas = difícil de leer y balancear). Además la expansión da MÁS espacio, lo que
+  en parte CONTRARRESTA la infestación que sube (te da lugar para escapar) → puede sentirse raro/anularse.
+- **Mejores formas de usar la expansión (en vez de simultánea "gratis"):**
+  a) **Fase 2 del jefe:** derrotás la infestación → el tablero se EXPANDE y la infestación reinicia más
+     rápida/alta. Escala épica sin saturar de entrada.
+  b) **Expansión que ACELERA la amenaza:** el tablero crece agregando filas infestadas ABAJO (no espacio
+     libre) → la expansión ES más +, coherente y sube la presión (no la baja).
+  c) **Twist/escenario aparte:** un nivel "el tablero que crece" separado, sin la infestación.
+- **Recomendación:** implementar la **Idea 1 sola** como jefe + (es redonda por sí misma). Sumar la
+  expansión después como **fase 2** (opción a) o como **aceleración** (opción b), no como segunda amenaza
+  suelta simultánea. Así cada capa se entiende y se balancea de a una.

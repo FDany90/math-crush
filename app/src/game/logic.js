@@ -678,6 +678,13 @@ function lineHasMatch(chars, targetSet, maxDigits, maxOps = 1) {
   return false;
 }
 
+// ¿la fila r o la columna c forman algún objetivo? (para que el jefe NO coloque un + que arme una
+// cuenta al infestar). Trabaja sobre el grid ya modificado con el + puesto en (r,c).
+export function lineFormsTarget(grid, r, c, targets, maxDigits = Infinity, maxOps = 1) {
+  const set = new Set(targets);
+  return lineHasMatch(getRow(grid, r), set, maxDigits, maxOps) || lineHasMatch(getCol(grid, c), set, maxDigits, maxOps);
+}
+
 // Busca un swap adyacente que forme alguna jugada (para la pista / anti-deadlock).
 // El tablero está en estado resuelto (sin matches), así que un swap solo puede crear
 // un match en las líneas que pasan por las celdas intercambiadas: chequeamos solo esas

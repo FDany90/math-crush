@@ -307,7 +307,9 @@ export class Board {
       if (!t || t.state) continue;               // no pisar fichas con otro estado
       t.setChar('+');
       t.setState('infested');
-      gsap.fromTo(t.scale, { x: 1.25, y: 1.25 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(2)' });
+      // aparición NOTORIA: pop grande + destello (se ve el intercambio de ficha por un +)
+      gsap.fromTo(t.scale, { x: 1.45, y: 1.45 }, { x: 1, y: 1, duration: 0.42, ease: 'back.out(2.4)' });
+      this.burst(t.x, t.y, 0xffffff);
     }
   }
   isInfested(r, c) { return this.tiles[r]?.[c]?.state === 'infested'; }

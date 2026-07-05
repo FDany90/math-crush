@@ -6,7 +6,7 @@ import {
   newGrid, tidyBoard, ensureMinOperators, findEquationCells, findTargetCellsMulti,
   findMatchesMulti, findHintFallback, pickTargets, adjacent, breakFormedTargets, plantTargetMove,
   countTargetMoves, addTargetMovesSubtle, destrandOperators, seedTargetMovesNear,
-  findTargetSegments, countComboMoves, plantComboMove, findComboMove,
+  findTargetSegments, countComboMoves, plantComboMove, findComboMove, lineFormsTarget,
 } from './logic.js'
 import { getLevel, makeGen, randTarget, starsFor, symbolAllowed } from './levels.js'
 
@@ -31,7 +31,8 @@ const CONTINUE_TIME = 60 // segundos que da cada "+1 min"
 const NEAR_MOVES = 3     // cuentas fáciles que se siembran (visibles) alrededor de donde jugás
 const BOSS_FREEZE_MS = 10000 // cada cuánto ataca el jefe (congela fichas)
 const BOSS_FREEZE_N = 3       // cuántas fichas congela por ataque
-const INFEST_MS = 20000      // cada cuánto sube el frente de la infestación de + (escenario Suma)
+const INFEST_MS = 15000      // cada cuánto sube el frente de la infestación de + (fila nueva)
+const SCATTER_MS = 10000     // cada cuánto el jefe Suma (fase 1) esparce + aislados
 const GOAL_NORMAL = 100  // meta de la barra en niveles normales: sumando el VALOR formado
                          // (contás de N en N) hasta 100. SIN reloj (se pierde sólo por intentos).
                          // Los JEFES usan su propio HP (no esto). Tuneable por nivel con `goal`.
@@ -122,6 +123,7 @@ export class Controller {
     if (this.timerId) clearTimeout(this.timerId)
     if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }   // ataques del jefe
     if (this._infestId) { clearTimeout(this._infestId); this._infestId = null }      // frente de infestación
+    if (this._scatterId) { clearTimeout(this._scatterId); this._scatterId = null }   // + aislados (fase 1)
     this._clearAutoHint()
     this.selected = null
     this.activeBooster = null
@@ -166,6 +168,7 @@ export class Controller {
     this.board.hideHandGuide()              // el jugador ya tomó el control: fuera la manito
     // El jefe Suma (con `infestAt`) NO congela: usa expansión + infestación por fases. El resto sí.
     if (this.boss && !this.boss.infestAt) this._startBossAttacks()
+    if (this.boss && this.boss.infestAt) this._startScatter()   // fase 1: esparce + aislados cada 10s
     if (this.infest) this._startInfest()    // arranca a subir el frente de + (escenario Suma standalone)
     if (this.relax || !this.timed) return   // sin reloj (por defecto): se gana llenando la barra
     this.deadline = Date.now() + this.startTime * 1000
@@ -665,7 +668,8 @@ export class Controller {
       this._infestStarted = true
       this.infest = true
       this.hooks.toast?.('🌿 ¡FASE 2! Los + empiezan a invadir…')
-      this._startInfest()
+      this._infestRise()      // la PRIMERA fila apenas llega al 50%
+      this._startInfest()     // y sigue subiendo una fila cada INFEST_MS (15s)
     }
   }
 
@@ -751,21 +755,51 @@ export class Controller {
     if (this.started && !this.busy && !this.coachActive) this._infestRise()
     this._infestId = setTimeout(() => this._infestTick(), INFEST_MS)
   }
-  // sube el frente: en cada columna infesta la celda JUSTO ARRIBA de la infestada más alta (o la
-  // de más abajo si la columna todavía está limpia). No pisa fichas con otro estado.
+  // sube el frente: en cada columna infesta la celda LIBRE más abajo (llena de abajo hacia arriba;
+  // salta las ya infestadas —incluidas las esparcidas de la fase 1—). No pisa fichas con otro estado.
   _infestRise() {
-    const infested = this.board.cellsWithState('infested')
     const toInfest = []
     for (let c = 0; c < this.board.cols; c++) {
-      let front = this.board.rows
-      for (let r = 0; r < this.board.rows; r++) if (infested.has(r + ',' + c)) { front = r; break }
-      const target = front === this.board.rows ? this.board.rows - 1 : front - 1
-      if (target < 0) continue
-      const t = this.board.tiles[target]?.[c]
-      if (t && !t.state) toInfest.push({ r: target, c })
+      for (let r = this.board.rows - 1; r >= 0; r--) {
+        const t = this.board.tiles[r]?.[c]
+        if (!t) continue
+        if (t.state === 'infested') continue      // ya infestada: seguir subiendo
+        if (t.state) break                          // otro estado (raro): no invadir esta columna
+        toInfest.push({ r, c }); break              // primera libre desde abajo → infestar
+      }
     }
     if (toInfest.length) { this.board.applyInfest(toInfest); this.board.shake(5) }
     this._infestCheckLoss()
+  }
+
+  // ---------- FASE 1 del jefe Suma: esparcir + AISLADOS ----------
+  // Cada SCATTER_MS convierte 2 fichas al azar en un '+' (inmutable, con animación notoria). Elige
+  // sólo posiciones donde poner el + NO forma una cuenta (para no regalar jugadas). Evita la fila 0
+  // (que la reserve el frente de la fase 2). Se detiene al arrancar la fase 2.
+  _startScatter() {
+    if (this._scatterId) return
+    this._scatterId = setTimeout(() => this._scatterTick(), SCATTER_MS)
+  }
+  _scatterTick() {
+    this._scatterId = null
+    if (this.ended || this._infestStarted) return   // fase 2: para el scatter (sube el frente)
+    if (this.started && !this.busy && !this.coachActive) this._scatterPlus(2)
+    this._scatterId = setTimeout(() => this._scatterTick(), SCATTER_MS)
+  }
+  _scatterPlus(n = 2) {
+    const grid = this.board.gridChars()
+    const cands = []
+    for (let r = 1; r < this.board.rows; r++) for (let c = 0; c < this.board.cols; c++) {  // r>=1: no la fila 0
+      const t = this.board.tiles[r]?.[c]
+      if (!t || t.state || grid[r][c] === '+') continue
+      const orig = grid[r][c]; grid[r][c] = '+'
+      const forms = lineFormsTarget(grid, r, c, this.targets, this.md, this.mo)   // no formar cuenta al poner el +
+      grid[r][c] = orig
+      if (!forms) cands.push({ r, c })
+    }
+    for (let i = cands.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[cands[i], cands[j]] = [cands[j], cands[i]] }
+    const pick = cands.slice(0, n)
+    if (pick.length) this.board.applyInfest(pick)
   }
   // perdés cuando la fila de arriba (row 0) queda TODA infestada (la marea de + llegó al techo)
   _infestCheckLoss() {
@@ -859,6 +893,7 @@ export class Controller {
     if (this.timerId) clearTimeout(this.timerId)
     if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }
     if (this._infestId) { clearTimeout(this._infestId); this._infestId = null }
+    if (this._scatterId) { clearTimeout(this._scatterId); this._scatterId = null }
     // Sin reloj (por defecto o relax): las estrellas premian la PRECISIÓN (movimientos
     // fallados = intentos gastados). 3★ sin fallar, 2★ hasta 3, 1★ completar. Con reloj:
     // por velocidad (timeLeft).
@@ -886,6 +921,7 @@ export class Controller {
     if (this.timerId) { clearTimeout(this.timerId); this.timerId = null }
     if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }
     if (this._infestId) { clearTimeout(this._infestId); this._infestId = null }
+    if (this._scatterId) { clearTimeout(this._scatterId); this._scatterId = null }
     this._clearAutoHint()
     this.board.hideHandGuide()
     this.board.locked = false

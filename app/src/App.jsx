@@ -751,7 +751,8 @@ export default function App() {
               const p = mapGeo.pts[d.at]
               if (!p) return null
               const onLeft = p.x / MAP_W < 0.5
-              const style = { top: p.y + 'px', [onLeft ? 'right' : 'left']: (8 + (k % 2) * 7) + '%', ['--rot']: ((k % 2 ? 1 : -1) * (3 + k)) + 'deg' }
+              // del lado opuesto al nodo, pero más ADENTRO (no pegadas al borde) y escalonadas
+              const style = { top: p.y + 'px', [onLeft ? 'right' : 'left']: (19 + (k % 2) * 8) + '%', ['--rot']: ((k % 2 ? 1 : -1) * (3 + k)) + 'deg' }
               return <span key={'sum' + k} className="map-sum" style={style} aria-hidden="true">{d.text}</span>
             })}
             {/* puentes: cruzan el hueco del camino al cambiar de mundo (cada 10 niveles) */}

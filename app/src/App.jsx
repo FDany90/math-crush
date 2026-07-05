@@ -71,18 +71,18 @@ const zoneColor = (i) => worldOf(i).color
 // (para la altura). Suma: L8/L9 muestran cuentas de 2 OPERADORES (mecánica de súper ficha).
 const MAP_EQS = [
   // ---- SUMA (1-10) ----
-  { at: 1, text: '2+3' }, { at: 2, text: '2+4' }, { at: 3, text: '4+4' },
-  { at: 5, text: '4+6' }, { at: 6, text: '5+7' },
-  { at: 7, text: '3+4+5' }, { at: 8, text: '4+5+6' },   // 2 operadores
+  { at: 1, text: '2+3=5' }, { at: 2, text: '2+4=6' }, { at: 3, text: '4+4=8' },
+  { at: 5, text: '4+6=10' }, { at: 6, text: '5+7=12' },
+  { at: 7, text: '3+4+5=12' }, { at: 8, text: '4+5+6=15' },   // 2 operadores
   // ---- RESTA (11-20) ----
-  { at: 10, text: '7−3' }, { at: 11, text: '9−4' }, { at: 12, text: '9−3' },
-  { at: 14, text: '8−3' }, { at: 15, text: '9−2' }, { at: 17, text: '8−2' }, { at: 18, text: '7−4' },
+  { at: 10, text: '7−3=4' }, { at: 11, text: '9−4=5' }, { at: 12, text: '9−3=6' },
+  { at: 14, text: '8−3=5' }, { at: 15, text: '9−2=7' }, { at: 17, text: '8−2=6' }, { at: 18, text: '7−4=3' },
   // ---- MULTIPLICACIÓN (21-30) ----
-  { at: 20, text: '2×3' }, { at: 21, text: '2×4' }, { at: 22, text: '3×4' },
-  { at: 24, text: '2×6' }, { at: 25, text: '4×6' }, { at: 27, text: '3×8' }, { at: 28, text: '4×3' },
+  { at: 20, text: '2×3=6' }, { at: 21, text: '2×4=8' }, { at: 22, text: '3×4=12' },
+  { at: 24, text: '2×6=12' }, { at: 25, text: '4×6=24' }, { at: 27, text: '3×8=24' }, { at: 28, text: '4×3=12' },
   // ---- DIVISIÓN (31-40) ----
-  { at: 30, text: '6÷3' }, { at: 31, text: '9÷3' }, { at: 32, text: '8÷4' },
-  { at: 34, text: '8÷2' }, { at: 35, text: '4÷1' }, { at: 37, text: '4÷2' }, { at: 38, text: '6÷2' },
+  { at: 30, text: '6÷3=2' }, { at: 31, text: '9÷3=3' }, { at: 32, text: '8÷4=2' },
+  { at: 34, text: '8÷2=4' }, { at: 35, text: '4÷1=4' }, { at: 37, text: '4÷2=2' }, { at: 38, text: '6÷2=3' },
 ]
 const CHALK_COLORS = ['#7fdfff', '#ff79b8', '#ffd23f', '#b98cff', '#7bed9f', '#f4f1e8']
 const DOODLE_TYPES = ['star', 'house', 'tree', 'planet', 'book', 'spark', 'heart', 'triangle', 'bulb']
@@ -761,6 +761,14 @@ export default function App() {
               const style = { top: p.y + 'px', [onLeft ? 'right' : 'left']: (19 + (k % 2) * 8) + '%', ['--rot']: ((k % 2 ? 1 : -1) * (3 + k)) + 'deg' }
               return <span key={'sum' + k} className="map-sum" style={style} aria-hidden="true">{d.text}</span>
             })}
+            {/* SEPARADOR de fase: una línea de tiza imperfecta cruza el mapa en cada límite de
+                mundo (además del puente), para marcar el cambio de fase. */}
+            {mapGeo.bridges.map((b) => (
+              <svg key={'sep' + b.key} className="phase-sep" style={{ top: b.y + 'px' }}
+                viewBox="0 0 300 16" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M 8 9 C 55 4, 95 12, 140 7 S 235 11, 292 8" />
+              </svg>
+            ))}
             {/* puentes: cruzan el hueco del camino al cambiar de mundo (cada 10 niveles) */}
             {mapGeo.bridges.map((b) => (
               <div key={b.key} className="map-bridge"

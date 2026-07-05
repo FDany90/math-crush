@@ -257,7 +257,10 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 /* garabatos SVG de tiza flotando a los costados */
 .map-doodles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
 .doodle-svg { position: absolute; opacity: .55; transform: rotate(var(--rot)); animation-name: floatDoodle; animation-timing-function: ease-in-out; animation-iteration-count: infinite; animation-direction: alternate; }
-/* sumas de tiza blanca decorativas (fase Suma del mapa) */
+/* separador de fase: línea de tiza imperfecta que cruza el mapa en cada límite de mundo */
+.phase-sep { position: absolute; left: 0; width: 100%; height: 16px; transform: translateY(-50%); z-index: 1; pointer-events: none; filter: url(#chalkRough); opacity: .5; }
+.phase-sep path { fill: none; stroke: #f4f1e8; stroke-width: 2.4; stroke-linecap: round; }
+/* cuentas de tiza blanca decorativas por fase del mapa */
 .map-sum { position: absolute; z-index: 1; pointer-events: none; white-space: nowrap;
   transform: translateY(-50%) rotate(var(--rot)); font-family: var(--font-chalk); font-size: 26px;
   color: #f4f1e8; opacity: .5; letter-spacing: 2px; filter: url(#chalkRough); text-shadow: 0 1px 2px #0006; }

@@ -3,10 +3,11 @@
 // sprites sincronizados con la grilla y anima cada paso.
 // El tamaño del tablero es variable (cambia por nivel) -> hace resize.
 // ====================================================================
-import { Container, Graphics, Text, Rectangle } from 'pixi.js'
+import { Container, Graphics, Text, Sprite, Rectangle } from 'pixi.js'
 import { gsap } from 'gsap'
 import { kindOf } from '../game/logic.js'
 import { CELL_STATES } from './cellStates.js'   // registro de estados de casillero (frozen, infested, …)
+import { getTileTexture } from './tileTextures.js'   // texturas de ficha pre-renderizadas (perf)
 
 export const TILE = 64;
 export const MAX_PX = TILE * 8;  // tamaño máximo (8x8) para inicializar el canvas
@@ -71,66 +72,25 @@ class Tile extends Container {
   }
   get blocksUse() { return !!(this.state && CELL_STATES[this.state].blocksUse); }
   get blocksDrag() { return !!(this.state && CELL_STATES[this.state].blocksDrag); }
+  // El arte de la ficha (fondo + garabato + contorno + número) está PRE-RENDERIZADO a
+  // una textura compartida por carácter (ver tileTextures.js). Acá sólo apuntamos un
+  // Sprite a esa textura -> crear/recambiar una ficha cuesta ~0 (antes redibujaba ~70
+  // trazos + un Text por ficha, y en cascadas grandes tironeaba).
   setChar(ch) {
     this.ch = ch;
-    this._killSuperPulse();     // corta el latido viejo antes de re-dibujar (se recrea en _applySuper)
-    this.removeChildren();
-    const col = colorFor(ch);
-    const s = TILE - 8, rad = 13;
-
-    // sombrita
-    const shadow = new Graphics();
-    shadow.roundRect(-s / 2, -s / 2 + 3, s, s, rad).fill({ color: 0x000000, alpha: 0.22 });
-    this.addChild(shadow);
-
-    // máscara redondeada: recorta el "pintado" a la forma de la ficha
-    const mask = new Graphics();
-    mask.roundRect(-s / 2, -s / 2, s, s, rad).fill(0xffffff);
-    this.addChild(mask);
-
-    // ficha = pizarrón NEGRO con tiza de color garabateada encima. El fondo es oscuro
-    // (color del pizarrón), y el color viene de las pinceladas diagonales a mano.
-    const paint = new Container();
-    const base = new Graphics();
-    base.roundRect(-s / 2, -s / 2, s, s, rad).fill({ color: 0x222d27, alpha: 0.92 });   // fondo negro pizarrón
-    paint.addChild(base);
-    // dir = 1 diagonal ↘ ; dir = -1 diagonal ↙ (perpendicular). Ambas irregulares:
-    // no forman una red, solo cubren más y quedan disparejas.
-    const scribble = (width, alpha, step, dir) => {
-      const g = new Graphics();
-      let x = -s;
-      while (x < s) {
-        const x1 = x + (Math.random() - 0.5) * 5, y1 = -s / 2 - 3 + (Math.random() - 0.5) * 7;
-        const x2 = x + dir * s + (Math.random() - 0.5) * 9, y2 = s / 2 + 3 + (Math.random() - 0.5) * 7;
-        const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * 7, my = (y1 + y2) / 2 + (Math.random() - 0.5) * 7;
-        g.moveTo(x1, y1).lineTo(mx, my).lineTo(x2, y2);          // trazo con un quiebre = hecho a mano
-        x += step + Math.random() * step;                        // espaciado irregular
-      }
-      g.stroke({ color: col, width, alpha });
-      paint.addChild(g);
-    };
-    scribble(3.2, 0.7, 4, 1);                                    // pinceladas principales ↘
-    scribble(1.6, 0.42, 7, 1);                                   // acentos ↘
-    scribble(2.6, 0.5, 6, -1);                                   // pasada perpendicular ↙ (cubre más, disparejo)
-    paint.mask = mask;
-    this.addChild(paint);
-
-    // contorno de tiza (doble trazo, leve desfasaje = dibujado a mano)
-    const outline = new Graphics();
-    outline.roundRect(-s / 2, -s / 2, s, s, rad).stroke({ color: 0xffffff, width: 2.5, alpha: 0.85, alignment: 0.5 });
-    outline.roundRect(-s / 2 + 1, -s / 2 - 1.5, s, s, rad).stroke({ color: 0xffffff, width: 1, alpha: 0.3, alignment: 0.5 });
-    this.addChild(outline);
-
-    // número/símbolo en tiza blanca (sobre el fondo oscuro de la ficha); dorado si es súper
-    const t = new Text({
-      text: ch,
-      style: { fontFamily: 'Tiza, "Patrick Hand", cursive', fontSize: 42, fill: this.super ? 0xffe07a : 0xffffff },
-    });
-    t.anchor.set(0.5);
-    // el glifo '−' de la fuente Tiza cae bajo (parece guión bajo): subirlo para centrarlo
-    t.y = ch === '−' ? -10 : -1;
-    this.addChild(t);
-    // setChar borra los hijos: re-pintar decoraciones (súper ficha y/o estado como el hielo)
+    this._killSuperPulse();     // corta el latido viejo antes de recambiar (se recrea en _applySuper)
+    if (this._sprite) {
+      // conservar el sprite base; quitar sólo decoraciones previas (aura súper / overlay)
+      for (const child of [...this.children]) if (child !== this._sprite) child.destroy();
+    } else {
+      this.removeChildren();
+      this._sprite = new Sprite();
+      this._sprite.anchor.set(0.5);
+      this.addChild(this._sprite);
+    }
+    const tex = getTileTexture(ch, this.super);   // súper = número dorado (variante propia)
+    if (tex) this._sprite.texture = tex;
+    // re-pintar decoraciones sobre el sprite (súper ficha y/o estado como el hielo)
     if (this.super) this._applySuper();
     this._overlay = null;
     if (this.state) this._applyOverlay();

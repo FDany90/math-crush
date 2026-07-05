@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Application } from 'pixi.js'
 import { Board, MAX_PX } from './pixi/Board.js'
+import { buildTileTextures } from './pixi/tileTextures.js'
 import { Controller, getHintPool, setHintPool, HINTS_MAX } from './game/controller.js'
 import { LEVELS } from './game/levels.js'
 import { initMetrics, getNick, setNick, trackEvent } from './metrics.js'
@@ -141,6 +142,10 @@ export default function App() {
           document.fonts.load('700 28px Fredoka'),
         ])
       } catch { /* sin conexión: cae a la fuente fallback */ }
+
+      // Pre-renderizar las texturas de ficha UNA vez (perf): a partir de acá crear una
+      // ficha sólo apunta un Sprite a la textura cacheada (ver pixi/tileTextures.js).
+      buildTileTextures(app.renderer)
 
       const hooks = {
         setTime: setTimeLeft, setInventory, setHints,

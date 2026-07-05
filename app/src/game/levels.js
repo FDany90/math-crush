@@ -37,34 +37,33 @@ export const LEVELS = [
   { name: 'Primeros pasos',   size: 4, digits: range(1, 3), ops: ['+'], eq: false, maxDigits: 1, target: 4,        quota: 10, tutorial: true },
   { name: 'Amigos del 5',     size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 5,        quota: 10 },
   { name: 'Media docena',     size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 6,        quota: 10 },
-  { name: 'Solo pares',       size: 5, digits: ['2', '4', '6'], ops: ['+'], eq: false, maxDigits: 1, target: 8,   quota: 10 },  // solo pares → 2+6, 4+4
-  { name: 'Doble objetivo',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [4, 8],   quota: 10 },  // 🎁 twist: 4 y 8 a la vez
-  { name: 'Ponete la 10',     size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 10,       quota: 10 },
-  { name: 'Modo relax',       size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 9,        quota: 10, relax: true },       // 🎁 twist: sin reloj
-  { name: 'Una docena',       size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12,       quota: 10 },
-  { name: 'Fiebre de combos', size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 7,        quota: 10, comboFever: true },  // 🎁 twist: los combos cuentan DOBLE
+  { name: 'Solo pares',       size: 5, digits: ['2', '4', '6'], ops: ['+'], eq: false, maxDigits: 1, target: 8,   quota: 10, goal: 150 },  // solo pares → 2+6, 4+4
+  { name: 'Doble objetivo',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [4, 8],   quota: 10, goal: 150 },  // 🎁 twist: 4 y 8 a la vez
+  { name: 'Ponete la 10',     size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 10,       quota: 10, goal: 200 },
+  { name: 'Impares 7 y 9',    size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [7, 9],   quota: 10, goal: 200 },  // 🎁 doble de impares (más difícil: menos pares)
+  { name: 'Una docena',       size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12,       quota: 10, goal: 200 },
+  { name: 'De 3 en 3',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [3, 6, 9], quota: 10, comboFever: true, goal: 250 },  // 🎁 triple múltiplos de 3 + combos DOBLE
   // Nivel 10 = ACUMULATIVO (hito de fin de mundo): formá cualquiera de estos resultados y su
   // VALOR se suma a un total; ganás al llegar a 100. Ver DISEÑO §7.5 / PLAN_SESION_AUTONOMA.
   { name: 'Jefe: el signo +', size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 6, 8, 10], boss: { hp: 500 }, quota: 99 },  // 👹 BATALLA DE JEFE (base): 500 HP, daño = valor formado
 
-  // ================= MUNDO RESTA (niveles 11-15, objetivo fijo, mecánica nueva) =================
-  // Resta de 1 cifra, resultados CHICOS y fáciles (≥0, sin negativos aún). Mismo motor
-  // target-rich que la suma: tablero sesgado al objetivo, siembra de cuentas fáciles,
-  // dígitos = operandos útiles (acá el minuendo puede ser mayor al resultado, ej. 9−4=5).
-  // teach→test→twist, números bajos primero. Ver DISEÑO §7 (mundos por operación).
-  // En resta, objetivo ALTO = MENOS pares (target 6 solo tiene 3: 9−3,8−2,7−1). Banda cómoda
-  // 3-6. Arranca en 3 (no trivial) y la doble entra temprano (el jugador ya sabe la mecánica).
-  { name: 'Primera resta',    size: 5, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 3,       quota: 10 },
-  { name: 'Doble resta',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 5],  quota: 10 },  // 🎁 twist: 2 y 5 a la vez
-  { name: 'Diferencia 5',     size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 5,       quota: 10 },
-  { name: 'Diferencia 6',     size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 6,       quota: 10 },
-  { name: 'Fiebre de restas', size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 4,       quota: 10, comboFever: true },  // 🎁 twist: combos x2
-  // --- 4 niveles de RESTA con DOBLE objetivo (cada uno mezcla un target cómodo con uno más
-  // difícil = menos pares; ej. 7 solo tiene 8−1 y 9−2). Twists encima para variar. ---
-  { name: 'Resta doble',    size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 6], quota: 10 },
-  { name: 'Doble relax',    size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 6], quota: 10, relax: true },       // 🎁 sin reloj
-  { name: 'Doble combos',   size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 7], quota: 10, comboFever: true },  // 🎁 combos x2
-  { name: 'Resta maestra',  size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7], quota: 15 },                    // tablero 7×7
+  // ================= MUNDO RESTA (niveles 11-19 + hito) — RAMPA DE DIFICULTAD =================
+  // Mundo 2: acá EMPIEZA la fricción real (primeras pérdidas). Resta de 1 cifra, resultados ≥0.
+  // La dificultad sube por 4 palancas: (1) metas más largas (150→350), (2) tableros 7×7 antes,
+  // (3) objetivos más difíciles (impares/altos = MENOS pares; triples), (4) MENOS intentos en
+  // los duros (4 y 3 tizas → margen chico para el error). En resta objetivo alto = menos pares:
+  // 7 solo tiene 8−1,9−2; 8 solo 9−1 (evitar); banda usable 2-7. Ver DISEÑO §7.
+  // 11-12 = intro suave a la resta (operación nueva); desde el 13 arranca la rampa.
+  { name: 'Primera resta',    size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 4,       quota: 10, goal: 150 },
+  { name: 'Doble resta',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 5],  quota: 10, goal: 150 },  // 🎁 doble
+  { name: 'Diferencia 6',     size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 6,       quota: 10, goal: 200 },  // menos pares (7−1,8−2,9−3)
+  { name: 'Resta doble',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 6],  quota: 10, goal: 200 },  // 🎁 doble
+  { name: 'Fiebre de restas', size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 5,       quota: 10, goal: 250, comboFever: true },  // 🎁 combos x2
+  // --- desde acá la rampa aprieta: 7×7, impares/altos, triples y MENOS intentos ---
+  { name: 'Resta difícil',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [5, 7],  quota: 15, goal: 250, tries: 4 },  // 7×7, 7 = solo 8−1,9−2
+  { name: 'Doble combos',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7],  quota: 15, goal: 300, comboFever: true, tries: 4 },  // 🎁 combos x2, 7×7
+  { name: 'Triple resta',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 4, 6], quota: 15, goal: 300, tries: 4 },  // 🎁 triple
+  { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 350, tries: 3 },  // 🎁 triple, solo 3 intentos
   // Nivel 20 = ACUMULATIVO resta: arrancás en 40 y cada resta BAJA el total; ganás al llegar a 0.
   { name: 'Bajá a 0',       size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3, 4, 5], accum: { start: 40, goal: 0 }, quota: 99 },  // 🏁 acumulativo
 

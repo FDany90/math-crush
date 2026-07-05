@@ -164,6 +164,32 @@ function loadProgress() {
   catch { return { stars: {} } }
 }
 
+// ---------- CORAZONES ❤️ (vidas globales: reintentar un nivel perdido cuesta 1) ----------
+// v1: máx 5, regen +1 cada 25 min (generoso, no coercitivo — ver estrategia de retención).
+// Persisten { n, t } donde t = base del reloj de regen. Al cargar se calcula cuántos se
+// regeneraron desde t. Refill futuro: regalo diario + rewarded ad (opt-in).
+const HEARTS_MAX = 5
+const HEARTS_REGEN_MS = 25 * 60 * 1000
+const HEARTS_KEY = 'math_hearts'
+function loadHearts() {
+  let n = HEARTS_MAX, t = Date.now()
+  try {
+    const raw = JSON.parse(localStorage.getItem(HEARTS_KEY) || 'null')
+    if (raw && typeof raw.n === 'number' && typeof raw.t === 'number') { n = raw.n; t = raw.t }
+  } catch { /* sin localStorage */ }
+  if (n >= HEARTS_MAX) return { n: HEARTS_MAX, t: Date.now() }        // lleno: reloj en cero
+  const gained = Math.floor((Date.now() - t) / HEARTS_REGEN_MS)      // regen acumulada
+  if (gained > 0) { n = Math.min(HEARTS_MAX, n + gained); t = n >= HEARTS_MAX ? Date.now() : t + gained * HEARTS_REGEN_MS }
+  return { n, t }
+}
+function saveHearts(h) { try { localStorage.setItem(HEARTS_KEY, JSON.stringify(h)) } catch { /* noop */ } }
+// segundos hasta el próximo corazón (0 si está lleno)
+function heartsNextInSec(h) {
+  if (h.n >= HEARTS_MAX) return 0
+  return Math.max(0, Math.ceil((h.t + HEARTS_REGEN_MS - Date.now()) / 1000))
+}
+function fmtMMSS(sec) { return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') }
+
 // Descripción corta del nivel para el pop-up de inicio (estilo Candy Crush)
 function levelBrief(lv) {
   if (lv.tutorial) return 'Arrastrá fichas y formá el número de arriba 👆'
@@ -323,7 +349,8 @@ export default function App() {
   const [boss, setBoss] = useState(null)               // batalla de jefe: { hp, max, sign } | null
   const [target, setTarget] = useState({ level: 1, name: '', list: [10], flash: false })
   const [goal, setGoal] = useState({ need: 0, done: 0 })   // barra de objetivo: progreso/total
-  const [tries, setTries] = useState(0)                           // intentos restantes
+  const [tries, setTries] = useState(0)                           // intentos (vidas = tizas) restantes
+  const [triesMax, setTriesMax] = useState(5)                     // total de vidas (tizas de la barra)
   const [triesPop, setTriesPop] = useState(0)
   const [hints, setHints] = useState(0)                           // pistas manuales que quedan
   const [startPopup, setStartPopup] = useState(null)              // índice del nivel a arrancar (pop-up)
@@ -331,6 +358,8 @@ export default function App() {
   const [devUnlocked, setDevUnlocked] = useState(() => new Set()) // MODO TEST (secreto): niveles abiertos a mano
   const [dailyOpen, setDailyOpen] = useState(false)               // pop-up del regalo diario
   const [hintPool, setHintPoolState] = useState(() => getHintPool()) // pistas globales (para mostrar en el reward)
+  const [hearts, setHearts] = useState(loadHearts)                // corazones (vidas globales) { n, t }
+  const [nowTick, setNowTick] = useState(0)                       // fuerza refresco del contador de regen
   const winTimer = useRef(null)
   const startPopupTimer = useRef(null)
   const devTap = useRef({ i: -1, n: 0, t: null })                 // contador de toques para el desbloqueo de test
@@ -376,8 +405,9 @@ export default function App() {
         onHintUsed: (index) => trackEvent('hint', index),
         onAddMinute: (index) => trackEvent('continue', index),
         setGoal: (g) => setGoal(g),
-        setTries: ({ left, dec }) => {
+        setTries: ({ left, max, dec }) => {
           setTries(left)
+          if (max != null) setTriesMax(max)
           if (dec) setTriesPop((p) => p + 1)
         },
         setTarget: (t) => {
@@ -430,6 +460,34 @@ export default function App() {
   }, [])
 
   useEffect(() => { initMetrics() }, [])                          // ID anónimo + upsert jugador
+  // CORAZONES: persistir la regen al montar y refrescar cada 20s (regen + contador)
+  useEffect(() => {
+    saveHearts(hearts)
+    const id = setInterval(() => { const nh = loadHearts(); saveHearts(nh); setHearts(nh); setNowTick((x) => x + 1) }, 20000)
+    return () => clearInterval(id)
+  }, [])
+  const spendHeart = () => setHearts((h) => { const nh = { n: Math.max(0, h.n - 1), t: h.n >= HEARTS_MAX ? Date.now() : h.t }; saveHearts(nh); return nh })
+  const addHearts = (k = 1) => setHearts((h) => { const n = Math.min(HEARTS_MAX, h.n + k); const nh = { n, t: n >= HEARTS_MAX ? Date.now() : h.t }; saveHearts(nh); return nh })
+  // contador de regen: refresco por segundo SOLO en el mapa (para el "próximo en MM:SS")
+  useEffect(() => {
+    if (screen !== 'map') return
+    const id = setInterval(() => setNowTick((x) => x + 1), 1000)
+    return () => clearInterval(id)
+  }, [screen])
+  // Al gastar un intento (triesPop sube): flash ROJO + shake de TODA la barra de tizas, para
+  // marcar el error. La tiza consumida además se desvanece por su transición CSS (la barra baja).
+  useEffect(() => {
+    if (triesPop <= 0) return
+    const el = document.querySelector('.lives')
+    if (!el) return
+    el.animate([
+      { filter: 'none', transform: 'translateX(0) scale(1)' },
+      { filter: 'sepia(1) saturate(6) hue-rotate(-25deg) brightness(1.12)', transform: 'translateX(-5px) scale(1.04)', offset: 0.15 },
+      { filter: 'sepia(1) saturate(6) hue-rotate(-25deg)', transform: 'translateX(5px)', offset: 0.42 },
+      { filter: 'sepia(1) saturate(5) hue-rotate(-25deg)', transform: 'translateX(-3px)', offset: 0.7 },
+      { filter: 'none', transform: 'translateX(0) scale(1)' },
+    ], { duration: 500, easing: 'ease-out' })
+  }, [triesPop])
   // scrollear al fondo (nivel 1) SOLO al entrar al mapa; no en cada render
   // (antes el ref inline lo reseteaba al abrir el pop-up de "Jugar")
   useEffect(() => {
@@ -518,17 +576,17 @@ export default function App() {
     <div className="app">
       {/* ---------- pantalla de juego (siempre montada para conservar el canvas Pixi) ---------- */}
       <div className="game" style={{ display: screen === 'game' ? 'flex' : 'none' }}>
-        {/* Fila superior: intentos · (tiempo sólo si el nivel tiene reloj) */}
-        <div className="top-row">
-          <div className="tries-big">
-            <span key={triesPop} className={'tries-num' + (triesPop > 0 ? ' pop' : '') + (tries <= 3 ? ' low' : '')}>{tries}</span>
+        {/* Reloj: sólo si el nivel tiene tiempo (hoy ninguno). Los intentos van en la barra de
+            tizas sobre el tablero (ver abajo). */}
+        {mode.timed && (
+          <div className="top-row">
+            <div className={'time-big' + (tsec <= 15 ? ' low' : '')}>{timeStr}</div>
           </div>
-          {mode.timed && <div className={'time-big' + (tsec <= 15 ? ' low' : '')}>{timeStr}</div>}
-        </div>
+        )}
 
-        {/* Objetivo. En modo ACUMULATIVO: barra de total hacia la meta. Si no: "Formá [N]" +
-            los palitos que se van tachando (contador pegado al objetivo, tipo Candy Crush). */}
-        <div className={'obj-card' + (coach?.[0]?.highlight === 'target' ? ' coach-hl' : '')}>
+        {/* Objetivo. Boss: signo + HP. Acumulativo: barra hacia la meta. Normal: chip + barra.
+            El resaltado del coach va en el chip ('target') o la barra ('glass'), no en toda la tarjeta. */}
+        <div className="obj-card">
           {boss ? (
             /* BATALLA DE JEFE (base): el signo grande + barra de HP que baja. Formá cualquiera
                de los resultados para golpearlo; a 0 HP se derrota. */
@@ -554,7 +612,6 @@ export default function App() {
             <div className="accum">
               {/* qué cuentas valen (set fijo) → se muestran para que la regla sea clara */}
               <div className="obj-top accum-targets">
-                <span className="obj-label sm">Formá</span>
                 {(target.list || []).map((t, i) => (
                   <React.Fragment key={t}>
                     {i > 0 && <span className="tor">o</span>}
@@ -573,9 +630,10 @@ export default function App() {
           ) : (
             /* BARRA de objetivo (igual que el acumulativo): "Formá 4 (o 8)" + una sola barra
                que se llena de verde. Cualquier objetivo cuenta al mismo progreso (ej 13/50). */
-            <div className={'goalbars' + (coach?.[0]?.highlight === 'glass' ? ' coach-hl' : '')}>
-              <div className="obj-top accum-targets">
-                <span className="obj-label sm">Formá</span>
+            <div className="goalbars">
+              {/* 1ra instrucción del tutorial resalta SOLO el chip del número (coach 'target');
+                  la 2da resalta SOLO la barra (coach 'glass'). */}
+              <div className={'obj-top accum-targets' + (coach?.[0]?.highlight === 'target' ? ' coach-hl' : '')}>
                 {(target.list || []).map((t, i) => (
                   <React.Fragment key={t}>
                     {i > 0 && <span className="tor">o</span>}
@@ -583,12 +641,19 @@ export default function App() {
                   </React.Fragment>
                 ))}
               </div>
-              <div className="accum-bar">
+              <div className={'accum-bar' + (coach?.[0]?.highlight === 'glass' ? ' coach-hl' : '')}>
                 <div className="accum-fill" style={{ width: (goal.need ? Math.min(100, Math.round((100 * goal.done) / goal.need)) : 0) + '%' }} />
                 <span className="accum-num">{goal.done}/{goal.need}</span>
               </div>
             </div>
           )}
+        </div>
+
+        {/* Vidas = 5 TIZAS acostadas sobre el pizarrón (barra). Cada intento fallido gasta una. */}
+        <div className={'lives' + (coach?.[0]?.highlight === 'lives' ? ' coach-hl' : '')} aria-label={`${tries} de ${triesMax} intentos`}>
+          {Array.from({ length: triesMax }).map((_, i) => (
+            <span className={'chalk' + (i < tries ? '' : ' used') + (i < tries && tries <= 2 ? ' danger' : '')} key={i} />
+          ))}
         </div>
 
         <div className="board-area">
@@ -632,6 +697,10 @@ export default function App() {
         <div className="screen map" ref={mapScrollRef}>
           {/* barra de opciones del mapa (fija): pistas + regalo diario */}
           <div className="map-top">
+            <span className="map-hearts" title="Corazones (vidas)">
+              ❤️ {hearts.n}
+              {hearts.n < HEARTS_MAX && <span className="hearts-timer">{fmtMMSS(heartsNextInSec(hearts))}</span>}
+            </span>
             <span className="map-hints">💡 {hintPool}</span>
             <button className="daily-btn" onClick={() => setDailyOpen(true)} aria-label="Regalo del día">
               🎁{!dailyClaimed() && <span className="daily-dot" />}
@@ -757,10 +826,13 @@ export default function App() {
                   : '¡Te quedaste sin intentos!'}</div>
             <div className="ok">{result.boss ? 'HP restante del jefe' : 'Cuentas que faltaron'}</div>
             <div className="os">{result.left}</div>
-            {result.continuesLeft > 0 && (
-              <button className="continue-btn" onClick={() => ctrlRef.current?.resumeWithBonus()}>
-                {result.boss ? '🧊 Descongelar todo y seguir' : result.timed ? '+1 minuto' : 'Reintentar'}
+            {/* Reintentar cuesta 1 CORAZÓN. Sin corazones: se recargan solos (o futuro: ad). */}
+            {hearts.n > 0 ? (
+              <button className="continue-btn" onClick={() => { spendHeart(); ctrlRef.current?.resumeWithBonus() }}>
+                {result.boss ? '🧊 Descongelar todo' : 'Reintentar'} <span className="cost">❤️ 1</span>
               </button>
+            ) : (
+              <div className="no-hearts">💔 Sin corazones. Se recargan solos — próximo en {fmtMMSS(heartsNextInSec(hearts))}.</div>
             )}
             <div className="card-btns">
               <button onClick={() => { setResult(null); setScreen('map') }}>Salir</button>

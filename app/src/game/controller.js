@@ -21,7 +21,7 @@ const BOOSTER_DEFS = [
 
 const START_TIME = 120   // 2 minutos base; cada cuenta suma tiempo
 const TIME_PER_CUENTA = 5 // segundos que otorga cada cuenta formada
-const MAX_TRIES = 10     // intentos: cada movimiento que NO forma cuenta resta 1
+const MAX_TRIES = 5      // intentos (vidas): cada movimiento que NO forma cuenta resta 1
 const MAX_HINTS_POOL = 10 // tope del pool GLOBAL de pistas (se acumulan entre niveles)
 const START_HINTS = 5     // pistas con las que arranca un jugador nuevo
 const HINTS_KEY = 'math_hints'
@@ -157,6 +157,7 @@ export class Controller {
   // reanuda el reloj (si corresponde; antes del primer movimiento no hace nada)
   resume() {
     if (!this.started || this.ended || this.timerOn) return
+    if (this.relax || !this.timed) return   // niveles sin reloj: reanudar NO debe arrancar timer
     this.deadline = Date.now() + this.timeLeft * 1000
     this.timerOn = true
     this._tick()
@@ -419,12 +420,6 @@ export class Controller {
       this._coach([{ text: '¡Así se hace! Llená la barra formando el resultado una y otra vez.', highlight: 'glass' }])
       return   // coachDismissed() retoma la manito automática al cerrar el mensaje
     }
-    // Nivel 2: al resolver la PRIMERA cuenta, frenar el reloj y señalar cuántas faltan.
-    if (this.levelIndex === 1 && consumed.size > 0 && !this.coachedFirstCuenta && this.left > 0) {
-      this.coachedFirstCuenta = true
-      this._coach([{ text: '¡Bien! Seguí formando el resultado para llenar la barra antes de que se acabe el tiempo.', highlight: 'glass' }])
-      return
-    }
     this._startAutoHint()
   }
 
@@ -627,7 +622,7 @@ export class Controller {
     try {
       if (!localStorage.getItem('math_coached_wrongmove')) {
         localStorage.setItem('math_coached_wrongmove', '1')
-        this._coach([{ text: 'Eso no forma una cuenta. Te quedan ' + this.tries + ' movimientos: pensá bien antes de mover.' }])
+        this._coach([{ text: '¡Ups! Ese movimiento no formó una cuenta. Cada error gasta una tiza ✏️. Te quedan ' + this.tries + ' — ¡pensá bien antes de mover!', highlight: 'lives' }])
       }
     } catch { /* sin localStorage: no avisar */ }
   }
@@ -706,7 +701,7 @@ export class Controller {
   // En el JEFE, el reintento ROMPE TODO EL HIELO (no da tiempo). En niveles con reloj, suma
   // tiempo (legacy). En niveles sin reloj, sólo repone intentos. Máximo MAX_CONTINUES veces.
   resumeWithBonus() {
-    if (!this.ended || this.continues >= MAX_CONTINUES) return
+    if (!this.ended) return                            // el gate ahora es el CORAZÓN (en App)
     this.continues++
     this.hooks.onAddMinute?.(this.levelIndex)          // métrica
     this.ended = false
@@ -787,7 +782,7 @@ export class Controller {
     this.hooks.setBoss?.(this.boss ? { hp: this.bossHp, max: this.bossHpMax, sign: this.level.ops?.[0] ?? '+' } : null)
     this.hooks.setTime(this.timeLeft)
     this.hooks.setGoal?.({ need: this.goalNeed, done: this.goalDone })
-    this.hooks.setTries?.({ left: this.tries, dec: false })
+    this.hooks.setTries?.({ left: this.tries, max: this.level.tries ?? MAX_TRIES, dec: false })
     this.hooks.setHints?.(this.hintsLeft)
   }
   _pushInventory() {

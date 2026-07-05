@@ -64,9 +64,20 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 @keyframes chipIn { 0% { transform: scale(.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
 /* ---- HUD: fila superior (intentos · tiempo · tally) + objetivo a ancho completo ---- */
-.top-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; width: min(94vw, 460px); margin: 30px auto 22px; }
-.top-row .tries-big { justify-self: start; }
-.top-row .tally { justify-self: end; }
+.top-row { display: flex; justify-content: center; align-items: center; width: min(94vw, 460px); margin: 24px auto 14px; }
+
+/* VIDAS = 5 tizas acostadas sobre el pizarrón (barra). Cada intento fallido "gasta" una tiza. */
+.lives { display: flex; gap: 6px; width: min(94vw, 460px); margin: 20px auto 2px; padding: 0 2px; }
+.chalk { flex: 1; height: 13px; border-radius: 7px; position: relative;
+  background: linear-gradient(180deg, #fdfbf3, #e6e0cd);
+  box-shadow: inset 0 2px 2px #ffffffcc, inset 0 -2px 3px #0000001f, 0 2px 3px #0006;
+  transition: opacity .35s ease, filter .35s ease, transform .35s ease; }
+/* puntita (extremo) un poco más marcada, como una tiza real */
+.chalk::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 22%;
+  border-radius: 0 7px 7px 0; background: linear-gradient(180deg, #efe9d8, #d6cfb8); }
+.chalk.used { opacity: .16; filter: grayscale(1); transform: scaleX(.93); box-shadow: none; }
+.chalk.danger { background: linear-gradient(180deg, #ffd2d2, #ff8f8f); animation: lowpulse .8s infinite; }
+.chalk.danger::after { background: linear-gradient(180deg, #ffc0c0, #f07a7a); }
 .time-big { font-family: var(--font-tiza); font-size: 48px; font-weight: 700; line-height: 1; letter-spacing: 1px; text-align: center; text-shadow: 0 3px 0 #00000040; display: inline-block; }
 .time-big.low { color: var(--red); animation: lowpulse .7s infinite; }
 .time-big.bump { animation: timeBump .35s ease; }
@@ -74,10 +85,6 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 @keyframes timeBump { 0% { transform: scale(1); } 40% { transform: scale(1.18); color: #7bed9f; } 100% { transform: scale(1); } }
 
 .hud2 { display: flex; align-items: center; justify-content: center; gap: 14px; width: min(94vw, 460px); margin-bottom: 6px; }
-.tries-big { display: flex; flex-direction: column; align-items: center; min-width: 60px; }
-.tries-num { font-family: var(--font-tiza); font-size: 40px; font-weight: 700; line-height: 1; display: inline-block; }
-.tries-num.low { color: var(--red); }
-.tries-num.pop { animation: triesDrop .45s ease; }
 
 /* "+Ns" que sube desde el reloj */
 .time-bonus { position: fixed; font-family: var(--font-tiza); font-size: 30px; color: #7bed9f; text-shadow: 0 0 10px #2ed57388; pointer-events: none; transform: translate(-50%,-50%); z-index: 46; }
@@ -133,7 +140,7 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .goalfill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #5cd66b, #37b24d); transition: width .25s ease; }
 .gstar { position: absolute; top: -5px; transform: translateX(-50%); font-size: 14px; color: #fff8; }
 
-.board-area { position: relative; width: min(94vw, 460px); margin-top: 44px; }
+.board-area { position: relative; width: min(94vw, 460px); margin-top: 32px; }
 /* Flechas de dirección (solo en resta/división). Doradas y con pulso SECUENCIAL
    start→mid→end para que se lea el sentido (→ y ↓). No animan transform (los .mid lo
    usan para centrarse): el "flujo" se logra con el desfasaje del pulso de opacidad/glow. */
@@ -221,6 +228,8 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 /* barra de opciones del mapa (fija arriba a la derecha): pistas + regalo diario */
 .map-top { position: fixed; top: 10px; right: 12px; z-index: 20; display: flex; align-items: center; gap: 10px; }
 .map-hints { font-family: var(--font-tiza); font-size: 20px; color: var(--eq); background: #1a241fcc; padding: 5px 12px; border-radius: 16px; border: 1.5px solid #ffffff22; }
+.map-hearts { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-tiza); font-size: 20px; color: #ff8fa3; background: #1a241fcc; padding: 5px 12px; border-radius: 16px; border: 1.5px solid #ffffff22; }
+.hearts-timer { font-family: var(--font-body); font-size: 11px; font-weight: 700; color: var(--chalk-dim); opacity: .85; }
 .daily-btn { position: relative; font-size: 24px; width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(160deg, #ff9db0, #e0607a); box-shadow: 0 4px 0 #a03a52; display: flex; align-items: center; justify-content: center; }
 .daily-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #a03a52; }
 .daily-dot { position: absolute; top: -2px; right: -2px; width: 14px; height: 14px; border-radius: 50%; background: #2ed573; border: 2px solid #1a241f; animation: lowpulse 1s infinite; }
@@ -310,6 +319,8 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 
 /* botón "+1 minuto" (seguir tras perder) = tiza amarilla, destacado */
 .continue-btn { display: block; width: 100%; margin: 20px 0 4px; font-family: var(--font-tiza); font-weight: 700; font-size: 26px; letter-spacing: .5px; padding: 12px 18px; border-radius: 16px; color: #4a3a00; background: linear-gradient(160deg, var(--eq2), var(--eq)); border: 3px solid #f4f1e8; box-shadow: 0 5px 0 #b8860b, 0 0 18px #ffd23f66; }
+.continue-btn .cost { font-size: 18px; color: #a03a52; }
+.no-hearts { margin: 18px 0 4px; font-family: var(--font-chalk); font-size: 16px; color: #ff8fa3; line-height: 1.4; }
 .continue-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #b8860b; }
 
 /* botón "Abandonar nivel" (dentro de Ajustes): secundario, discreto */

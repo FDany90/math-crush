@@ -794,6 +794,21 @@ export class Controller {
     })
   }
 
+  // ABANDONAR el nivel (salir al mapa sin ganar ni perder): frena TODO (reloj, ataques del
+  // jefe, pistas, manito) sin disparar onLevelEnd. Si no, el loop del jefe sigue y termina
+  // mostrando la derrota por "congelado" en el mapa.
+  abandon() {
+    this.ended = true
+    this.timerOn = false
+    this.busy = false
+    if (this.timerId) { clearTimeout(this.timerId); this.timerId = null }
+    if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }
+    this._clearAutoHint()
+    this.board.hideHandGuide()
+    this.board.locked = false
+    this.selected = null; this.board.select(null); this.activeBooster = null
+  }
+
   // REINTENTO: el jugador perdió pero elige seguir. Repone intentos y reanuda el nivel.
   // En el JEFE, el reintento ROMPE TODO EL HIELO (no da tiempo). En niveles con reloj, suma
   // tiempo (legacy). En niveles sin reloj, sólo repone intentos. Máximo MAX_CONTINUES veces.

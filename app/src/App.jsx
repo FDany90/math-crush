@@ -633,7 +633,7 @@ export default function App() {
             <div className="start-lvl">Ajustes</div>
             <div className="start-name">Nivel {target.level}</div>
             <button className="start-play" onClick={() => setSettingsOpen(false)}>Seguir jugando</button>
-            <button className="leave-btn" onClick={() => { setSettingsOpen(false); setCoach(null); setResult(null); setScreen('map') }}>Abandonar nivel</button>
+            <button className="leave-btn" onClick={() => { ctrlRef.current?.abandon(); setSettingsOpen(false); setCoach(null); setResult(null); setScreen('map') }}>Abandonar nivel</button>
           </div>
         </div>
       )}

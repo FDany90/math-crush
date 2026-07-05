@@ -244,7 +244,7 @@ export class Board {
   build(grid) {
     this.hideHandGuide();
     this.rows = grid.length; this.cols = grid[0].length;
-    if (this.onResize) this.onResize(this.cols * TILE);  // canvas cuadrado del tamaño del nivel
+    this._resizeCanvas();  // canvas del tamaño del nivel (ancho×alto; cuadrado si rows==cols)
     this.layer.removeChildren();
     this.fx.removeChildren();
     this.selTile = null; this.selOutline = null;
@@ -261,18 +261,19 @@ export class Board {
 
   gridChars() { return this.tiles.map((row) => row.map((t) => (t ? t.ch : null))); }
 
-  // CRECER en vivo (+1 fila abajo, +1 columna derecha) conservando las fichas existentes; mantiene
-  // el tablero cuadrado. refill() aporta el char de las fichas nuevas. Para la fase 1 del jefe Suma.
-  grow(refill) {
-    const oldR = this.rows, oldC = this.cols;
-    this.cols = oldC + 1;
-    this.rows = oldR + 1;
-    const fresh = [];
-    for (let r = 0; r < oldR; r++) fresh.push(this._newTile(r, oldC, refill()));   // nueva columna derecha
-    this.tiles.push([]);                                                            // nueva fila abajo
-    for (let c = 0; c < this.cols; c++) fresh.push(this._newTile(oldR, c, refill()));
-    if (this.onResize) this.onResize(this.cols * TILE);                             // canvas cuadrado nuevo
-    for (const t of fresh) { t.scale.set(0, 0); gsap.to(t.scale, { x: 1, y: 1, duration: 0.36, ease: 'back.out(2)' }); }
+  // CRECER en vivo de a UNO (para la fase 1 del jefe Suma), conservando las fichas existentes. El
+  // tablero puede quedar NO cuadrado entre pasos (el canvas ajusta ancho/alto). refill() = char nuevo.
+  _resizeCanvas() { if (this.onResize) this.onResize(this.cols * TILE, this.rows * TILE); }
+  _popIn(tiles) { for (const t of tiles) { t.scale.set(0, 0); gsap.to(t.scale, { x: 1, y: 1, duration: 0.36, ease: 'back.out(2)' }); } }
+  addRow(refill) {              // fila nueva ABAJO
+    const r = this.rows; this.rows = r + 1; this.tiles.push([]);
+    const fresh = []; for (let c = 0; c < this.cols; c++) fresh.push(this._newTile(r, c, refill()));
+    this._resizeCanvas(); this._popIn(fresh);
+  }
+  addCol(refill) {              // columna nueva DERECHA
+    const c = this.cols; this.cols = c + 1;
+    const fresh = []; for (let r = 0; r < this.rows; r++) fresh.push(this._newTile(r, c, refill()));
+    this._resizeCanvas(); this._popIn(fresh);
   }
 
   // ---------- estados de casillero (efectos del tablero, genérico) ----------

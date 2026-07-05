@@ -644,17 +644,19 @@ export class Controller {
     if (!b || this.ended) return
     const frac = this.bossHpMax ? this.bossHp / this.bossHpMax : 0
     const infestAt = b.infestAt ?? 0
-    // FASE 1 — EXPANSIÓN: crecer hasta `expandTo`, umbrales repartidos en (infestAt, 1].
+    // FASE 1 — EXPANSIÓN: agrega de a UNO (fila, luego columna, alternando) en cada umbral de 10%
+    // hasta `expandTo`. De 5×5 a 7×7 = 4 pasos (+fila,+col,+fila,+col), repartidos en (infestAt, 1].
     if (b.expandTo) {
-      const grows = Math.max(0, b.expandTo - this.level.size)
-      for (let k = 1; k <= grows; k++) {
-        const thr = 1 - (1 - infestAt) * (k / (grows + 1))
+      const adds = Math.max(0, (b.expandTo - this.level.size) * 2)   // filas + columnas a agregar
+      for (let k = 1; k <= adds; k++) {
+        const thr = 1 - (1 - infestAt) * (k / (adds + 1))
         if (frac <= thr && this._grownCount < k) {
           this._grownCount = k
-          this.board.grow(this.gen.randTile)
-          this.board.shake(9)
+          if (k % 2 === 1) this.board.addRow(this.gen.randTile)      // impar = fila abajo
+          else this.board.addCol(this.gen.randTile)                  // par = columna derecha
+          this.board.shake(8)
           this.hooks.toast?.('🟩 ¡El tablero crece!')
-          if (this.fixedTargets != null) this._healFixedBoard()   // re-saneo target-rich en el nuevo tamaño
+          if (this.fixedTargets != null) this._healFixedBoard()      // re-saneo target-rich en el nuevo tamaño
         }
       }
     }

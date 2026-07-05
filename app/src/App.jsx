@@ -194,7 +194,11 @@ export default function App() {
       const board = new Board(
         app.stage,
         (r, c) => ctrl && ctrl.onTileTap(r, c),
-        (sizePx) => app.renderer.resize(sizePx, sizePx),
+        (w, h) => {   // ancho/alto por separado (tablero puede crecer no-cuadrado); el contenedor
+          const hh = h ?? w                        // ajusta su aspect-ratio para no distorsionar el canvas
+          app.renderer.resize(w, hh)
+          if (mountRef.current) mountRef.current.style.aspectRatio = w / hh
+        },
         (a, b) => ctrl && ctrl.onDragSwap(a, b),
       )
       ctrl = new Controller(board, hooks)

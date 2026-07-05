@@ -63,16 +63,19 @@ export const LEVELS = [
   // los duros (4 y 3 tizas → margen chico para el error). En resta objetivo alto = menos pares:
   // 7 solo tiene 8−1,9−2; 8 solo 9−1 (evitar); banda usable 2-7. Ver DISEÑO §7.
   // 11-12 = intro suave a la resta (operación nueva); desde el 13 arranca la rampa.
-  { name: 'Primera resta',    size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 4,       quota: 10, goal: 150 },
-  { name: 'Doble resta',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 5],  quota: 10, goal: 150 },  // 🎁 doble
-  { name: 'Diferencia 6',     size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 6,       quota: 10, goal: 200 },  // menos pares (7−1,8−2,9−3)
-  { name: 'Resta doble',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 6],  quota: 10, goal: 200 },  // 🎁 doble
-  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 5,       timed: true, time: 60, goal: 50 },  // ⏱ nivel 15 = contrarreloj; el tablero CRECE a 7×7 después de acá
+  // Metas MÁS BAJAS que en Suma: en resta los objetivos son chicos (2-7) → cada cuenta suma
+  // menos, así que 100→200 es un rango parejo (antes 150→350 pedía demasiadas cuentas). A
+  // rebalancear tras jugarlo. El contrarreloj (L15) va a 150 (coherente con el L5 de Suma).
+  { name: 'Primera resta',    size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 4,       quota: 10, goal: 100 },
+  { name: 'Doble resta',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 5],  quota: 10, goal: 120 },  // 🎁 doble
+  { name: 'Diferencia 6',     size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 6,       quota: 10, goal: 140 },  // menos pares (7−1,8−2,9−3)
+  { name: 'Resta doble',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 6],  quota: 10, goal: 150 },  // 🎁 doble
+  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 5,       timed: true, time: 60, goal: 150 },  // ⏱ nivel 15 = contrarreloj; el tablero CRECE a 7×7 después de acá
   // --- desde acá la rampa aprieta: 7×7, impares/altos, triples y MENOS intentos ---
-  { name: 'Resta difícil',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [5, 7],  quota: 15, goal: 250, tries: 4 },  // 7×7, 7 = solo 8−1,9−2
-  { name: 'Doble combos',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7],  quota: 15, goal: 300, comboFever: true, tries: 4 },  // 🎁 combos x2, 7×7
-  { name: 'Triple resta',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 4, 6], quota: 15, goal: 300, tries: 4 },  // 🎁 triple
-  { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 350, tries: 3 },  // 🎁 triple, solo 3 intentos
+  { name: 'Resta difícil',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [5, 7],  quota: 15, goal: 160, tries: 4 },  // 7×7, 7 = solo 8−1,9−2
+  { name: 'Doble combos',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7],  quota: 15, goal: 175, comboFever: true, tries: 4 },  // 🎁 combos x2, 7×7
+  { name: 'Triple resta',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 4, 6], quota: 15, goal: 190, tries: 4 },  // 🎁 triple
+  { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 200, tries: 3 },  // 🎁 triple, solo 3 intentos
   // Nivel 20 = ACUMULATIVO resta: arrancás en 40 y cada resta BAJA el total; ganás al llegar a 0.
   { name: 'Jefe: el signo −', size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3, 4, 5], boss: { hp: 180 }, quota: 99 },  // 👹 JEFE resta (daño = diferencia formada)
 

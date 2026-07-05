@@ -57,7 +57,7 @@ export const LEVELS = [
   // 👹 JEFE SUMA de 2 FASES (DISEÑO §18.6.2): FASE 1 (100%→50% HP) el tablero CRECE 5×5→7×7;
   // FASE 2 (desde 50%) arranca la INFESTACIÓN de + (suben hasta tapar = perdés). `expandTo` = tamaño
   // final; `infestAt` = fracción de HP donde empieza la fase 2. Este jefe NO usa el freeze.
-  { name: 'Jefe: el signo +', size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 6, 8, 10], boss: { hp: 500, expandTo: 7, infestAt: 0.5 }, quota: 99 },
+  { name: 'El Rey +', size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 6, 8, 10], boss: { hp: 500, expandTo: 7, infestAt: 0.5 }, quota: 99 },
 
   // ================= MUNDO RESTA (niveles 11-19 + hito) — RAMPA DE DIFICULTAD =================
   // Mundo 2: acá EMPIEZA la fricción real (primeras pérdidas). Resta de 1 cifra, resultados ≥0.
@@ -80,7 +80,7 @@ export const LEVELS = [
   { name: 'Triple resta',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 4, 6], quota: 15, goal: 190, tries: 4 },  // 🎁 triple
   { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 200, tries: 3 },  // 🎁 triple, solo 3 intentos
   // Nivel 20 = ACUMULATIVO resta: arrancás en 40 y cada resta BAJA el total; ganás al llegar a 0.
-  { name: 'Jefe: el signo −', size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3, 4, 5], boss: { hp: 180 }, quota: 99 },  // 👹 JEFE resta (daño = diferencia formada)
+  { name: 'El Rey −', size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3, 4, 5], boss: { hp: 180 }, quota: 99 },  // 👹 JEFE resta (daño = diferencia formada)
 
   // ================= MUNDO MULTIPLICACIÓN (21-30, objetivo fijo) =================
   // Productos de 1 cifra. Empieza con tablas chicas (2×3=6) y sube. Dobles intercalados.
@@ -95,7 +95,7 @@ export const LEVELS = [
   { name: 'Doble grande',   size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: [8, 24],  quota: 15 },  // 🎁 doble
   { name: 'Fiebre por',     size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: 12,       quota: 15, comboFever: true },  // 🎁 combos x2
   // Nivel 30 = ACUMULATIVO multiplicación: sumá los productos hasta llegar a 100.
-  { name: 'Jefe: el signo ×', size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: [6, 8, 12], boss: { hp: 440 }, quota: 99 },  // 👹 JEFE multiplicación (daño = producto formado)
+  { name: 'El Rey ×', size: 7, digits: range(1, 9), ops: ['×'], eq: false, maxDigits: 1, target: [6, 8, 12], boss: { hp: 440 }, quota: 99 },  // 👹 JEFE multiplicación (daño = producto formado)
 
   // ================= MUNDO DIVISIÓN (31-40, objetivo fijo, ÷ exacta) =================
   // División exacta de 1 cifra. Cocientes CHICOS (2,3,4): los altos casi no tienen pares
@@ -110,7 +110,7 @@ export const LEVELS = [
   { name: 'División difícil', size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: 2,      quota: 15 },  // tablero 7×7
   { name: 'Doble maestro',  size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3],   quota: 15 },  // 🎁 doble
   // Nivel 40 = ACUMULATIVO división: arrancás en 24 y cada división BAJA el total hasta 0.
-  { name: 'Jefe: el signo ÷', size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3, 4], boss: { hp: 160 }, quota: 99 },  // 👹 JEFE división (daño = cociente formado)
+  { name: 'El Rey ÷', size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3, 4], boss: { hp: 160 }, quota: 99 },  // 👹 JEFE división (daño = cociente formado)
 
   // 🧪 NIVEL DE PRUEBA (temporal): mecánica de INFESTACIÓN de + aislada, para verla y balancearla.
   // Los + suben desde abajo (cada 3.5 s); jugás cuentas para retroceder el frente; si llega al techo,

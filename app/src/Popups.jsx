@@ -74,7 +74,7 @@ export function ResultCard({ result, hearts, onRetry, onExit }) {
             : result.reason === 'flooded' ? '🌿 ¡Los + invadieron el tablero!'
               : result.reason === 'time' ? '¡Se acabó el tiempo!'
                 : '¡Te quedaste sin intentos!'}</div>
-        <div className="ok">{result.boss ? 'HP restante del jefe' : 'Puntos que faltaron'}</div>
+        <div className="ok">{result.boss ? 'HP restante del Rey' : 'Puntos que faltaron'}</div>
         <div className="os">{result.left}</div>
         {hearts.n > 0 ? (
           <button className="continue-btn" onClick={onRetry}>

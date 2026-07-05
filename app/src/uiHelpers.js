@@ -59,7 +59,7 @@ export function buildConfetti(n = 20) {
 // Descripción corta del nivel para el pop-up de inicio (estilo Candy Crush)
 export function levelBrief(lv) {
   if (lv.tutorial) return 'Arrastrá fichas y formá el número de arriba 👆'
-  if (lv.boss) return 'Formá los resultados para atacar al jefe. ¡Bajale todo el HP! 👹'
+  if (lv.boss) return 'Formá los resultados para atacar al Rey ' + (lv.ops?.[0] ?? '+') + '. ¡Bajale todo el HP! 👹'
   if (lv.accum) return 'Formá los resultados y llená la barra hasta la meta'
   if (lv.timed) return '⏱ ¡Contrarreloj! Llená la barra antes de que se acabe el tiempo'
   return Array.isArray(lv.target)

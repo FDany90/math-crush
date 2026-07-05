@@ -147,7 +147,7 @@ export class Controller {
     } else if (this.boss && !this._alreadyCoached('math_coached_boss')) {
       // Llegaste al JEFE: explicá qué hacer (formar los resultados que marca = daño) y que
       // va a atacar. El detalle del ataque CONGELAR se explica en la primera congelada.
-      this._coach([{ text: '¡Llegaste al JEFE! 👹 Formá los resultados que marca arriba: cada cuenta le baja la vida. ¡Dejalo en 0 para ganar!' }])
+      this._coach([{ text: '¡Llegaste al Rey ' + (this.level.ops?.[0] ?? '+') + '! 👹 Formá los resultados que marca arriba: cada cuenta le baja la vida. ¡Dejalo en 0 para ganar!' }])
     } else if (this.level.superTile && !this._alreadyCoached('math_coached_super')) {
       // TUTORIAL de SÚPER FICHA (primera vez): explicá la cuenta de 2 operadores y, al cerrar
       // el coach, dejá la manito guía sobre una jugada de 2 operadores YA preparada.
@@ -666,7 +666,7 @@ export class Controller {
           if (this.fixedTargets != null) this._healFixedBoard()      // re-saneo target-rich en el nuevo tamaño
           if (!this._coachedExpand) {
             this._coachedExpand = true
-            this._coach([{ text: '¡El jefe agranda el tablero! 🟩 Va sumando filas y columnas para complicarla. Seguí bajándole la vida.' }])
+            this._coach([{ text: '¡El Rey + agranda el tablero! 🟩 Va sumando filas y columnas para complicarla. Seguí bajándole la vida.' }])
           }
         }
       }
@@ -679,7 +679,7 @@ export class Controller {
       this._startInfest()     // y sigue subiendo una fila cada INFEST_MS (15s)
       if (!this._coachedInfest) {
         this._coachedInfest = true
-        this._coach([{ text: '¡El + se cansó y quiere hacerte perder! 🌿 Ahora sube FILAS enteras cada 15s. ¡Apurate a dejarlo en 0 antes de que tape el tablero!' }])
+        this._coach([{ text: '¡El Rey + se cansó y quiere hacerte perder! Ahora sube FILAS enteras. ¡Apurate a derrotarlo antes de que tape el tablero!' }])
       }
     }
   }
@@ -721,7 +721,7 @@ export class Controller {
       this.hooks.toast?.('❄️ ¡El jefe congeló ' + toFreeze.length + ' ficha' + (toFreeze.length > 1 ? 's' : '') + '!')
       // Primera congelada del juego: explicá el ataque (una sola vez).
       if (!this.ended && !this._alreadyCoached('math_coached_freeze')) {
-        this._coach([{ text: 'El jefe CONGELA fichas ❄️. Las que tienen hielo no se pueden usar ni mover. Formá una cuenta al lado para romper el hielo 💥.' }])
+        this._coach([{ text: 'El Rey ' + (this.level.ops?.[0] ?? '+') + ' CONGELA fichas ❄️. Las que tienen hielo no se pueden usar ni mover. Formá una cuenta al lado para romper el hielo 💥.' }])
       }
     }
     this._bossCheckStuck()   // ¿te dejó sin movimientos? → perdés
@@ -814,7 +814,7 @@ export class Controller {
       this.board.applyInfest(pick)
       if (!this._coachedScatter) {
         this._coachedScatter = true
-        this._coach([{ text: 'El jefe empieza a ensuciar el tablero con signos + 🌿. Se van acumulando… ¡usalos en tus sumas!' }])
+        this._coach([{ text: 'El Rey + empieza a ensuciar el tablero con signos + 🌿. Se van acumulando… ¡usalos en tus sumas!' }])
       }
     }
   }

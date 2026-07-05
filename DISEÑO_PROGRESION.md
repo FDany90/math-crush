@@ -1090,3 +1090,22 @@ EXPANDEN hasta tapar todo el escenario. Si cubre todo → perdés.
 - **Recomendación:** implementar la **Idea 1 sola** como jefe + (es redonda por sí misma). Sumar la
   expansión después como **fase 2** (opción a) o como **aceleración** (opción b), no como segunda amenaza
   suelta simultánea. Así cada capa se entiende y se balancea de a una.
+
+#### 18.6.1 ⚠️ RESTRICCIÓN CLAVE: los + infestados son INMUTABLES para el auto-mantenimiento
+Pedido explícito del usuario: los signos + de la infestación **NO deben recalcularse ni reemplazarse
+NUNCA de forma automática.** Se pueden **usar a mano** por el jugador (como + de una cuenta), pero el
+motor jamás debe convertirlos en un número para "asegurar" una jugada.
+- **Por qué importa:** el `_healFixedBoard` HOY cambia fichas activamente para garantizar el mínimo de
+  jugadas (`destrandOperators` convierte operadores varados en dígitos, `ensureMinOperators`,
+  `breakFormedTargets`, `addTargetMovesSubtle`, `plantTargetMove`, siembra…). Si tocara los +
+  infestados, "curaría" la infestación → rompe la mecánica.
+- **Regla de implementación:** las celdas infestadas van a un set PROTEGIDO que TODAS las funciones de
+  mantenimiento saltean (no solo al aplicar al board: no deben mutarlas en la grilla). Ya existe el
+  patrón (`stateKeys`/`superCells` se excluyen); extenderlo para que el mantenimiento **ni lea ni
+  escriba** esas celdas al armar jugadas.
+- **Consecuencia deseada:** en un nivel infestado, la garantía anti-deadlock (`if (!findHintFallback)
+  plantTargetMove` y el piso de MIN_MOVES) se **DESACTIVA/relaja** — si la infestación te deja sin
+  jugadas, PERDÉS (ese es el objetivo del jefe). El motor NO debe rescatarte cambiando un + infestado.
+- **Usable a mano:** el + infestado SÍ cuenta como operador válido si el jugador arma la cuenta a mano
+  (no lo enmascaramos para la DETECCIÓN de cuentas del jugador), pero queda fuera de toda REESCRITURA
+  automática. (Decidir si además bloquea o no; lo importante: inmutable para el motor.)

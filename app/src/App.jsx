@@ -5,8 +5,9 @@ import { Controller, getHintPool, setHintPool, HINTS_MAX } from './game/controll
 import { LEVELS } from './game/levels.js'
 import { initMetrics, getNick, setNick, trackEvent } from './metrics.js'
 import { WORLDS, zoneColor, MAP_EQS, buildMapDoodles, ChalkDoodle, Mascota, MAP_W, mapGeometry, MapBridge, Stars } from './mapView.jsx'
-import { tokenColor, fmtMMSS, buildDoodles, buildConfetti, levelBrief } from './uiHelpers.js'
+import { tokenColor, fmtMMSS, buildDoodles, buildConfetti } from './uiHelpers.js'
 import { loadProgress, saveProgress, loadHearts, saveHearts, HEARTS_MAX, heartsNextInSec } from './storage.js'
+import { CoachBubble, WinScreen, StartPopup, ResultCard, SettingsPopup, DailyPopup, NickPopup } from './Popups.jsx'
 
 export default function App() {
   const mountRef = useRef(null)
@@ -566,121 +567,31 @@ export default function App() {
         </div>
       )}
 
-      {/* ---------- pantalla de victoria (auto-avanza a los ~3,4 s) ---------- */}
-      {winScreen && (
-        <div className="win-cele" onClick={() => advanceFromWin(winScreen.index)}>
-          <div className="confetti" aria-hidden="true">
-            {confetti.map((c, i) => (
-              <span key={i} style={{
-                left: c.left, width: c.size + 'px', height: c.size * 1.6 + 'px',
-                background: c.color, animationDelay: c.delay, animationDuration: c.dur,
-                transform: `rotate(${c.rot}deg)`,
-              }} />
-            ))}
-          </div>
-          <div className="win-inner">
-            <div className="win-title">¡Nivel superado!</div>
-            <div className="win-sub">¡Buen trabajo! Seguí así 🎉</div>
-            <div className="win-stars"><Stars n={winScreen.stars} size={58} /></div>
-            <div className="win-hint">tocá para seguir</div>
-          </div>
-        </div>
-      )}
+      <WinScreen win={winScreen} confetti={confetti} onAdvance={advanceFromWin} />
 
-      {/* ---------- pop-up de inicio de nivel (estilo Candy Crush) ---------- */}
-      {startPopup != null && (
-        <div className="overlay" onClick={() => setStartPopup(null)}>
-          <div className="card start" onClick={(e) => e.stopPropagation()}>
-            <button className="card-x" aria-label="Cerrar" onClick={() => setStartPopup(null)}>✕</button>
-            <div className="start-lvl">Nivel {startPopup + 1}</div>
-            <div className="start-name">{LEVELS[startPopup].name}</div>
-            <div className="start-desc">{levelBrief(LEVELS[startPopup])}</div>
-            <button className="start-play" onClick={() => playLevel(startPopup)}>¡Jugar!</button>
-          </div>
-        </div>
-      )}
+      <StartPopup index={startPopup} onClose={() => setStartPopup(null)} onPlay={playLevel} />
 
-      {/* ---------- resultado de nivel (solo cuando se pierde) ---------- */}
-      {result && !result.win && (
-        <div className="overlay">
-          <div className="card">
-            <div className="ot">{
-              result.reason === 'frozen' ? '🧊 ¡El jefe te congeló el tablero!'
-                : result.reason === 'time' ? '¡Se acabó el tiempo!'
-                  : '¡Te quedaste sin intentos!'}</div>
-            <div className="ok">{result.boss ? 'HP restante del jefe' : 'Puntos que faltaron'}</div>
-            <div className="os">{result.left}</div>
-            {/* Reintentar cuesta 1 CORAZÓN. Sin corazones: se recargan solos (o futuro: ad). */}
-            {hearts.n > 0 ? (
-              <button className="continue-btn" onClick={() => { spendHeart(); ctrlRef.current?.resumeWithBonus() }}>
-                {result.boss ? '🧊 Descongelar todo' : result.timed ? '+1 minuto' : 'Reintentar'} <span className="cost">❤️ 1</span>
-              </button>
-            ) : (
-              <div className="no-hearts">💔 Sin corazones. Se recargan solos — próximo en {fmtMMSS(heartsNextInSec(hearts))}.</div>
-            )}
-            <div className="card-btns">
-              <button onClick={() => { setResult(null); setScreen('map') }}>Salir</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ResultCard result={result} hearts={hearts}
+        onRetry={() => { spendHeart(); ctrlRef.current?.resumeWithBonus() }}
+        onExit={() => { setResult(null); setScreen('map') }} />
 
-      {/* ---------- pop-up de ajustes (dentro del juego) ---------- */}
       {settingsOpen && (
-        <div className="overlay" onClick={() => setSettingsOpen(false)}>
-          <div className="card settings" onClick={(e) => e.stopPropagation()}>
-            <button className="card-x" aria-label="Cerrar" onClick={() => setSettingsOpen(false)}>✕</button>
-            <div className="start-lvl">Ajustes</div>
-            <div className="start-name">Nivel {target.level}</div>
-            <button className="start-play" onClick={() => setSettingsOpen(false)}>Seguir jugando</button>
-            <button className="leave-btn" onClick={() => { ctrlRef.current?.abandon(); setSettingsOpen(false); setCoach(null); setResult(null); setScreen('map') }}>Abandonar nivel</button>
-          </div>
-        </div>
+        <SettingsPopup levelNum={target.level} onClose={() => setSettingsOpen(false)}
+          onLeave={() => { ctrlRef.current?.abandon(); setSettingsOpen(false); setCoach(null); setResult(null); setScreen('map') }} />
       )}
 
-      {/* ---------- pop-up REGALO DIARIO ---------- */}
       {dailyOpen && (
-        <div className="overlay" onClick={() => setDailyOpen(false)}>
-          <div className="card daily-card" onClick={(e) => e.stopPropagation()}>
-            <button className="card-x" aria-label="Cerrar" onClick={() => setDailyOpen(false)}>✕</button>
-            <div className="daily-emoji">🎁</div>
-            <div className="start-lvl">Regalo del día</div>
-            <div className="daily-hints">Tenés <b>{hintPool}</b> / {HINTS_MAX} pistas 💡</div>
-            {dailyClaimed()
-              ? <div className="daily-done">¡Ya lo reclamaste hoy! Volvé mañana 😊</div>
-              : <button className="start-play" onClick={claimDaily}>Reclamar +{DAILY_HINTS} pistas 💡</button>}
-          </div>
-        </div>
+        <DailyPopup hintPool={hintPool} claimed={dailyClaimed()} dailyHints={DAILY_HINTS}
+          onClose={() => setDailyOpen(false)} onClaim={claimDaily} />
       )}
 
-      {/* ---------- pop-up "Ingresá tu Nick" (aparece al empezar el nivel 3) ---------- */}
       {nickOpen && (
-        <div className="overlay">
-          <div className="card nick">
-            <div className="start-name">Ingresá tu Nick</div>
-            <div className="start-desc">Para las pruebas del juego. Es opcional, podés saltearlo.</div>
-            <input className="nick-input" type="text" maxLength={24} autoFocus
-              placeholder="Tu apodo" value={nickInput}
-              onChange={(e) => setNickInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && nickInput.trim()) { setNick(nickInput); localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) } }} />
-            <button className="start-play" disabled={!nickInput.trim()}
-              onClick={() => { setNick(nickInput); localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) }}>
-              Guardar
-            </button>
-            <button className="leave-btn" onClick={() => { localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) }}>Saltear</button>
-          </div>
-        </div>
+        <NickPopup value={nickInput} onChange={setNickInput}
+          onSave={() => { setNick(nickInput); localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) }}
+          onSkip={() => { localStorage.setItem('math_nick_asked', '1'); setNickOpen(false) }} />
       )}
 
-      {/* ---------- mensaje flotante del coach (tutorial / avisos; pausa el reloj) ---------- */}
-      {coach && coach[0] && (
-        <div className="coach" onClick={dismissCoach}>
-          <div className={'coach-bubble' + (coach[0].highlight ? ' point-' + coach[0].highlight : '')}>
-            <div className="coach-text">{coach[0].text}</div>
-            <div className="coach-hint">{coach.length > 1 ? 'tocá para seguir →' : 'tocá para continuar'}</div>
-          </div>
-        </div>
-      )}
+      <CoachBubble coach={coach} onDismiss={dismissCoach} />
 
       {/* capa de tokens que vuelan al objetivo (efecto collect) */}
       <div className="fly-overlay" ref={overlayRef} />

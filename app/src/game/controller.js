@@ -30,9 +30,9 @@ const CONTINUE_TIME = 60 // segundos que da cada "+1 min"
 const NEAR_MOVES = 3     // cuentas fáciles que se siembran (visibles) alrededor de donde jugás
 const BOSS_FREEZE_MS = 10000 // cada cuánto ataca el jefe (congela fichas)
 const BOSS_FREEZE_N = 3       // cuántas fichas congela por ataque
-const GOAL_NORMAL = 1000 // meta de la barra en niveles normales: sumando el VALOR formado
-                         // (contás de N en N) hasta 1000. SIN reloj (se pierde sólo por intentos).
-                         // Tuneable por nivel con el campo `goal`.
+const GOAL_NORMAL = 100  // meta de la barra en niveles normales: sumando el VALOR formado
+                         // (contás de N en N) hasta 100. SIN reloj (se pierde sólo por intentos).
+                         // Los JEFES usan su propio HP (no esto). Tuneable por nivel con `goal`.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // ---- Pool GLOBAL de pistas (persiste entre niveles; tope MAX_HINTS_POOL) ----

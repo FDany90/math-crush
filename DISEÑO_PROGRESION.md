@@ -872,3 +872,143 @@ operadores. Falta probar en runtime (visual de la súper + detonación en cruz).
   nativo o plugin Cordova. Plan: armar `ads.js` ya (stub web) → arrancar con AdMob si se quiere rapidez
   → migrar a MAX sin tocar el juego. Coherente con estrategia: rewarded opt-in, 1-5/día, recargar
   vidas/pistas, nunca intrusivo (ver retención/monetización en memoria).
+
+## 18. Catálogo de mecánicas de estado de fichas / ataques de jefe (para el enganche) — DISEÑO, no implementado (2026-07-05)
+
+**Tesis (del usuario):** más mecánicas nuevas = más sorpresa, curiosidad y desafío = más retención.
+Cada jefe/escenario con un ESTADO de casillero nuevo mantiene enganchado al jugador. El sistema
+`CELL_STATES` (Board.js) ya es genérico: agregar un estado = una entrada (`blocksUse`/`blocksDrag`/
+`overlay`/`breakFx`) + enganchar su ataque en el controller (como el freeze del jefe +).
+
+**Personalidad de ataque por operación (norte):**
+- **Suma + → CONGELAR** ❄️ (IMPLEMENTADO): hielo que se acumula; se rompe con una cuenta al lado.
+- **Resta − → BORRAR** 🧹 (ELEGIDO, a implementar — spec abajo).
+- **Mult × → CLONAR/CONTAGIO**: una ficha "basura" se DUPLICA a una vecina cada turno (multiplica obstáculos).
+- **Div ÷ → MEZCLAR/PARTIR**: el jefe baraja una zona del tablero o lo parte en dos (divide).
+
+### 18.1 Jefe RESTA — "Borrón" 🧹 (ELEGIDO; implementar después, NO ahora)
+- **Ataque:** cada **5 s** el jefe − borra **1 ficha al azar** (una sola por tick). NO se expande (por ahora).
+- **Efecto visual:** animación de **borrador de pizarrón** que pasa por la ficha y deja una **mancha
+  de tiza** (smudge) sobre ella. (A diferencia del hielo, no es un cristal: es una mancha borrosa.)
+- **Diferencia CLAVE con el hielo:** la ficha borrada **NO se rompe ni se recupera — es PERMANENTE.**
+  Queda como celda muerta/bloqueante. El colapso NO la rellena → **el tablero se va haciendo más
+  chico** (menos celdas usables) con el tiempo. Esto mete presión real: hay que bajar el HP del jefe
+  ANTES de que el tablero se achique demasiado.
+- **Pérdida:** si el borrado deja el tablero sin ninguna jugada posible (reusar el check tipo
+  `_bossCheckStuck` con `gridCharsMasked`) → perdés (reason nuevo, ej. 'erased'). El reintento
+  (equivalente al "descongelar todo") tendría que… ¿restaurar el tablero? (ver pregunta abajo).
+- **Balance inicial a probar:** 1 ficha / 5 s, HP jefe ~180 (igual que hoy). Si en la práctica el
+  tablero muere antes de bajar el HP, subir el intervalo (7-8 s) o bajar HP.
+- **Notas de IMPLEMENTACIÓN (para después):**
+  - Nuevo `CELL_STATES.erased`: `blocksUse:true, blocksDrag:true`, SIN `breakFx` (no se rompe),
+    `overlay` = mancha de tiza (smudge). `gridCharsMasked` ya lo trata como pared ('#').
+  - **Diferencia técnica con freeze:** el hielo viaja con la gravedad (es una ficha normal
+    bloqueada temporalmente) y se rompe con `_breakStatesNear`. El borrado es PERMANENTE y NO se
+    rompe → hay que EXCLUIRLO de `_breakStatesNear`/`_breakAllStates` (que hoy rompen todo estado).
+    Opciones para "el tablero se achica":
+    - **v1 (fácil, reusa freeze):** la ficha borrada queda como ficha PERMANENTEMENTE bloqueada (viaja
+      con la gravedad pero nunca se rompe ni se puede usar). El tablero no cambia de FORMA pero pierde
+      celdas usables. El ataque del − usa el mismo `applyState` que el freeze, con estado 'erased', y
+      NUNCA se rompe. Es la vía más rápida.
+    - **v2 (fiel a la visión, más trabajo):** la celda borrada se vuelve un HUECO MUERTO fijo: el
+      colapso la saltea (no cae nada ahí, no se rellena) → el tablero literalmente se achica de forma.
+      Requiere que `collapse` maneje celdas-bloqueador inmóviles (hoy no lo hace). Dejar para cuando
+      queramos el efecto pleno.
+  - El ataque del jefe hoy es genérico (freeze para todo boss). Para diferenciar por operación: elegir
+    el ataque según `level.ops[0]` (− → borrar, × → clonar, ÷ → mezclar) en `_bossAttack`.
+  - **Pregunta abierta:** ¿el reintento del jefe borrón restaura las fichas borradas (equiv. a
+    "descongelar todo") o solo repone intentos? Si son permanentes de verdad, el reintento debería
+    dar una "esponja" que limpia N manchas, o restaurar el tablero entero. Decidir en implementación.
+
+### 18.2 Jefe RESTA alternativo — "Drenaje" ➖ (INTERESANTE; documentar, NO implementar)
+- **Ataque:** cada N s el jefe − **resta 1 al VALOR** de algunas fichas número (ej. 2-3 al azar): un
+  7 pasa a 6, etc. Temática literal: la resta… resta.
+- **Ficha en 0:** si una ficha llega a **0**, queda **INÚTIL para la resta** (un 0 no sirve de
+  minuendo/sustraendo útil). Visual: número tenue/tachado; no forma cuentas (estado que `blocksUse`).
+- **Por qué es interesante:** desarma las jugadas PLANEADAS (mientras pensás, tus números cambian) →
+  sorpresa y tensión distinta a bloquear celdas.
+- **Notas de IMPLEMENTACIÓN / riesgo (para después):**
+  - Pelea con el auto-mantenimiento: el `_healFixedBoard` repone jugadas tras CADA movimiento. El
+    drenaje corre en su propio timer (entre movimientos) para desarmar el plan; hay que decidir que el
+    healer NO "cure" instantáneamente los drenados (protegerlos, o que no les suba el valor).
+  - No cambia la FORMA del tablero (a diferencia del borrón) → menos riesgo de deadlock, pero puede
+    confundir ("¿por qué cambió ese número?"). Requiere telegrafía (animación clara del −1 sobre la ficha).
+  - Balance: cuántas fichas por ataque y cada cuánto; ¿el drenaje respeta un piso (no toca las fichas
+    que forman las únicas jugadas)? Definir al implementar.
+
+### 18.3 Estados reusables (para niveles normales / mini-jefes, estilo Candy Crush) — backlog
+Cada uno = una entrada en `CELL_STATES` + su regla. Sacar de a uno para el goteo de novedad:
+- **Jelly / gelatina**: 2 golpes (cuentas encima/al lado) para limpiar.
+- **Candado** 🔒: se abre con una cuenta EXACTA encima (o una llave que cae).
+- **Cajón de madera** 📦: se rompe con una cuenta AL LADO (no encima).
+- **Bomba** 💣: cuenta regresiva por turnos; si llega a 0 sin limpiarse, perdés.
+- **Piedra** 🪨: pesada, tarda varios turnos/golpes en disolverse.
+- **Niebla** 🌫️: tapa el VALOR de una zona (jugás "a ciegas" hasta despejarla).
+- **Contagio ×**: ficha basura que se duplica a una vecina cada turno (ataque del jefe ×).
+- **Mezclar ÷**: baraja una zona del tablero (ataque del jefe ÷).
+
+**Orden sugerido de implementación:** (1) Borrón − v1 [próximo], (2) Clonar × y Mezclar ÷ para sus
+jefes, (3) estados reusables (jelly/candado/bomba) intercalados en niveles normales para variar.
+
+### 18.4 Análisis detallado del backlog de mecánicas (para evaluar antes de implementar)
+Dimensiones por mecánica: **qué hace · temática/dónde encaja · tipo de presión · nota de impl · riesgo/pregunta.**
+
+**Jelly / gelatina** 🟩
+- Qué: la ficha está cubierta; hay que "golpearla" (formar una cuenta que la incluya o toque) N veces para limpiar la gelatina; recién ahí la ficha vuelve a ser usable.
+- Encaja: niveles normales de cualquier mundo; buen "objetivo secundario" (limpiar toda la gelatina).
+- Presión: obliga a jugar EN una zona concreta (no donde querés) → planificación.
+- Impl: `CELL_STATES.jelly` con contador (`hits` en el Tile); `breakFx` al llegar a 0; `blocksUse` mientras cubierta (o semi-usable). Board ya soporta estado por-ficha.
+- Riesgo: si `blocksUse` total, puede trabar; quizás la ficha SÍ se usa pero la gelatina resta 1 al contador cada vez.
+
+**Candado** 🔒
+- Qué: ficha trabada; se abre con una cuenta EXACTA encima, o cae una "llave" que hay que llevar hasta el candado.
+- Encaja: mini-jefes / niveles puzzle.
+- Presión: micro-objetivo puntual.
+- Impl: `blocksDrag` (no se mueve) pero `blocksUse:false` si la idea es "usarla la abre"; variante llave = ficha especial tipo súper.
+- Riesgo: la variante "llave que cae" es bastante más de motor (objetos que caen y viajan).
+
+**Cajón de madera** 📦
+- Qué: bloque que NO se usa; se rompe con una cuenta AL LADO (no encima). Puede tener 1-2 vidas.
+- Encaja: relleno de dificultad en cualquier mundo; parecido al hielo pero sin tema de frío.
+- Presión: estorbo posicional que se limpia jugando cerca (ya tenemos `_breakStatesNear`).
+- Impl: casi idéntico al freeze (reusa `breakFx` + break-near). Muy barato.
+- Riesgo: bajo. Es el más fácil de sumar; sirve de plantilla.
+
+**Bomba** 💣
+- Qué: cuenta regresiva (por TURNOS/movimientos o por segundos). Si llega a 0 sin limpiarse, perdés el nivel.
+- Encaja: momentos de tensión alta / mini-jefes.
+- Presión: urgencia fuerte (la mejor para "adrenalina"), pero cuidado con frustración.
+- Impl: estado con contador que baja en `_afterMove` (turnos) o en un timer; overlay con el número; al 0 → `_endLevel(false,'bomb')`.
+- Riesgo: puede ser castigador; empezar con contador por TURNOS (controlable) antes que por tiempo.
+
+**Piedra** 🪨
+- Qué: ficha pesada que tarda varios golpes/turnos en disolverse; mientras, ocupa lugar.
+- Encaja: división/multiplicación (mundos "duros").
+- Presión: lenta, de desgaste.
+- Impl: como jelly con más `hits`. 
+- Riesgo: si es muy lenta, aburre; balancear hits bajos.
+
+**Niebla** 🌫️
+- Qué: tapa el VALOR de una zona; jugás sin ver los números hasta despejar (formando cuentas cerca o con el tiempo).
+- Encaja: twist de percepción; buen "modo especial" más que jefe.
+- Presión: memoria / riesgo (jugás a ciegas).
+- Impl: overlay opaco sobre las fichas de la zona; la lógica ve los valores reales (no bloquea el uso), solo el JUGADOR no los ve. Distinto a los demás: NO es `blocksUse`, es puramente visual.
+- Riesgo: puede sentirse injusto si no hay pista; combinar con "se despeja al jugar al lado".
+
+**Contagio ×** (ataque del jefe MULTIPLICACIÓN) 🦠
+- Qué: una ficha "basura" (o un color) se DUPLICA a una vecina libre cada turno → si no la frenás, se multiplica y tapa el tablero.
+- Encaja: jefe ×. Temática perfecta (multiplicar).
+- Presión: crecimiento exponencial → hay que cortarlo rápido (tensión tipo "borrón que se expande" pero multiplicando).
+- Impl: estado 'junk' `blocksUse`; en `_afterMove`/timer, por cada junk intentar copiar a 1 vecina; se limpia con cuenta al lado. Cuidado con explosión (cap por turno).
+- Riesgo: puede descontrolarse; poner tope de propagación por turno y garantía anti-deadlock.
+
+**Mezclar / Partir ÷** (ataque del jefe DIVISIÓN) 🔀
+- Qué: el jefe BARAJA una zona del tablero (o lo parte en dos mitades que se reacomodan) cada X s.
+- Encaja: jefe ÷. Temática (dividir/repartir).
+- Presión: te rompe la lectura del tablero (tenés que re-planear).
+- Impl: elegir NxN celdas y permutar sus chars (con `applyChars` animado); respetar "no formar cuentas al azar" y "no dejar sin jugadas".
+- Riesgo: si mezcla mucho, marea; mezclar zonas chicas y no muy seguido.
+
+**Ideas extra (semilla, sin desarrollar):** viento/gravedad lateral (cae de costado un turno), comodín/wild (ficha que vale cualquier número), espejo (invierte una fila), portal (dos celdas conectadas). Evaluar más adelante.
+
+**Criterio para elegir la próxima:** que sea (1) temáticamente clara, (2) distinta a lo ya hecho, (3) barata de implementar sobre `CELL_STATES`, (4) sin riesgo de deadlock. Ranking de arranque: **Cajón 📦 (plantilla barata) → Contagio × y Mezclar ÷ (jefes) → Bomba 💣 (tensión) → Niebla/Jelly (variedad).**

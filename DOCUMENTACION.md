@@ -375,6 +375,62 @@ Aplicación de **DISEÑO_PROGRESION §5.2**: el bloque de 10 sumas dejó de ser 
 
 ### 17.5 Reward diario
 - Botón 🎁 en `.map-top` (fijo, con puntito verde si hay premio sin reclamar) + pop-up.
-- Da **+3 pistas por día** (`math_daily_<YYYY-MM-DD>`), respetando el tope de 10. **Celebratorio,
+- Da **+5 pistas por día** (`math_daily_<YYYY-MM-DD>`), respetando el tope de 10. **Celebratorio,
   sin castigo por faltar** (línea roja ética, DISEÑO §7.6). Muestra las pistas actuales.
-- Por ahora da pistas; a futuro podría dar cosméticos/estrellas (nunca power-ups).
+- ⚠️ Flag `DAILY_UNLIMITED` (App.jsx): en `true` (modo TEST, deployado) se puede reclamar SIEMPRE;
+  poner `false` para producción real (vuelve a 1/día).
+- Por ahora da pistas; a futuro podría dar cosméticos/estrellas y **corazones** (nunca power-ups).
+
+---
+
+## 18. Batalla de jefe, sin reloj, barra por valor, tizas/vidas, corazones y rampa de Resta (2026-07-04, tarde)
+
+Sesión grande. Deployado a qa+prod (commit `f49fd1c`). Diseño del jefe en **DISEÑO_PROGRESION.md §13**;
+flujo de deploy en **DEPLOY.md**.
+
+### 18.1 Sin reloj + barra de objetivo que suma el VALOR
+- Se **sacó el reloj** de todos los niveles: flag `this.timed` (default `false`, override por nivel).
+  El timer no arranca; las estrellas pasan a **precisión** (intentos gastados); el HUD oculta el reloj.
+  Se pierde SÓLO por gastar los intentos. Fix clave: `resume()` (al cerrar un coach) ya NO arranca
+  un timer fantasma en niveles sin tiempo (causaba un falso "¡Se acabó el tiempo!").
+- La barra de objetivo (normal) **suma el VALOR formado** (contás "de N en N": formar 5 → 5,10,15…)
+  hasta `goal`. Default `GOAL_NORMAL=100`; override por nivel con el campo **`goal`** (Suma: n4-5=150,
+  n6-8=200, n9=250; Resta: 150→350). `Controller._addGoal(v)`; estado `goalNeed/goalDone`; hook `setGoal`.
+- **Sincronización con la absorción:** el llenado VISIBLE (número + barra) se aplica cuando las fichas
+  LLEGAN al objetivo (~320ms, `onCuenta`→`flyTokens` con `payload.bar` = {goal|accum|boss}), no antes.
+
+### 18.2 Vidas = 5 tizas + corazones globales
+- **Intentos 10→5** (`MAX_TRIES=5`, override por nivel `tries`). Se muestran como **5 tizas acostadas**
+  sobre el tablero (`.lives`/`.chalk`, reemplaza el número grande). Al gastar una: **flash rojo + shake**
+  de toda la barra (WAAPI en un effect sobre `triesPop`) + la tiza se desvanece. El máximo se manda en
+  `setTries({max})`. Tutorial del 1er error resalta las tizas (coach `highlight:'lives'`).
+- **CORAZONES ❤️ (vidas globales, App.jsx):** máx **5**, regen **+1 cada 25 min**, persisten
+  (`math_hearts` = `{n, t}`; `loadHearts` calcula la regen desde `t`). **Reintentar un nivel perdido
+  cuesta 1 corazón** (`spendHeart` + `resumeWithBonus`; se quitó el tope `MAX_CONTINUES`). Sin corazones:
+  se recargan solos (refill por rewarded ad = futuro). Se ven en `.map-top` con contador `MM:SS`.
+  `addHearts()` listo para regalo diario / ad. En el jefe el reintento es "🧊 Descongelar todo".
+
+### 18.3 Estados de casillero + JEFE (nivel 10)
+- **Sistema genérico de estados** (`CELL_STATES` en `pixi/Board.js`, estilo Candy Crush): cada estado
+  define `blocksUse`/`blocksDrag`/`overlay`/`breakFx`. Agregar uno nuevo = una entrada. **'frozen'** es
+  el primero. El estado va en el `Tile` (viaja con el colapso). API: `applyState`/`clearState`/
+  `cellsWithState`/`gridCharsMasked(extra)` (las fichas con estado se ven como pared '#' en la detección).
+- **Nivel 10 = "Jefe: el signo +"** (`boss:{hp:500}`): signo grande + barra de HP; daño = valor formado;
+  a 0 HP se derrota. `Controller._addBoss`; hook `setBoss`. Sin reloj. Ataque **CONGELAR**: cada 10s
+  (`BOSS_FREEZE_MS`) congela 3 fichas (`BOSS_FREEZE_N`) al azar; SIN guardrail (puede congelar todo). Si
+  te deja sin jugadas (`_bossCheckStuck`) → perdés `reason:'frozen'`. Romper por **contacto**: una cuenta
+  adyacente descongela (`_breakStatesNear`). El mantenimiento/pistas saltean las congeladas.
+- Los otros hitos (20/30/40) siguen en `accum` (a convertir a jefes −/×/÷). Ver DISEÑO §13.
+
+### 18.4 Rampa de dificultad Mundo Resta (11-19)
+- Ahí **empiezan las pérdidas reales** (mundo 2). Palancas: metas 150→350, tableros **7×7** desde n16,
+  objetivos **impares/altos** (menos pares) y **triples**, **menos intentos** (4 y 3 tizas) en los duros.
+  n7 = doble impares `[7,9]` (sin relax); n9 "De 3 en 3" = triple `[3,6,9]`. Sim (1200 tableros): 0
+  formadas, siempre hay jugadas. Filosofía en DISEÑO §1 (mundo 1 = hook fácil; fricción desde el 10-11).
+
+### 18.5 Otros
+- Puente de tiza entre mundos en el mapa (`MapBridge`, el camino se corta cada 10 niveles).
+- Tutorial afinado: resalta SOLO el chip (1ra instrucción) / SOLO la barra (2da); "Formá" fuera de las
+  pantallas (salvo el jefe: "Atacá con").
+- **DEPLOY.md**: dos ambientes Vercel (`main`=prod, `qa`=preview). Flujo local-first: probar en local,
+  push a QA/PROD **bajo pedido**. URL estable de QA = `math-crush-git-qa-<scope>.vercel.app`.

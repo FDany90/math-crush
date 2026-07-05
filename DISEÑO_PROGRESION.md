@@ -757,8 +757,34 @@ donde el research dice que debe venir el desafío (competencia, no grind).
 - Empezar por la **versión base** (números-enemigo con HP, sin ataques) y recién después sumar
   el jefe animado con ataques al tablero.
 
+### Primer ataque concreto del jefe: CONGELAR (idea 2026-07-04)
+Ataque del jefe "+" (y molde para los demás). El jefe actúa **cada ~5 s**:
+- **Congela** algunas piezas del tablero (operadores Y números) → quedan **inutilizables**
+  (no se pueden arrastrar/usar) con overlay de hielo/escarcha ❄️.
+- **Romper el hielo:** si formás una cuenta **que hace contacto** (adyacencia ortogonal) con
+  una pieza congelada, se **descongela** y volvés a poder usarla.
+- Da tensión sin reloj-de-perder: el timer es **del jefe**, no del jugador (no perdés por tiempo;
+  el jefe simplemente estorba periódicamente).
+
+**Guardrails (críticos, definidos):**
+1. **Nunca dejar sin jugada:** capear nº de celdas congeladas y garantizar SIEMPRE ≥1 cuenta
+   posible con piezas libres (chequeo tipo `findHintFallback` ignorando congeladas). Si congelar
+   trabaría el tablero, congelar menos / saltear ese tick.
+2. **Contacto = adyacencia ortogonal** a las celdas de la cuenta jugada. Simple y legible.
+3. **Visual obvio** de congelado + animación de ruptura.
+4. **El mantenimiento** (siembra/reacomodo/`_healFixedBoard`) **saltea** celdas congeladas.
+5. **Cadencia** 5 s fija al inicio; acelerar por fases (poco HP → más seguido) a futuro.
+
+**Implementación (esbozo):** estado `frozen` por celda en el board (Set de "r,c"); scheduler
+`setInterval`/tick solo en niveles `boss`; el drag/selección ignora congeladas; tras `_resolve`,
+descongelar las adyacentes a `playedCols`/celdas jugadas; overlay de hielo en Pixi (`Board.js`).
+Toca el motor de tablero + Pixi (más pesado que la versión base estática).
+
 ### Estado
-Diseño base cerrado, **no implementado aún**. Reemplazaría la mecánica `accum` de los niveles
+Versión base del jefe (signo + HP 1000, daño=valor) **YA IMPLEMENTADA** (2026-07-04, nivel 10
+"Jefe: el signo +"). El ataque CONGELAR y el jefe animado son la fase 2, **no implementados aún**.
+La mecánica base reemplazó la `accum` en el nivel 10 (los hitos 20/30/40 siguen en `accum`).
+Diseño base cerrado. Reemplazaría la mecánica `accum` de los niveles
 10/20/30/40 (hoy: barra `{start,goal}`). Montado sobre el motor de barra/absorción ya sincronizado
 (ver [[equa-crush-project]]). Modelo base: `boss: true` + `target: [set]`; HP[n]=n·10; daño=valor;
 win al derrotar a todos. El **jefe-signo animado con ataques al tablero** es la fase 2 (a futuro).

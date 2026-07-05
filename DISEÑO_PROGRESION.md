@@ -886,7 +886,17 @@ Cada jefe/escenario con un ESTADO de casillero nuevo mantiene enganchado al juga
 - **Mult × → CLONAR/CONTAGIO**: una ficha "basura" se DUPLICA a una vecina cada turno (multiplica obstáculos).
 - **Div ÷ → MEZCLAR/PARTIR**: el jefe baraja una zona del tablero o lo parte en dos (divide).
 
-### 18.1 Jefe RESTA — "Borrón" 🧹 (ELEGIDO; implementar después, NO ahora)
+### 18.1 Jefe RESTA — "Borrón" 🧹 ✅ IMPLEMENTADO (2026-07-05, ver DOCUMENTACION.md §21)
+> **IMPLEMENTADO como "EL REY −":** 2 fases. FASE 1 (100%→50% HP) el tablero ENCOGE 7×7→5×5 (opuesto
+> del Rey + que crece); FASE 2 (desde 50%) borra signos − (estado `CELL_STATES.erased`, permanente,
+> mancha de tiza + borrador barriendo). Perdés por reason 'erased'; el reintento repone los signos.
+> `boss:{hp:200, shrinkTo:5, eraseAt:0.5}, target:[4,5,6]`. Se hizo el refactor a registro `BOSS_KINDS`.
+> **Diferencia con el diseño original de abajo:** el borrado NO achica el tablero (eso lo hace la fase 1
+> con `removeRow`/`removeCol`); las fichas tachadas quedan como paredes que viajan con la gravedad (v1,
+> reusa el patrón de freeze) en vez de huecos muertos. El resto del diseño se respetó.
+> Diseño original conservado abajo como referencia:
+
+### 18.1.orig Jefe RESTA — "Borrón" 🧹 (diseño original)
 - **Ataque:** cada **5 s** el jefe − borra **1 ficha al azar** (una sola por tick). NO se expande (por ahora).
 - **Efecto visual:** animación de **borrador de pizarrón** que pasa por la ficha y deja una **mancha
   de tiza** (smudge) sobre ella. (A diferencia del hielo, no es un cristal: es una mancha borrosa.)

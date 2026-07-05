@@ -543,3 +543,67 @@ de texto (fuente Tiza) arreglados; fix "abandonar jefe" (frena el controller); "
 4. **Catálogo de estados** (jelly, candado, cajón, bomba, niebla) para niveles normales — DISEÑO §18.4.
 5. **Antes de release real:** quitar nivel de prueba 41; `DAILY_UNLIMITED=false`; separar Supabase QA.
 6. **Deuda menor:** extraer hints/coach del controller (opcional); progreso por `id` estable de nivel.
+
+## 21. EL REY − (jefe Resta), registro de jefes, bloqueo Mult/Div y ajustes (2026-07-05 ter)
+
+Deployado a **QA y PROD** (commit `b364c14`). En esta etapa el playtest con gente se hace en **PROD**;
+`qa` lo usa el usuario para sus pruebas en mobile. `main` pasa a ser el repo productivo real **después
+del release** (el usuario avisará).
+
+### 21.1 EL REY − (nivel 20) = opuesto del Rey +
+`levels.js` L20: `size:7, boss:{ hp:200, shrinkTo:5, eraseAt:0.5 }, target:[4,5,6]`. Lógica en `game/hazards.js`.
+- **FASE 1 (100%→50% HP): el tablero ENCOGE 7×7 → 5×5.** Saca una fila de abajo + una columna derecha
+  alternando, en umbrales de HP (90/80/70/60%). `Board.removeRow`/`removeCol` (inverso de addRow/addCol)
+  con efecto **"borrón"**: las fichas del borde se disuelven (`_eraseCells`) y recién ahí se ajusta el
+  canvas. **Decisión (usuario): al achicar NO se re-sanea** (solo saca celdas del borde → no crea cuentas
+  formadas; el próximo movimiento sanea normal) → muchos menos cambios de fichas de golpe.
+- **FASE 2 (desde 50% HP): BORRA signos −.** Cada 9s (`ERASE_MS`) tacha un `−` usable al azar →
+  estado `CELL_STATES.erased` (mancha de tiza translúcida + rayas de arrastre, **sin cruz**; animación de
+  **borrador de pizarrón barriendo**, `Board.applyErase`, sincronizada ~0.6s con la aparición de la
+  mancha). Es **PERMANENTE**: no se rompe por contacto (excluido de `_breakStatesNear`), solo el reintento
+  lo limpia. En fase 2 se activa `this._noReplenish` → `_healFixedBoard` deja de reponer signos y de
+  garantizar jugadas (guard al inicio; solo rompe formadas) → los − escasean de verdad y se acumulan
+  paredes tachadas. Si te deja sin jugadas usables → perdés (reason **'erased'**), pantalla "🧽 ¡El Rey −
+  borró todos los signos!" + botón "✏️ Reponer los signos"; el reintento rompe estados (los − vuelven) y
+  hace un `_healFixedBoard` con reposición ON.
+- El signo `−` del jefe en el HUD se dibuja como **barra CSS** (`.minus-bar`) porque el glifo de la
+  fuente Tiza queda muy bajo (se ve como `_`).
+
+### 21.2 REFACTOR: registro `BOSS_KINDS` (Open/Closed)
+`game/hazards.js` pasó de amontonar `if`s a un **registro por signo**: cada jefe define
+`startAttacks / phase / onRetry / stuckReason`. `+` (scatter+expansión+infestación, portado igual) y
+`−` (encoge+borrón) tienen entrada; `×`/`÷` sin entrada → **freeze genérico**. Dispatchers en el mixin:
+`_bossKind`, `_bossStartAttacks`, `_bossPhaseCheck`, `_bossRetry`. **Agregar el jefe × o ÷ = una entrada
+más en `BOSS_KINDS` + su método de ataque.**
+
+### 21.3 Bloqueo de Mundo Multiplicación y División (`wip`)
+Para aislar el playtest de Suma+Resta. `WORLDS` marca Mult/Div con `wip:true` (`mapView.jsx`) + helper
+`isWip(i)`. `isUnlocked` nunca abre un nivel wip; tocar su nodo → pop-up **`WipPopup`** ("Próximamente /
+en desarrollo"); sector atenuado + chapita 🚧; nodo apagado con 🚧. El dev triple-clic NO funciona en wip
+(el overlay tapa el nodo). **Para rehabilitar: quitar el flag `wip` en `mapView.jsx`.**
+
+### 21.4 Jefes unificados a 3 objetivos + aprendizaje de diseño
+Rey + `[6,8,10,12]`→**`[8,10,12]`**, Rey − **`[4,5,6]`** (dropea el más bajo/temprano, no retrocede de
+número); ×`[6,8,12]` y ÷`[2,3,4]` ya tenían 3. **Aprendizaje:** la garantía POR OBJETIVO (`minMovesEach`,
+default 2, en `boardMaintenance.js`) SOLO corre con >1 objetivo → los jefes (multi-target) cambian muchas
+más fichas por movimiento que los niveles normales (single-target). Resta + encoger + 4 objetivos = el
+peor caso de churn visible; bajar a 3 objetivos + no-re-sanear-al-achicar lo redujo.
+
+### 21.5 Reward diario también repone las VIDAS
+`claimDaily` ahora hace `addHearts(HEARTS_MAX)` (rellena corazones al máximo) además de +5 pistas. Botón
+"Reclamar +5 pistas 💡 y vidas ❤️". Coherente con la estrategia (recargar vidas por reward/ad). ⚠️
+`DAILY_UNLIMITED=true` sigue en test.
+
+### 21.6 Archivos tocados
+`game/hazards.js` (registro + borrón), `pixi/Board.js` (removeRow/Col, _eraseCells, applyErase),
+`pixi/cellStates.js` (estado `erased`), `game/boardMaintenance.js` (guard `_noReplenish`),
+`game/controller.js` (dispatchers + timer `_eraseId`), `game/levels.js` (L10/L20), `App.jsx` +
+`mapView.jsx` + `Popups.jsx` + `styles.css` (wip + minus-bar + daily hearts + textos).
+
+### 21.7 CÓMO SEGUIR
+1. **Playtest en PROD** del Rey − (encoge + borrón) y Rey + con objetivos nuevos.
+2. **Jefe × = "contagio/clonar"** y **÷ = "mezclar/partir"** (DISEÑO §18) — ahora cada uno es UNA entrada
+   en `BOSS_KINDS` + su ataque.
+3. Catálogo de estados de ficha (jelly/candado/cajón/bomba/niebla) para niveles normales — DISEÑO §18.4.
+4. **Antes de release:** quitar nivel de prueba 41; `DAILY_UNLIMITED=false`; **rehabilitar Mult/Div
+   (quitar `wip`)**; separar Supabase QA.

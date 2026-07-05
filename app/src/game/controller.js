@@ -31,6 +31,7 @@ const CONTINUE_TIME = 60 // segundos que da cada "+1 min"
 const NEAR_MOVES = 3     // cuentas fáciles que se siembran (visibles) alrededor de donde jugás
 const BOSS_FREEZE_MS = 10000 // cada cuánto ataca el jefe (congela fichas)
 const BOSS_FREEZE_N = 3       // cuántas fichas congela por ataque
+const INFEST_MS = 3500       // cada cuánto sube el frente de la infestación de + (escenario Suma)
 const GOAL_NORMAL = 100  // meta de la barra en niveles normales: sumando el VALOR formado
                          // (contás de N en N) hasta 100. SIN reloj (se pierde sólo por intentos).
                          // Los JEFES usan su propio HP (no esto). Tuneable por nivel con `goal`.
@@ -85,6 +86,9 @@ export class Controller {
     this.boss = this.level.boss || null
     this.bossHpMax = this.boss ? this.boss.hp : 0
     this.bossHp = this.bossHpMax
+    // INFESTACIÓN de + (escenario/jefe Suma): los + suben desde abajo hasta tapar el tablero.
+    // Reutilizable en cualquier nivel con `infest: true`. Ver DISEÑO §18.6.
+    this.infest = !!this.level.infest
     this.ended = false
     this.busy = false
     this.started = false
@@ -114,6 +118,7 @@ export class Controller {
     this.timerOn = false
     if (this.timerId) clearTimeout(this.timerId)
     if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }   // ataques del jefe
+    if (this._infestId) { clearTimeout(this._infestId); this._infestId = null }      // frente de infestación
     this._clearAutoHint()
     this.selected = null
     this.activeBooster = null
@@ -157,6 +162,7 @@ export class Controller {
     this.started = true
     this.board.hideHandGuide()              // el jugador ya tomó el control: fuera la manito
     if (this.boss) this._startBossAttacks() // el jefe empieza a atacar (congelar) cada 5s
+    if (this.infest) this._startInfest()    // arranca a subir el frente de + (escenario Suma)
     if (this.relax || !this.timed) return   // sin reloj (por defecto): se gana llenando la barra
     this.deadline = Date.now() + this.startTime * 1000
     this.timerOn = true
@@ -584,7 +590,7 @@ export class Controller {
       })
       // ROMPER estados por CONTACTO: una cuenta descongela las fichas adyacentes (antes de
       // colapsar, con las posiciones aún válidas). Así se destraba el tablero jugando cerca.
-      if (this.boss) this._breakStatesNear(cells)
+      if (this.boss || this.infest) this._breakStatesNear(cells)   // jugar cerca rompe hielo/infestación
       await this.board.clear(cells)
       // GENERAR súper ficha: convertir el operador conservado ANTES del colapso (aún en su celda);
       // la ficha ya súper cae con el colapso conservando su estado.
@@ -693,6 +699,43 @@ export class Controller {
     if (toBreak.length) this.board.clearState(toBreak)
   }
 
+  // ---------- INFESTACIÓN de + (escenario/jefe Suma) ----------
+  // Loop propio: cada INFEST_MS el frente de + sube UNA fila (una celda por columna). Los +
+  // infestados se pueden usar a mano pero son INMUTABLES para el mantenimiento (tienen estado, y
+  // _healFixedBoard ya excluye las celdas con estado al aplicar). Ver DISEÑO §18.6/§18.6.1.
+  _startInfest() {
+    if (!this.infest || this._infestId) return
+    this._infestId = setTimeout(() => this._infestTick(), INFEST_MS)
+  }
+  _infestTick() {
+    this._infestId = null
+    if (this.ended) return
+    if (this.started && !this.busy && !this.coachActive) this._infestRise()
+    this._infestId = setTimeout(() => this._infestTick(), INFEST_MS)
+  }
+  // sube el frente: en cada columna infesta la celda JUSTO ARRIBA de la infestada más alta (o la
+  // de más abajo si la columna todavía está limpia). No pisa fichas con otro estado.
+  _infestRise() {
+    const infested = this.board.cellsWithState('infested')
+    const toInfest = []
+    for (let c = 0; c < this.board.cols; c++) {
+      let front = this.board.rows
+      for (let r = 0; r < this.board.rows; r++) if (infested.has(r + ',' + c)) { front = r; break }
+      const target = front === this.board.rows ? this.board.rows - 1 : front - 1
+      if (target < 0) continue
+      const t = this.board.tiles[target]?.[c]
+      if (t && !t.state) toInfest.push({ r: target, c })
+    }
+    if (toInfest.length) { this.board.applyInfest(toInfest); this.board.shake(5) }
+    this._infestCheckLoss()
+  }
+  // perdés cuando la fila de arriba (row 0) queda TODA infestada (la marea de + llegó al techo)
+  _infestCheckLoss() {
+    if (!this.infest || this.ended) return
+    for (let c = 0; c < this.board.cols; c++) if (!this.board.isInfested(0, c)) return
+    this._endLevel(false, 'flooded')
+  }
+
   // MODO ACUMULATIVO: suma (o resta) el valor formado al total; gana al alcanzar la meta.
   // El movimiento VISIBLE de la barra lo dispara onCuenta al llegar las fichas (absorción).
   _addAccum(value) {
@@ -777,6 +820,7 @@ export class Controller {
     this._clearAutoHint()
     if (this.timerId) clearTimeout(this.timerId)
     if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }
+    if (this._infestId) { clearTimeout(this._infestId); this._infestId = null }
     // Sin reloj (por defecto o relax): las estrellas premian la PRECISIÓN (movimientos
     // fallados = intentos gastados). 3★ sin fallar, 2★ hasta 3, 1★ completar. Con reloj:
     // por velocidad (timeLeft).
@@ -803,6 +847,7 @@ export class Controller {
     this.busy = false
     if (this.timerId) { clearTimeout(this.timerId); this.timerId = null }
     if (this._bossAtkId) { clearTimeout(this._bossAtkId); this._bossAtkId = null }
+    if (this._infestId) { clearTimeout(this._infestId); this._infestId = null }
     this._clearAutoHint()
     this.board.hideHandGuide()
     this.board.locked = false
@@ -827,6 +872,11 @@ export class Controller {
       this._breakAllStates()                           // el reintento ROMPE todo el hielo
       this.hooks.toast?.('¡Hielo roto! Seguí atacando al jefe ❄️💥')
       this._startBossAttacks()
+    }
+    if (this.infest) {
+      this._breakAllStates()                           // limpia TODA la infestación de +
+      this.hooks.toast?.('🌿 ¡Limpiaste la invasión! Seguí sumando')
+      this._startInfest()
     }
     if (this.timed && !this.relax) {                   // sólo niveles con reloj: sumar tiempo
       this.timerOn = true

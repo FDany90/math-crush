@@ -48,6 +48,23 @@ const CELL_STATES = {
       return ice;
     },
   },
+  // INFESTACIÓN de + (jefe/escenario Suma): la ficha se vuelve un '+' "contagiado" con glow verde
+  // tóxico. NO bloquea el uso (el jugador puede usarlo a mano como +), pero es INMUTABLE para el
+  // auto-mantenimiento (ver controller). Se expande de abajo hacia arriba. Ver DISEÑO §18.6.
+  infested: {
+    blocksUse: false, blocksDrag: false, breakFx: 0x7bed9f,
+    overlay: (s, rad) => {
+      const g = new Container();
+      const gg = new Graphics();
+      gg.roundRect(-s / 2, -s / 2, s, s, rad).fill({ color: 0x2ecc40, alpha: 0.26 });
+      gg.roundRect(-s / 2 - 2, -s / 2 - 2, s + 4, s + 4, rad + 2).stroke({ color: 0x7bed9f, width: 3, alpha: 0.95 });
+      g.addChild(gg);
+      for (const [x, y] of [[-s / 4, -s / 5], [s / 5, s / 4], [s / 6, -s / 4]]) {
+        const d = new Graphics(); d.circle(x, y, 2.2).fill({ color: 0xd7ffd0, alpha: 0.9 }); g.addChild(d);
+      }
+      return g;
+    },
+  },
   // futuros: jelly (N golpes), lock (candado), crate (cajón que se rompe al lado), etc.
 };
 
@@ -277,6 +294,18 @@ export class Board {
       if (t && !t.state) { t.setState(key); gsap.fromTo(t.scale, { x: 1.25, y: 1.25 }, { x: 1, y: 1, duration: 0.35, ease: 'back.out(2)' }); }
     }
   }
+  // INFESTAR: convierte la ficha en un '+' contagiado (char '+' + estado 'infested').
+  applyInfest(cells) {
+    for (const { r, c } of cells) {
+      const t = this.tiles[r]?.[c];
+      if (!t || t.state) continue;               // no pisar fichas con otro estado
+      t.setChar('+');
+      t.setState('infested');
+      gsap.fromTo(t.scale, { x: 1.25, y: 1.25 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(2)' });
+    }
+  }
+  isInfested(r, c) { return this.tiles[r]?.[c]?.state === 'infested'; }
+
   clearState(cells) {
     for (const { r, c } of cells) {
       const t = this.tiles[r]?.[c];

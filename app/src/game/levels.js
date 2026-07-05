@@ -108,6 +108,11 @@ export const LEVELS = [
   { name: 'Doble maestro',  size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3],   quota: 15 },  // 🎁 doble
   // Nivel 40 = ACUMULATIVO división: arrancás en 24 y cada división BAJA el total hasta 0.
   { name: 'Jefe: el signo ÷', size: 7, digits: range(1, 9), ops: ['÷'], eq: false, maxDigits: 1, target: [2, 3, 4], boss: { hp: 160 }, quota: 99 },  // 👹 JEFE división (daño = cociente formado)
+
+  // 🧪 NIVEL DE PRUEBA (temporal): mecánica de INFESTACIÓN de + aislada, para verla y balancearla.
+  // Los + suben desde abajo (cada 3.5 s); jugás cuentas para retroceder el frente; si llega al techo,
+  // perdés. Se gana llenando la barra (meta 150). Quitar antes de un release. Ver DISEÑO §18.6.
+  { name: '🧪 Infestación',   size: 7, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 10, goal: 150, infest: true },
 ];
 
 export const LEVEL_COUNT = LEVELS.length;

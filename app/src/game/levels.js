@@ -73,7 +73,7 @@ export const LEVELS = [
   // rebalancear tras jugarlo. El contrarreloj (L15) va a 150 (coherente con el L5 de Suma).
   // 11-12 = intro MUY suave a la resta: solo fichas 1-4 en 5×5, un único objetivo bajo (1, luego 2).
   // Metas cortas (la barra suma el VALOR: target 1 → cada cuenta suma 1). Se irá balanceando desde acá.
-  { name: 'Primera resta',    size: 5, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 1,       quota: 10, goal: 20 },   // solo 1-4; 1 = 2−1,3−2,4−3 (goal bajo: cada cuenta suma 1)
+  { name: 'Primera resta',    size: 5, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 1,       quota: 10, goal: 20, orderCoach: true },   // solo 1-4; 1 = 2−1,3−2,4−3 (goal bajo). orderCoach: explica el ORDEN (1ra resta del juego)
   { name: 'Segunda resta',    size: 5, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 2,       quota: 10, goal: 30 },   // solo 1-4; 2 = 3−1,4−2
   { name: 'Tercera resta',    size: 6, digits: range(1, 6), ops: ['−'], eq: false, maxDigits: 1, target: [1, 2, 3], quota: 10, goal: 50 },   // 6×6, fichas 1-6, triple objetivo bajo (1/2/3)
   { name: 'Resta doble',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 6],  quota: 10, goal: 150 },  // 🎁 doble

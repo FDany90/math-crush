@@ -142,16 +142,24 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .goalfill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #5cd66b, #37b24d); transition: width .25s ease; }
 .gstar { position: absolute; top: -5px; transform: translateX(-50%); font-size: 14px; color: #fff8; }
 
-.board-area { position: relative; width: min(94vw, 460px); margin-top: 32px; }
-/* Flechas de dirección (solo en resta/división). Doradas y con pulso SECUENCIAL
-   start→mid→end para que se lea el sentido (→ y ↓). No animan transform (los .mid lo
-   usan para centrarse): el "flujo" se logra con el desfasaje del pulso de opacidad/glow. */
-.arrow-h { position: absolute; top: -16px; width: 48px; height: 0; border-top: 3px solid var(--eq); filter: drop-shadow(0 0 5px #ffd23fcc); animation: arrowPulse 1.2s ease-in-out infinite; }
+/* Más angosto que antes (era 94vw) para dejar aire a las flechas de los COSTADOS en mobile
+   (antes las de la izquierda se salían de la pantalla). margin auto centra; 34px arriba/abajo
+   dan lugar a las flechas de arriba y abajo. */
+.board-area { position: relative; width: min(86vw, 440px); margin: 34px auto; }
+/* Flechas de dirección (solo en resta/división), en los CUATRO lados (filas → arriba y abajo,
+   columnas ↓ izquierda y derecha). Doradas y con pulso SECUENCIAL start→mid→end para que se lea
+   el sentido. No animan transform (los .mid lo usan para centrarse): el "flujo" se logra con el
+   desfasaje del pulso de opacidad/glow. */
+.arrow-h { position: absolute; width: 48px; height: 0; border-top: 3px solid var(--eq); filter: drop-shadow(0 0 5px #ffd23fcc); animation: arrowPulse 1.2s ease-in-out infinite; }
+.arrow-h.top { top: -18px; }
+.arrow-h.bottom { bottom: -18px; }
 .arrow-h::after { content: ''; position: absolute; right: -2px; top: -5px; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 10px solid var(--eq); }
 .arrow-h.start { left: 8px; }
 .arrow-h.mid { left: 50%; transform: translateX(-50%); animation-delay: .18s; }
 .arrow-h.end { right: 8px; animation-delay: .36s; }
-.arrow-v { position: absolute; left: -16px; height: 48px; width: 0; border-left: 3px solid var(--eq); filter: drop-shadow(0 0 5px #ffd23fcc); animation: arrowPulse 1.2s ease-in-out infinite; }
+.arrow-v { position: absolute; height: 48px; width: 0; border-left: 3px solid var(--eq); filter: drop-shadow(0 0 5px #ffd23fcc); animation: arrowPulse 1.2s ease-in-out infinite; }
+.arrow-v.left { left: -15px; }
+.arrow-v.right { right: -15px; }
 .arrow-v::after { content: ''; position: absolute; bottom: -2px; left: -5px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 10px solid var(--eq); }
 .arrow-v.start { top: 8px; }
 .arrow-v.mid { top: 50%; transform: translateY(-50%); animation-delay: .18s; }

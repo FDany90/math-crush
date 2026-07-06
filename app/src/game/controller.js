@@ -162,10 +162,10 @@ export class Controller {
         { text: 'Nuevo truco: podés formar el número con DOS operadores. En vez de 4+8, probá 3+4+5 = 12.', highlight: 'target' },
         { text: 'Una cuenta de 2 operadores crea una SÚPER FICHA ✨. Te muestro una jugada preparada 👇' },
       ])
-    } else if (this.level.ops.some((o) => o === '−' || o === '÷')) {
-      // Primera vez en un nivel de resta/división: el ORDEN importa (no da igual como en la
-      // suma). Aclaramos la DIRECCIÓN —no el tamaño—, porque más adelante habrá resultados
-      // negativos donde el número grande NO va primero. Solo cuenta el sentido de las flechas.
+    } else if (this.level.orderCoach) {
+      // SOLO en el 1er nivel de una operación NO conmutativa (resta/división): el ORDEN importa.
+      // En el resto NO se muestra (ya se entiende por las flechas, que sí van en todos). Se aclara
+      // la DIRECCIÓN —no el tamaño—: más adelante habrá negativos donde el grande NO va primero.
       this._coach([{ text: 'Ojo: acá el ORDEN importa. La cuenta se arma en el sentido de las flechas: → de izquierda a derecha, ↓ de arriba a abajo.' }])
     }
     this._startAutoHint()

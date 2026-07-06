@@ -423,10 +423,13 @@ export default function App() {
 
         <div className="board-area">
           {/* Flechas de dirección SOLO en operaciones donde el orden importa (resta/división).
-              En suma y multiplicación da igual el orden (conmutativas) → no se muestran. */}
+              En suma y multiplicación da igual el orden (conmutativas) → no se muestran.
+              Van en los CUATRO lados: filas → arriba y abajo, columnas ↓ izquierda y derecha. */}
           {dirMatters && (<>
-            <div className="arrow-h start" /><div className="arrow-h mid" /><div className="arrow-h end" />
-            <div className="arrow-v start" /><div className="arrow-v mid" /><div className="arrow-v end" />
+            <div className="arrow-h top start" /><div className="arrow-h top mid" /><div className="arrow-h top end" />
+            <div className="arrow-h bottom start" /><div className="arrow-h bottom mid" /><div className="arrow-h bottom end" />
+            <div className="arrow-v left start" /><div className="arrow-v left mid" /><div className="arrow-v left end" />
+            <div className="arrow-v right start" /><div className="arrow-v right mid" /><div className="arrow-v right end" />
           </>)}
           <div className="board-wrap" ref={mountRef} />
         </div>

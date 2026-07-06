@@ -32,40 +32,51 @@ export const maintenanceMethods = {
     }
     const grid = this.board.gridChars()
     const changed = []
-    // 1) operadores: sacar los varados + reponer hasta el piso con buena distribución
-    const min = Math.ceil(this.board.cols * 1.2)
+    // Operadores VARADOS → dígito (limpia; no ensucia). NO reponemos operadores acá a propósito:
+    // los operadores vienen "DE ARRIBA" (la caída trae ~33% operadores). El saneo prioriza HEALEAR
+    // cambiando NÚMEROS (num→num), NO convirtiendo dígitos en signos (se veía feo, sobre todo en
+    // Resta: dígitos que se volvían '−'). Solo si cambiar números NO alcanza (faltan operadores para
+    // armar jugadas) reponemos operadores como FALLBACK (más abajo).
     changed.push(...destrandOperators(grid, this.gen))
-    changed.push(...ensureMinOperators(grid, this.gen, min))
-    // 2) romper cuentas YA formadas (el paso 1 pudo dejar un '+' entre dos dígitos que
-    //    suman el objetivo). El tablero se entrega resuelto: sólo jugadas a un movimiento.
+    // romper cuentas YA formadas: el tablero se entrega resuelto (solo jugadas a un movimiento).
     changed.push(...breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo))
-    // 3) asegurar el mínimo de jugadas (sutil, de abajo hacia arriba). Dos garantías:
-    //    - TOTAL: al menos MIN_MOVES jugadas a cualquier objetivo (escala con el tablero:
-    //      5×5→3, 6×6→5, 7×7→6, 8×8→7).
-    //    - POR OBJETIVO (solo doble): cada objetivo tiene sus propias jugadas, así el más
-    //      fácil (ej. 10) no se come el tablero dejando al otro (ej. 5) casi sin salida.
-    //    Se itera porque reforzar uno puede reducir levemente al otro; `avoid`=TODOS los
-    //    objetivos evita que al reforzar uno quede formado otro.
+    // asegurar el mínimo de jugadas. Dos garantías:
+    //  - TOTAL: al menos MIN_MOVES jugadas (escala con el tablero: 5×5→3, 6×6→5, 7×7→6, 8×8→7).
+    //  - POR OBJETIVO (solo multi): cada objetivo tiene sus propias jugadas (el más fácil no acapara).
     const MIN_MOVES = this.level.minMoves ?? (this.board.cols <= 5 ? 3 : this.board.cols - 1)
     const eachMin = this.level.minMovesEach ?? 2
-    // Garantía POR OBJETIVO: cada objetivo tiene al menos `eachMin` jugadas propias, así el
-    // más fácil no acapara el tablero. Aplica al doble y al acumulativo (set chico 5,6,8,10).
     const perTarget = this.targets.length > 1
-    for (let pass = 0; pass < 4; pass++) {
-      let ok = true
-      if (perTarget) {
-        for (const t of this.targets) {
-          if (countTargetMoves(grid, [t], this.md, this.mo, eachMin) < eachMin) {
-            changed.push(...addTargetMovesSubtle(grid, this.gen, [t], this.md, this.mo, eachMin, this.targets))
-            ok = false
+    // SOLO cambia dígitos (addTargetMovesSubtle es num→num). Se itera porque reforzar un objetivo
+    // puede reducir levemente a otro; `avoid`=TODOS evita formar el otro al reforzar uno.
+    const ensureMoves = () => {
+      for (let pass = 0; pass < 4; pass++) {
+        let ok = true
+        if (perTarget) {
+          for (const t of this.targets) {
+            if (countTargetMoves(grid, [t], this.md, this.mo, eachMin) < eachMin) {
+              changed.push(...addTargetMovesSubtle(grid, this.gen, [t], this.md, this.mo, eachMin, this.targets))
+              ok = false
+            }
           }
         }
+        if (countTargetMoves(grid, this.targets, this.md, this.mo, MIN_MOVES) < MIN_MOVES) {
+          changed.push(...addTargetMovesSubtle(grid, this.gen, this.targets, this.md, this.mo, MIN_MOVES))
+          ok = false
+        }
+        if (ok) break
       }
-      if (countTargetMoves(grid, this.targets, this.md, this.mo, MIN_MOVES) < MIN_MOVES) {
-        changed.push(...addTargetMovesSubtle(grid, this.gen, this.targets, this.md, this.mo, MIN_MOVES))
-        ok = false
-      }
-      if (ok) break
+    }
+    ensureMoves()
+    // FALLBACK — recién si cambiar NÚMEROS no alcanzó (faltan operadores en el tablero): reponer
+    // operadores (dígito→signo) y reintentar el healeo por números. En el caso común (hay operadores
+    // de sobra caídos de arriba) esto NO corre → 0 conversiones dígito→signo.
+    const short = () =>
+      countTargetMoves(grid, this.targets, this.md, this.mo, MIN_MOVES) < MIN_MOVES ||
+      (perTarget && this.targets.some((t) => countTargetMoves(grid, [t], this.md, this.mo, eachMin) < eachMin))
+    if (short()) {
+      changed.push(...ensureMinOperators(grid, this.gen, Math.ceil(this.board.cols * 1.2)))
+      changed.push(...breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo))
+      ensureMoves()
     }
     // Último recurso: si algún objetivo sigue por debajo del mínimo (el refuerzo sutil solo
     // cambia dígitos y a veces no alcanza porque los operadores quedaron lejos), PLANTAR

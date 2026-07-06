@@ -518,6 +518,16 @@ justo la palanca de **anticipación** (§1.4) y hay que aprovecharla:
    beneficio no probado? La evidencia de "relación" venía de jugadores reales.
 4. **Tras el fallo, ¿qué patrón concreto hace REINTENTAR** en vez de abandonar? La
    evidencia advierte contra la DDA compleja pero no identificó el patrón ganador.
+5. **🔴 PENDIENTE — ¿CÓMO se pierde? (balance de pérdidas)** (2026-07-05). Hoy la única
+   forma de perder es gastar los **5 intentos** (movimientos fallidos), pero: (a) 5 fallos
+   es MUCHO —casi nadie los gasta jugando de buena fe—, y (b) al perder podés **reintentar
+   con una vida/corazón**, así que en la práctica **casi nadie pierde de verdad**. Sin
+   riesgo real, ganar no se siente logrado y el modo contrarreloj pierde tensión. A
+   explorar (no decidido): bajar intentos en niveles concretos, "vidas" que cuesten formar
+   objetivos equivocados, condición de pérdida por objetivo/tiempo, o que la derrota "duela"
+   un poco más (sin ser castigo — respetar el checklist ético §8). **Balancear las pérdidas
+   con datos de playtest** antes de tocar. Relacionado: §1 (fricción real desde el mundo 2),
+   preguntas 4 de acá.
 
 ---
 

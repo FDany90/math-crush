@@ -35,25 +35,23 @@ export const LEVELS = [
   // aparecen intercalados (un giro sí / uno no) para cortar la monotonía. La suma sigue
   // siendo de 1 cifra; los twists cambian la EXPERIENCIA, no la carga matemática.
   { name: 'Primeros pasos',   size: 4, digits: range(1, 3), ops: ['+'], eq: false, maxDigits: 1, target: 4,        quota: 10, tutorial: true, goal: 50 },  // tutorial corto: barra a 50 (~13 cuentas)
-  { name: 'Amigos del 5',     size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 5,        quota: 10 },
-  { name: 'Media docena',     size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 6,        quota: 10 },
-  { name: 'Solo pares',       size: 5, digits: ['2', '4', '6'], ops: ['+'], eq: false, maxDigits: 1, target: 8,   quota: 10, goal: 150 },  // solo pares → 2+6, 4+4
+  { name: 'Amigos del 5',     size: 5, digits: range(1, 3), ops: ['+'], eq: false, maxDigits: 1, target: 5,        quota: 10 },  // fichas 1-3 (onboarding gradual): 5 = 2+3
+  { name: 'Media docena',     size: 5, digits: range(1, 4), ops: ['+'], eq: false, maxDigits: 1, target: 6,        quota: 10 },  // fichas 1-4: 6 = 2+4,3+3
+  { name: 'Solo pares',       size: 5, digits: ['2', '4', '6'], ops: ['+'], eq: false, maxDigits: 1, target: [6, 8], quota: 10, goal: 150 },  // 🎁 doble, solo pares → 6=2+4, 8=2+6,4+4
   // 🎁 CONTRARRELOJ (nivel 5 de cada mundo: 5/15/25/35): nivel ESPECIAL con RELOJ (1 min) y
-  // tablero un poco más grande. Objetivo único. Si se acaba el tiempo → "+1 minuto" (reintento).
-  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 8,       timed: true, time: 60, goal: 200 },
-  // 🎁 Doble objetivo (dos números a la vez): 5 y 10 juntos. Mismo tamaño que el resto del mundo.
-  { name: 'Doble objetivo',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 10],  goal: 200 },
+  // tablero un poco más grande. Si se acaba el tiempo → "+1 minuto" (reintento).
+  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 7), ops: ['+'], eq: false, maxDigits: 1, target: [5, 10],  timed: true, time: 60, goal: 200 },  // ⏱ doble 5/10, fichas 1-7
+  // 🎁 Objetivo múltiple (varios números a la vez): 5, 8 y 10 juntos.
+  { name: 'Triple objetivo',  size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 8, 10], goal: 200 },
   { name: 'La docena',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12,        goal: 200 },  // normal: enseña el 12 antes de la súper ficha
-  // ✨ SÚPER FICHA (mecánica tipo Candy Crush): acá se INTRODUCE. Doble objetivo alto [9,12] para
-  // que las cuentas de 2 operadores (ej. 3+4+5=12, 2+3+4=9) sean viables y se aprovechen. Formar
+  // ✨ SÚPER FICHA (mecánica tipo Candy Crush): acá se INTRODUCE. Doble objetivo alto [10,12] para
+  // que las cuentas de 2 operadores (ej. 3+4+5=12, 2+3+5=10) sean viables y se aprovechen. Formar
   // una con 2 operadores deja una súper ficha '+'; usarla explota en CRUZ. El motor garantiza
   // siempre ≥1 jugada de 2 operadores. Tablero 6×6 (a+b+c son 5 celdas, entran). Ver DISEÑO §16.
-  { name: 'Súper doble ✨',    size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [8, 12],  maxOps: 2, superTile: true, goal: 200 },
-  // ✨ SÚPER FICHA (continúa la mecánica del nivel 8) con TRIPLE objetivo alto: 10/12/15 tienen
-  // muchísimas cuentas de 2 operadores (15=5+5+5,4+5+6; 12=3+4+5; 10=3+3+4,2+3+5) → generar súper es viable.
-  { name: 'Súper triple ✨',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [10, 12, 15], maxOps: 2, superTile: true, goal: 250 },
-  // Nivel 10 = ACUMULATIVO (hito de fin de mundo): formá cualquiera de estos resultados y su
-  // VALOR se suma a un total; ganás al llegar a 100. Ver DISEÑO §7.5 / PLAN_SESION_AUTONOMA.
+  { name: 'Súper doble ✨',    size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [10, 12], maxOps: 2, superTile: true, goal: 200 },
+  // ✨ SÚPER FICHA (continúa la mecánica del nivel 8) con TRIPLE objetivo alto: 10/12/14 tienen
+  // muchísimas cuentas de 2 operadores (14=5+5+4,6+4+4; 12=3+4+5; 10=3+3+4,2+3+5) → generar súper es viable.
+  { name: 'Súper triple ✨',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [10, 12, 14], maxOps: 2, superTile: true, goal: 250 },
   // 👹 JEFE SUMA de 2 FASES (DISEÑO §18.6.2): FASE 1 (100%→50% HP) el tablero CRECE 5×5→7×7;
   // FASE 2 (desde 50%) arranca la INFESTACIÓN de + (suben hasta tapar = perdés). `expandTo` = tamaño
   // final; `infestAt` = fracción de HP donde empieza la fase 2. Este jefe NO usa el freeze.
@@ -62,27 +60,22 @@ export const LEVELS = [
   { name: 'El Rey +', size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [8, 10, 12], boss: { hp: 500, expandTo: 7, infestAt: 0.5 }, quota: 99 },
 
   // ================= MUNDO RESTA (niveles 11-19 + hito) — RAMPA DE DIFICULTAD =================
-  // Mundo 2: acá EMPIEZA la fricción real (primeras pérdidas). Resta de 1 cifra, resultados ≥0.
-  // La dificultad sube por 4 palancas: (1) metas más largas (150→350), (2) tableros 7×7 antes,
-  // (3) objetivos más difíciles (impares/altos = MENOS pares; triples), (4) MENOS intentos en
-  // los duros (4 y 3 tizas → margen chico para el error). En resta objetivo alto = menos pares:
-  // 7 solo tiene 8−1,9−2; 8 solo 9−1 (evitar); banda usable 2-7. Ver DISEÑO §7.
-  // 11-12 = intro suave a la resta (operación nueva); desde el 13 arranca la rampa.
-  // Metas MÁS BAJAS que en Suma: en resta los objetivos son chicos (2-7) → cada cuenta suma
-  // menos, así que 100→200 es un rango parejo (antes 150→350 pedía demasiadas cuentas). A
-  // rebalancear tras jugarlo. El contrarreloj (L15) va a 150 (coherente con el L5 de Suma).
-  // 11-12 = intro MUY suave a la resta: solo fichas 1-4 en 5×5, un único objetivo bajo (1, luego 2).
-  // Metas cortas (la barra suma el VALOR: target 1 → cada cuenta suma 1). Se irá balanceando desde acá.
+  // Mundo 2: resta de 1 cifra, resultados ≥0. Rampa balanceada a mano (2026-07-05).
+  // 11-15 = intro MUY gradual (fichas y objetivos chicos, 5×5→6×6):
+  //   11 (target 1, 1-4) · 12 (target 2, 1-4) · 13 (target 3, 1-6) · 14 ([2,3], 1-6) · 15 ([3,5], 1-7, ⏱).
+  //   Goals cortos: 20 · 30 · 50 · 50 · 100. La barra suma el VALOR (resultado) → cuentas ≈ goal/objetivo.
+  // 16-19 = rampa dura: 7×7, fichas 1-9, dobles/triples altos, goal 150 parejo y MENOS intentos (4/4/4/3).
+  //   En resta objetivo alto = MENOS pares (7 solo 8−1,9−2). Ver DISEÑO §7.
   { name: 'Primera resta',    size: 5, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 1,       quota: 10, goal: 20, orderCoach: true },   // solo 1-4; 1 = 2−1,3−2,4−3 (goal bajo). orderCoach: explica el ORDEN (1ra resta del juego)
   { name: 'Segunda resta',    size: 5, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 2,       quota: 10, goal: 30 },   // solo 1-4; 2 = 3−1,4−2
-  { name: 'Tercera resta',    size: 6, digits: range(1, 6), ops: ['−'], eq: false, maxDigits: 1, target: [1, 2, 3], quota: 10, goal: 50 },   // 6×6, fichas 1-6, triple objetivo bajo (1/2/3)
-  { name: 'Resta doble',      size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 6],  quota: 10, goal: 150 },  // 🎁 doble
-  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: 5,       timed: true, time: 60, goal: 150 },  // ⏱ nivel 15 = contrarreloj; el tablero CRECE a 7×7 después de acá
-  // --- desde acá la rampa aprieta: 7×7, impares/altos, triples y MENOS intentos ---
-  { name: 'Resta difícil',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [5, 7],  quota: 15, goal: 160, tries: 4 },  // 7×7, 7 = solo 8−1,9−2
-  { name: 'Doble combos',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7],  quota: 15, goal: 175, comboFever: true, tries: 4 },  // 🎁 combos x2, 7×7
-  { name: 'Triple resta',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 4, 6], quota: 15, goal: 190, tries: 4 },  // 🎁 triple
-  { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 200, tries: 3 },  // 🎁 triple, solo 3 intentos
+  { name: 'Tercera resta',    size: 6, digits: range(1, 6), ops: ['−'], eq: false, maxDigits: 1, target: 3,        quota: 10, goal: 50 },   // 6×6, fichas 1-6, objetivo único 3
+  { name: 'Resta doble',      size: 6, digits: range(1, 6), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3],  quota: 10, goal: 50 },   // 🎁 doble, fichas 1-6
+  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 7), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5],   timed: true, time: 60, goal: 100 },  // ⏱ contrarreloj; doble impar 3/5, fichas 1-7; el tablero CRECE a 7×7 después
+  // --- desde acá la rampa aprieta: 7×7, impares/altos, triples y MENOS intentos (goal 150 parejo) ---
+  { name: 'Resta difícil',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [5, 7],  quota: 15, goal: 150, tries: 4 },  // 7×7, 7 = solo 8−1,9−2
+  { name: 'Doble combos',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7],  quota: 15, goal: 150, comboFever: true, tries: 4 },  // 🎁 combos x2, 7×7
+  { name: 'Triple resta',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 4, 6], quota: 15, goal: 150, tries: 4 },  // 🎁 triple
+  { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 150, tries: 3 },  // 🎁 triple, solo 3 intentos
   // 👹 EL REY − (opuesto del Rey +): FASE 1 el tablero ENCOGE 7×7→5×5 (shrinkTo); FASE 2 (desde
   // eraseAt=50% HP) BORRA signos − (tachados permanentes → si te quedás sin jugadas, perdés). Daño = diferencia formada.
   { name: 'El Rey −', size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 5, 6], boss: { hp: 200, shrinkTo: 5, eraseAt: 0.5 }, quota: 99 },

@@ -185,7 +185,8 @@ export const hazardMethods = {
       this.board.applyState(toFreeze, 'frozen')
       this.board.shake(8)
       this.hooks.toast?.('❄️ ¡El jefe congeló ' + toFreeze.length + ' ficha' + (toFreeze.length > 1 ? 's' : '') + '!')
-      if (!this.ended && !this._alreadyCoached('math_coached_freeze')) {
+      if (!this.ended && !this._coachedFreeze) {
+        this._coachedFreeze = true
         this._coach([{ text: 'El Rey ' + (this.level.ops?.[0] ?? '+') + ' CONGELA fichas ❄️. Las que tienen hielo no se pueden usar ni mover. Formá una cuenta al lado para romper el hielo 💥.' }])
       }
     }

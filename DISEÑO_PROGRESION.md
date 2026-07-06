@@ -1150,3 +1150,46 @@ lento. Umbrales de fase configurables.
    resize del canvas. Es la pieza más nueva del motor.
 3. **Sistema de FASES por HP** en el controller (umbrales → disparar expansión / activar infestación).
 - **Orden sugerido:** (1) infestación sola en un nivel de prueba → (2) fases por HP → (3) resize en vivo.
+
+## 19. Caminos separados por operación (mapa ramificado) — DISEÑO, no implementado (2026-07-05)
+
+> **Idea del usuario:** en vez de UN camino lineal de 40 nodos (Suma 1-10 → Resta 11-20 → …), que
+> cada operación tenga su **propio path visual**. El jefe de fin de Suma (nivel 10) **desbloquea el
+> path de Resta**; y Suma puede **seguir creciendo** con más niveles/mecánicas/jefes en SU propio path,
+> sin quedar "linkeada" linealmente dentro de Resta. Que se diferencien bien.
+
+### 19.1 Mi opinión (recomendación)
+**Buena dirección y compatible con el diseño de "mundos" del §7** — es una evolución de la TOPOLOGÍA
+del mapa, no un cambio de filosofía. Hoy los mundos ya existen (§17.4, `WORLDS`), pero comparten UN
+camino serpenteante y la numeración/progreso es **lineal por índice**. Separar los paths aporta:
+- **Cada operación crece independiente:** agregar niveles a Suma NO recorre ni renumera Resta.
+- **Mapa más legible y con identidad:** un path por operación (color/tema/mascota propia) diferencia
+  fuerte y construye anticipación (§1.4).
+- **Jefes/mecánicas propias por rama:** Suma puede tener su path avanzado con más jefes + (§18) en
+  paralelo a Resta, sin forzar un orden lineal entre operaciones distintas.
+
+**🔴 Mantener la compuerta pedagógica (§7.2):** aunque los paths sean visualmente separados, Resta se
+**sigue desbloqueando al terminar el núcleo de Suma** (no es "mundo abierto" de libre elección desde el
+inicio — la matemática tiene orden de dependencia). Es un **grafo de ramas GATED**, no open-world.
+
+### 19.2 El refactor real = progreso por `id` estable + desbloqueo por GRAFO
+La separación de paths es sobre todo un cambio de datos, no de arte. El bloqueante es el mismo pendiente
+ya anotado en **DOCUMENTACION.md §15** (progreso indexado por POSICIÓN). Plan por etapas (barato→caro):
+
+1. **`id` estable por nivel** (barato, forward-compatible): agregar `id: 'suma-01'`, `'resta-03'`, … a
+   cada objeto de `LEVELS`. El progreso pasa a `{ stars: { 'resta-03': 3 } }` (por id, no por índice).
+   Migrar el `math_progress` viejo una vez (o resetear, aún no hay usuarios que importen). **Esto se
+   puede hacer AISLADO, sin tocar el mapa** — y deja todo listo para lo siguiente. ← *el "dejar preparado".*
+2. **Desbloqueo por grafo:** cada nivel/rama declara `requires: [id]` (ej. `resta-01.requires =
+   ['suma-boss-10']`). `isUnlocked` deja de ser "índice−1 tiene ★" y pasa a "todos los `requires`
+   cumplen ≥1★". Un path se abre cuando su nodo raíz cumple sus `requires`.
+3. **Mapa ramificado (UI, lo más caro):** `mapView.jsx` deja de dibujar un serpenteante único y dibuja
+   **lanes/ramas por operación** (cada `WORLDS[i]` su columna/rama, con puente de desbloqueo desde el
+   jefe que la abre). El path de Suma sigue hacia arriba con sus niveles avanzados; el de Resta arranca
+   como rama nueva desde el jefe +.
+
+### 19.3 Estado actual y decisión
+**Decisión (usuario, 2026-07-05): NO separar ahora — dejarlo documentado y preparado.** Por ahora
+seguimos con el camino lineal (Suma 1-10, Resta 11-19+jefe, Mult/Div `wip`) y balanceando niveles. El
+primer paso barato (`id` estable, §19.2.1) se puede hacer cuando se quiera **sin romper nada visual** y
+es el que habilita todo lo demás. Cuando se encare, esta sección + DOCUMENTACION §15 son el plan.

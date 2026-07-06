@@ -640,3 +640,45 @@ funciones en runtime**, nunca al evaluar el módulo (no hay acceso en TDZ).
 
 **Futuro (si hiciera falta aún más):** `BitmapText` para los números, o pre-warm de más glifos. Hoy no
 es necesario.
+
+## 23. Coaches por-partida, objetivos súper ficha e intro de Resta rebalanceada (2026-07-05 quater)
+
+Sesión de correcciones de playtest + balance. Junto con §22 (perf texturas). Aún **sin deployar** al
+momento de escribir (verificar `git log`).
+
+### 23.1 Coaches/tutoriales de nivel ahora se REPITEN cada vez que jugás el nivel
+**Bug:** los coaches ligados a un nivel se marcaban en **localStorage para siempre** (`_alreadyCoached`
+→ claves `math_coached_super/_boss/_dir/_freeze/_supermade`). Una vez vistos **no volvían a aparecer**,
+ni en una "run nueva", porque el localStorage seguía marcado de sesiones viejas (por eso no salía el
+tutorial de súper ficha en el nivel 8). **Fix:** pasaron a **flags por-partida** (se resetean en
+`Controller.start()`, como ya hacían los coaches de etapa del jefe) → se muestran **cada vez que entrás
+o repetís el nivel**. Afecta: intro del jefe, súper ficha (2 operadores + "¡creada!"), dirección
+(resta/división), y congelar (hazards.js). Se eliminó el método muerto `_alreadyCoached`.
+- **El coach de "movimiento fallado"** (`math_coached_wrongmove`) se dejó **once-ever** a propósito
+  (no es de un nivel puntual; decisión del usuario). Sigue con localStorage directo.
+- Los flags viejos en localStorage quedan huérfanos (nadie los lee) — inofensivos.
+
+### 23.2 Objetivos de súper ficha (niveles 8 y 9)
+`levels.js`: nivel 8 "Súper doble" `[9,12]`→**`[8,12]`**; nivel 9 "Súper triple" `[9,12,15]`→**`[10,12,15]`**.
+Siguen siendo viables para cuentas de 2 operadores (8=2+3+3, 10=3+3+4…).
+
+### 23.3 Intro de Resta rebalanceada (niveles 11-13) — arranque MUY suave
+El mundo Resta empezaba fuerte (target 4, dígitos 1-9). Nuevo arranque gradual (`levels.js`):
+| Nivel | Nombre | Tablero | Fichas | Objetivo | Goal | Notas |
+|---|---|---|---|---|---|---|
+| 11 | Primera resta | 5×5 | 1-4 | **1** | 20 | 1 = 2−1,3−2,4−3. Goal bajo (cada cuenta suma 1). |
+| 12 | Segunda resta | 5×5 | 1-4 | **2** | 30 | 2 = 3−1,4−2. |
+| 13 | Tercera resta | 6×6 | 1-6 | **[1,2,3]** | 50 | Triple objetivo bajo; primer 6×6. |
+- **Clave de balance:** la barra suma el **VALOR** formado hasta `goal`. Con target chico cada cuenta
+  suma poco → `goal` debe ser bajo (target 1 + goal 20 = ~20 cuentas). No confundir con los goals 100+
+  de los niveles altos.
+- **Verificado por sim** (2000 tableros/nivel, réplica pura de `_healFixedBoard`): **0 cuentas formadas,
+  0 tableros bajo el mínimo de jugadas, cada objetivo del triple con ≥2 jugadas propias**. Sin deadlocks.
+- Los niveles 14-19 (rampa dura) siguen como estaban — a rebalancear en próximas sesiones.
+- **No cambió cantidad ni orden de niveles → NO se sube `PROGRESS_VERSION`.**
+
+### 23.4 Idea a futuro: caminos separados por operación (mapa ramificado)
+El usuario propuso que cada operación tenga su **path visual propio** (el jefe de Suma desbloquea el path
+de Resta; Suma sigue creciendo en su rama con sus propios jefes) en vez del camino lineal único.
+**Decisión: documentar y dejar preparado, NO implementar ahora.** Plan completo y por etapas (el
+bloqueante es el progreso por `id` estable, no el arte) en **DISEÑO_PROGRESION.md §19**.

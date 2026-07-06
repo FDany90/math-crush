@@ -121,6 +121,8 @@ export class Controller {
     this.coachActive = false               // hay un mensaje del coach en pantalla (pausa pistas/manito)
     this._madeSuper = false                // se acaba de generar una súper ficha (para su coach)
     this._pendingComboGuide = false        // hay que telegrafiar una jugada de 2 operadores (tutorial súper)
+    this._coachedSuperMade = false         // ya se explicó "súper ficha creada" (una vez POR PARTIDA)
+    this._coachedFreeze = false            // ya se explicó el ataque CONGELAR del jefe (una vez POR PARTIDA)
     this.moves = 0                         // movimientos hechos (para límite de pistas)
     this.autoHintCount = 0                 // pistas automáticas ya mostradas
     this.combo = 0
@@ -148,11 +150,11 @@ export class Controller {
     // Como el reloj arranca recién en el primer movimiento, no consume tiempo.
     if (this.tutorial) {
       this._coach([{ text: 'Mové las fichas para formar el número de arriba.', highlight: 'target' }])
-    } else if (this.boss && !this._alreadyCoached('math_coached_boss')) {
+    } else if (this.boss) {
       // Llegaste al JEFE: explicá qué hacer (formar los resultados que marca = daño) y que
       // va a atacar. El detalle del ataque CONGELAR se explica en la primera congelada.
       this._coach([{ text: '¡Llegaste al Rey ' + (this.level.ops?.[0] ?? '+') + '! 👹 Formá los resultados que marca arriba: cada cuenta le baja la vida. ¡Dejalo en 0 para ganar!' }])
-    } else if (this.level.superTile && !this._alreadyCoached('math_coached_super')) {
+    } else if (this.level.superTile) {
       // TUTORIAL de SÚPER FICHA (primera vez): explicá la cuenta de 2 operadores y, al cerrar
       // el coach, dejá la manito guía sobre una jugada de 2 operadores YA preparada.
       this._pendingComboGuide = true
@@ -160,7 +162,7 @@ export class Controller {
         { text: 'Nuevo truco: podés formar el número con DOS operadores. En vez de 4+8, probá 3+4+5 = 12.', highlight: 'target' },
         { text: 'Una cuenta de 2 operadores crea una SÚPER FICHA ✨. Te muestro una jugada preparada 👇' },
       ])
-    } else if (this.level.ops.some((o) => o === '−' || o === '÷') && !this._alreadyCoached('math_coached_dir')) {
+    } else if (this.level.ops.some((o) => o === '−' || o === '÷')) {
       // Primera vez en un nivel de resta/división: el ORDEN importa (no da igual como en la
       // suma). Aclaramos la DIRECCIÓN —no el tamaño—, porque más adelante habrá resultados
       // negativos donde el número grande NO va primero. Solo cuenta el sentido de las flechas.
@@ -220,14 +222,6 @@ export class Controller {
     if (this.ended) return
     const h = findComboMove(this.board.gridCharsMasked(), this.targets, this.md)
     if (h) this.board.showHandGuide(h.a, h.b)
-  }
-  // ¿ya se mostró este coach de UNA sola vez (en todo el juego)? Si no, lo marca y devuelve false.
-  _alreadyCoached(key) {
-    try {
-      if (localStorage.getItem(key)) return true
-      localStorage.setItem(key, '1')
-      return false
-    } catch { return true }   // sin localStorage: no molestar
   }
   _tick() {
     if (!this.timerOn) return
@@ -361,7 +355,8 @@ export class Controller {
     // SÚPER FICHA recién generada: la primera vez, marcarla y explicar cómo usarla.
     if (this._madeSuper) {
       this._madeSuper = false
-      if (!this._alreadyCoached('math_coached_supermade')) {
+      if (!this._coachedSuperMade) {
+        this._coachedSuperMade = true
         this.board.markSupers()
         this._coach([{ text: '¡Súper ficha creada! ✨ Es el + dorado brillante. Usalo en cualquier cuenta y explota en CRUZ: rompe toda la fila y la columna.' }])
         return

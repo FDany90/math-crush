@@ -762,3 +762,64 @@ Protegida del saneo/infestación. Activa en TODOS los niveles de objetivo fijo.
 6. **Estados de pieza nuevos** para niveles normales: roadmap priorizado en **DISEÑO §22**.
 7. **Antes del release real:** quitar nivel 41 de prueba; `DAILY_UNLIMITED=false`; rehabilitar
    Mult/Div; separar Supabase QA; progreso por `id` estable (§15/§19).
+
+## 25. Sesión 2026-07-09: ronda de feedback del playtest QA (niveles 1-20)
+
+> El usuario corrió los 20 niveles en QA y pasó feedback F1-F7 + mejoras M1-M3. TODO implementado
+> en esta sección (solo en `qa` hasta pedido explícito de promover).
+
+### 25.1 Densidad de SIGNOS por zona (F1 + M2) — regla nueva del saneo
+El nivel 1 se quedó con UN solo '+' (zonas densas de números sin nada que jugar = aburrido).
+Regla (`ensureSignDensity` en logic.js, llamada en `_healFixedBoard` ANTES de `breakFormedTargets`):
+**ninguna ventana deslizante de 3×3 sin signo (se agrega 1) y ninguna de 4×4 con menos de 2.**
+Elige celdas donde el signo sirve (`opUsableAt`) y repartidas (pocos signos vecinos). NO corre en la
+fase borrón del Rey − (`_noReplenish`: quedarse sin signos ES el jefe). Replicada en el sim.
+**Efecto medido:** operadores en pantalla suben (~5→7 en 6×6) → más jugadas y más combos regalados
+(N7 21→36% combos) → se compensó SUBIENDO goals (ver 25.2). Se acabaron los desiertos (secado ~0%).
+
+### 25.2 Rebalanceo mundo Suma (F3-F7) — todo MEDIDO con el sim
+- **N4 "Solo pares"**: era muy fácil (todo par formando 8; combos regalaban 39%). Ahora fichas
+  [2,4,6,8] → target **10** (=2+8,4+6: hay que BUSCAR el par entre 4 operandos), goal 170→**200**.
+  Medido: 12.6 movs, combos 34.6%.
+- **REORDEN 5↔6 (F4)**: el twist suave va ANTES del reloj. Nuevo orden: 5 = "Elegí tu objetivo 🎯"
+  (ver 25.3), 6 = Contrarreloj ⏱ (sin cambios). "Triple objetivo" se reemplazó por el nivel de
+  elección (el triple sigue existiendo en N9). ⚠ Cambia el orden de niveles pero NO se bumpeó
+  `PROGRESS_VERSION` (estrellas de 5/6 intercambian significado; tolerable en playtest — evaluar
+  bump si molesta).
+- **N7 "La docena" (F5)**: target 12 → **[10, 12]**, goal 200→**230** (13.2 movs, como antes pero
+  doble = más lectura).
+- **N8 "Súper doble" (F6)**: target [10,12] → **[11, 13]** (impares = pares menos obvios:
+  11=2+9,3+8,4+7,5+6; 13=4+9,5+8,6+7), goal 200→**230**.
+- **Coach de súper ficha (F6+F7)**: UNA sola vez en todo el juego (`_coachOnce('math_coached_super')`
+  en controller, patrón localStorage como el de 1er error) y texto mínimo: "Podés formar cuentas con
+  2 operadores." — la manito guía sigue mostrando la jugada preparada. Ya NO se repite en N9.
+
+### 25.3 Nivel "ELEGÍ TU OBJETIVO" 🎯 (M1) — twist nuevo `choose`
+El jugador ELIGE qué números formar: flag `choose: { pool, max, goalFactor }` en levels.js.
+- **N5 suma**: pool [3..10], hasta 2. **N14 resta** (reemplaza "Resta doble"): pool [1..5], fichas 1-6.
+- Flujo: `startLevel` ve `choose` → hook `chooseTarget` → overlay `TargetPicker` (Popups.jsx; chips
+  tocables, 1 o 2, el 3ro reemplaza al más viejo) → `ctrl.applyChosenTargets(nums)` rearma objetivos
+  fijos + generador sesgado + tablero + meta. Sin coach: el picker se explica solo.
+- **Meta escalada**: `goalNeed = goalFactor × promedio(elegidos)` (factor 20 ≈ 20 cuentas SIEMPRE:
+  elegir [3,4] no es grind, elegir [9,10] no es regalo). `target` en levels.js = default (sim/fallback).
+
+### 25.4 Pantalla de inicio de nivel ESPECÍFICA (F2)
+`StartPopup` ya no repite siempre el mismo texto: muestra **lo de ESTE nivel** — chips de objetivos
+("Formá 10 o 12"), meta de puntos, y filas SOLO si aplican: ⏱ segundos, ✨ súper ficha, 🔥 combos x2,
+🧘 relax, ✏️ menos intentos, 🔳 tablero 7×7. Nivel de jefe: mini-signo rojo CON CARA + "Atacalo con"
++ vida. Nivel choose: muestra el pool. (`levelBrief` de uiHelpers se eliminó.)
+
+### 25.5 Presentación del jefe (M3): cara en cinemáticas + sin "Rey"
+- **La MISMA cara del HUD ahora está en**: la cinemática de intro (mood 'menace': cejas en V +
+  sonrisita), la de furia ('rage': grito) y el desenlace de la victoria ('ko': ojos en X + boquita
+  triste, cae girando). Componente `CineFace` (Popups.jsx) + CSS `.cface` con posiciones en % del
+  box `1.15em` del glifo → escala a cualquier tamaño (cine grande, pop-up chico). Variante `.minus`.
+- **El jefe ya NO se llama "Rey"**: es SU SIGNO en rojo llamativo (`.boss-name`, #ff2e2e con glow;
+  banners "¡LLEGÓ +!" / "¡+ SE ENFURECE!" / "¡+ derrotado!"). Textos de toasts/coach sin "Rey"
+  ("El jefe congela…"). Los `level.name` internos ("El Rey +") quedan como id de métricas.
+
+### 25.6 CÓMO SEGUIR
+Igual que 24.6 (pérdidas → jefes ×÷ → súper multi-op → personaje fase 2 → estados nuevos), más:
+- Validar en playtest la ronda 25: densidad de signos (¿regala de más?), N4/N7/N8 endurecidos,
+  el picker de objetivos (¿se entiende sin coach?) y la cara del jefe en las cinemáticas.
+- Si el reorden 5↔6 confunde estrellas viejas → bumpear `PROGRESS_VERSION`.

@@ -54,8 +54,9 @@ export function StartPopup({ index, onClose, onPlay }) {
     <div className="overlay" onClick={onClose}>
       <div className="card start" onClick={(e) => e.stopPropagation()}>
         <button className="card-x" aria-label="Cerrar" onClick={onClose}>✕</button>
+        {/* Sin nombre/subtítulo de nivel (decisión 2026-07-06): evita tener que traducirlos.
+            `level.name` queda como identificador interno (métricas/dev). */}
         <div className="start-lvl">Nivel {index + 1}</div>
-        <div className="start-name">{lv.name}</div>
         <div className="start-desc">{levelBrief(lv)}</div>
         <button className="start-play" onClick={() => onPlay(index)}>¡Jugar!</button>
       </div>

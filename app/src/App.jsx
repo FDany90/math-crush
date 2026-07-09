@@ -577,7 +577,7 @@ export default function App() {
                   style={{ top: p.y + 'px', left: (p.x / MAP_W * 100) + '%', '--nc': zoneColor(i) }}
                   onClick={() => handleNode(i)}>
                   {i === currentLevel && <span className="node-here">¡Acá!</span>}
-                  {unlocked && i === currentLevel && <span className="node-name">{lv.name}</span>}
+                  {/* sin nombre de nivel en el mapa (2026-07-06): evita traducirlos; name = id interno */}
                   {isBoss && <span className="node-crown" aria-hidden="true">👹</span>}
                   {isTimed && <span className="node-clock" aria-hidden="true">⏱</span>}
                   {/* el número SIEMPRE se ve (aunque esté bloqueado); el candado va como chapita */}

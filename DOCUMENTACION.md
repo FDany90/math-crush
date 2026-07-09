@@ -682,3 +682,83 @@ El usuario propuso que cada operación tenga su **path visual propio** (el jefe 
 de Resta; Suma sigue creciendo en su rama con sus propios jefes) en vez del camino lineal único.
 **Decisión: documentar y dejar preparado, NO implementar ahora.** Plan completo y por etapas (el
 bloqueante es el progreso por `id` estable, no el arte) en **DISEÑO_PROGRESION.md §19**.
+
+## 24. Sesiones 2026-07-06: sim-balance, presencia de JEFES, ficha bomba, Rey − completo
+
+> TODO deployado a **QA y PROD** (último commit `6b15515`, ramas `qa` y `main` idénticas).
+> Detalle de diseño en DISEÑO_PROGRESION: §20 (presencia del jefe), §21 (ficha bomba), §22 (roadmap
+> de mecánicas nuevas). Esta sección resume TODO lo hecho para retomar sin el chat.
+
+### 24.1 Harness de SIMULACIÓN (`app/sim/simulate.mjs`) — "no se mejora lo que no se mide"
+Juega N partidas por nivel como un jugador (bot = movimiento válido al azar) replicando el loop real
+(swap → cascada/combos → colapso → saneo). Mide: movidas para ganar, movimientos posibles por turno,
+SECADO del tablero (turnos sin jugadas antes del saneo), churn del saneo (celdas cambiadas, díg→signo,
+% fallback de operadores) y puntos deliberado vs combos. Uso:
+```
+cd app && npx esbuild sim/simulate.mjs --bundle --format=esm --platform=node --outfile=sim/_b.mjs
+SIMN=200 node sim/_b.mjs 11 12     # niveles 1-based; sin args = todos; borrar sim/_b.mjs después
+```
+Limitaciones v1: no modela súper ficha, bomba ni jefes; el bot no "piensa". Con esto se rebalancearon
+(medido antes→después): N2 fichas 1-4 (combos 52→29%), N4 target 8 goal 170 (combos 60→37%),
+N5 80s/150 (18.4→14 movs), N11 goal 10 (15.6→7.8 movs, era grind), N12 6×6 goal 24 (secado 12.5→2%),
+N15 80s/75 (20.1→15.3), N16-19 goal 120. Loop: cambiar → simular → comparar → commitear.
+
+### 24.2 Saneo prioriza NÚMEROS + coach/flechas
+- `_healFixedBoard`: los operadores ya NO se reponen siempre — vienen "de arriba" (caída ~33%); el
+  saneo healea cambiando NÚMEROS (num→num) y solo repone operadores como FALLBACK si no alcanza.
+  Medido: ~25-30% menos conversiones díg→signo, 0 deadlocks.
+- Coach del ORDEN solo en el 1er nivel de resta (`orderCoach: true` en L11); en el resto lo dicen las
+  flechas, que ahora van en los CUATRO lados (tablero 94vw→86vw para que no se corten en mobile).
+- Sin nombres/subtítulos de nivel en la UI ("Amigos del 5" etc.): preparación para traducir.
+  `level.name` queda como id interno (métricas/dev).
+
+### 24.3 PRESENCIA DE JEFES (sistema completo, estilo videojuego) — DISEÑO §20
+- **Telegrafiado** (`hazards._bossTelegraph` + hook `bossAttack` en App.jsx): antes de CADA ataque el
+  signo del HUD embiste (wind-up + destello) y dispara PROYECTILES con SU signo a las celdas exactas
+  afectadas. Tablero bloqueado ~760ms (sin razas; `_teleSeq` invalida al reiniciar). Aplica a:
+  scatter, filas de infestación, borrado del Rey −, crecer ('grow') y achicar ('shrink') con destello
+  del marco. Los ticks de ataque tienen guard `_telegraphing` y "reintento en ~1s" si están bloqueados
+  (coach/cascada) para no perder el turno.
+- **Cinemáticas** (~3s, paso `{cine,sign}` del coach → `BossCine` en Popups.jsx, auto-avanza, tap
+  saltea): 'intro' al entrar (banner "¡EL REY X!") y 'phase' al cambiar de fase ("¡SE ENFURECE!").
+  Desenlace en WinScreen: el signo KO gris y mareado 💫 cae ("¡Rey X derrotado!").
+- **El signo del HUD es el personaje**: tiza roja con glow ACOTADO (blur chico, se veía borroso),
+  respira en idle (bossIdle), se ENFURECE bajo 50% HP (.enraged), y tiene **CARA** (ojos/cejas/boca,
+  CSS puro en App.jsx + styles): parpadea y mira en idle, cejas en V + grito al atacar (.attacking
+  desde bossAttackFx), ojos apretados de DOLOR al absorber golpes (.hurt desde flyTokens), ojos en X
+  al morir. Variante `.minus` reposiciona la cara alrededor de la barra −.
+- **SIN coaches explicativos**: "no hace falta explicar nada si se ve visualmente". Solo quedan:
+  tutorial N1, 2-operadores N8, orden N11, 1er error, freeze (×÷). Fichas especiales sin coach.
+- Fixes: los + del jefe ('infested') ya NO se rompen por contacto (solo el hielo; se convertían en
+  números vía saneo); reintento vs invasión = TODO el tablero explota (`Board.explodeAll`) y se
+  reconstruye fresco; 1ra fila de infestación pegada a la cinemática (tick con reintento).
+
+### 24.4 FICHA BOMBA 💣 — DISEÑO §21
+DOS cuentas perpendiculares CONECTADAS en el mismo paso (comparten celda: cruz/T/L — O PEGADAS
+ortogonalmente sin compartir, "L pegada") → la celda de contacto se vuelve BOMBA con el OPERADOR DEL
+NIVEL (resta → '−' usable; antes salía '+', bug). También en CASCADAS. Usarla en una cuenta EXPLOTA el
+3×3 con violencia: flash de todo el tablero + bola de fuego + doble onda + METRALLA (las piezas salen
+despedidas girando — `Board.clear(cells, blasts)`) + shake 17; suma el valor de los números rotos.
+Protegida del saneo/infestación. Activa en TODOS los niveles de objetivo fijo.
+
+### 24.5 Balance de JEFES (números finales)
+- **Rey + (N10):** hp **400**, expansiones 5×5→7×7 exactas cada 50 HP (350/300/250/200, `infestAt:
+  0.375`), FASE 2 (infestación) a **150 HP**. Filas suben cada 15s (1ra al cerrar la cinemática);
+  scatter 2 signos cada 10s (celdas que no formen cuenta, nunca fila 0).
+- **Rey − (N20):** hp **180**, encoge 7×7→5×5 cada 20 HP (160/140/120/100, `eraseAt: 4/9`), FASE 2
+  (borrón) a **80 HP**. Borra 1 ficha cada **9s** (se probó 4.5s = muy difícil, revertido) con patrón
+  **2 números : 1 signo** (rotación `_eraseCount`; los signos escasean 3× más lento). Encogida en OLA
+  suave (fichas del borde se disuelven escalonadas). El borrado es ataque telegrafiado (proyectil −).
+
+### 24.6 CÓMO SEGUIR (prioridad sugerida)
+1. **Playtest en PROD** de los 2 jefes + bomba (recién deployado; juntar reacciones y métricas §11).
+2. **Balance de PÉRDIDAS** (DISEÑO §9.5) — casi nadie pierde (5 intentos + reintento por corazón);
+   sin riesgo no hay tensión. El pendiente más importante de game-feel.
+3. **Jefes × y ÷** (contagio/clonar y mezclar/partir, DISEÑO §18): hoy cada uno es UNA entrada en
+   `BOSS_KINDS` + su ataque. Al terminarlos, rehabilitar Mult/Div (quitar `wip` en mapView.jsx).
+4. **Generalizar la súper ficha a − × ÷** (DISEÑO §16.b, hoy solo suma) — la bomba ya es multi-op.
+5. **Personaje fase 2** (DISEÑO §20.2): más expresiones (risa cuando fallás), cara también en la
+   cinemática, y quizá marca visual para los + del jefe (se confunden con operadores comunes).
+6. **Estados de pieza nuevos** para niveles normales: roadmap priorizado en **DISEÑO §22**.
+7. **Antes del release real:** quitar nivel 41 de prueba; `DAILY_UNLIMITED=false`; rehabilitar
+   Mult/Div; separar Supabase QA; progreso por `id` estable (§15/§19).

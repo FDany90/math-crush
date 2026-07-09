@@ -1259,3 +1259,48 @@ Protegida del mantenimiento (`bombCells` en los sets protegidos de `boardMainten
 infestación del jefe (`applyInfest` saltea súper/bomba). Coach 1 vez por partida (`_coachedBombMade`).
 **Activa en TODOS los niveles de objetivo fijo** (es rara: requiere doble cuenta conectada). Si el
 playtest muestra que regala mucho, gatearla por nivel con un flag (`bombTile`).
+
+## 22. Roadmap de mecánicas y estados de pieza NUEVOS (brainstorm 2026-07-06, no implementado)
+
+> Complementa el catálogo del §18 (jelly, candado, cajón, bomba¹, niebla — ¹la bomba YA se
+> implementó, §21, distinta a la idea original). Criterio de prioridad: (a) reusa el sistema
+> `CELL_STATES`/fichas especiales existente, (b) enseña o refuerza matemática, (c) genera
+> "momentos" (§1.4 sorpresa). Introducir de a UNO por mundo/tanda (teach→test→twist, §4).
+
+### 22.1 Estados de pieza (candidatos, orden sugerido de implementación)
+1. **🔒 Candado/cadena** (fácil: es un frozen que no ataca): ficha visible pero inusable hasta
+   romperla POR CONTACTO (1 cuenta al lado). Para niveles normales: enseña a jugar "cerca de".
+   Nivel-diseño: 3-5 candados sembrados al armar el tablero.
+2. **🎁 Cofre/piñata**: ficha especial que al romperse POR CONTACTO da premio (+1 pista, +tiempo
+   en contrarreloj, o puntos). Economía positiva, cero castigo — alinea con §7.6.
+3. **🍮 Gelatina 2 capas**: como candado pero requiere DOS contactos (la 1ra cuenta la debilita,
+   cambia el look). Rampa natural del candado.
+4. **🌫️ Niebla**: la ficha se ve como «?» hasta que hacés una cuenta adyacente (revela 3×3).
+   Twist de memoria/exploración; barato: overlay + flag reveal.
+5. **⏳ Ficha de arena**: cuenta regresiva visible (3-4 movimientos); si no la usás, se vuelve
+   PIEDRA (celda muerta hasta romper por contacto). Genera urgencia localizada sin reloj global.
+6. **🃏 Comodín**: vale como CUALQUIER dígito (el motor ya evalúa por segmento: al validar,
+   probar el valor que haga match). Premio raro de combos grandes o del cofre.
+7. **⭐ Multiplicador**: la cuenta que la incluye vale ×2 puntos a la barra. Simple y jugoso.
+8. **🐌 Pegajosa**: no cae con la gravedad (ancla su celda; lo de abajo colapsa alrededor).
+   Rompe el patrón mental de "todo cae" — para niveles avanzados.
+
+### 22.2 Mecánicas nuevas (más grandes)
+- **Combos de especiales** (estilo Candy Crush): bomba+bomba adyacentes = explosión 5×5;
+  súper+bomba en la misma cuenta = cruz que EXPLOTA cada celda que toca. Momentos épicos.
+- **Súper ficha en − × ÷** (pendiente §16.b): hoy solo suma. La bomba ya salió multi-op.
+- **Racha/streak**: N cuentas seguidas sin error → multiplicador visible que crece (x1.5, x2…)
+  y se pierde al fallar. Da tensión SIN quitar vidas (conecta con el problema de pérdidas §9.5).
+- **Objetivo con condición**: "formá 6 solo con pares", "solo cuentas verticales" — twists
+  baratos sobre el motor actual (filtro en la validación).
+- **Desafío diario**: 1 nivel generado del día (semilla por fecha) con tabla de amigos. Retención
+  D1/D7 pura (§10). Requiere backend mínimo (Supabase ya está).
+- **Jefes × y ÷** (§18): contagio/clonar (×: una ficha basura se duplica a una vecina por turno)
+  y mezclar/partir (÷: baraja una zona / parte el tablero en dos con un tajo).
+- **Mini-jefes de mitad de mundo** (nivel 5 de cada mundo, hoy contrarreloj): versión light de la
+  batalla (sin fases) para que el hito no aparezca solo cada 10 niveles.
+
+### 22.3 Antídotos al problema de PÉRDIDAS (§9.5) — a decidir con playtest
+La racha (22.2) + ficha de arena (22.1.5) agregan tensión sin castigo duro. Alternativa más
+agresiva: intentos 5→3 en mundos 2+, o que el reintento por corazón NO reponga intentos completos.
+Medir con métricas antes de elegir (win-rate por nivel, §11).

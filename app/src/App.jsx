@@ -59,6 +59,11 @@ export default function App() {
           { transform: 'scale(1.34)', filter: 'brightness(1.6) drop-shadow(0 0 16px #ffe07a)', offset: 0.4 },
           { transform: 'scale(1)', filter: 'brightness(1) drop-shadow(0 0 0 #ffe07a00)' },
         ], { duration: 380, easing: 'ease-out' })
+        // si el que recibe es el JEFE: cara de DOLOR (ojos apretados) mientras absorbe el golpe
+        if (chip?.classList.contains('boss-sign')) {
+          chip.classList.add('hurt')
+          clearTimeout(chip._hurtT); chip._hurtT = setTimeout(() => chip.classList.remove('hurt'), 380)
+        }
       }
     }
     // las fichas tardan ~340ms en llegar: llenar la barra justo cuando aterrizan (absorción)
@@ -71,6 +76,11 @@ export default function App() {
   // kind: 'scatter' | 'infest' (con celdas) | 'grow' (sin celdas: embestida + destello del marco).
   const bossAttackFx = useCallback(({ cells, rows, cols, kind }) => {
     const sign = document.querySelector('.boss-sign')
+    // cara de MALDAD durante el ataque (cejas en V + grito, clase .attacking sobre el signo)
+    if (sign) {
+      sign.classList.add('attacking')
+      setTimeout(() => sign.classList.remove('attacking'), 800)
+    }
     // 1) wind-up + embestida del signo (crece, tiembla y golpea hacia abajo/el tablero)
     if (sign) sign.animate([
       { transform: 'scale(1) rotate(0deg)', filter: 'brightness(1)' },
@@ -403,9 +413,17 @@ export default function App() {
                de los resultados para golpearlo; a 0 HP se derrota. */
             <div className="boss">
               {/* el glifo '−' de la fuente tiza queda muy bajo → barra dibujada y centrada */}
-              {/* el signo VIVO: idle respirando; bajo 50% HP se enfurece (anim más rápida y roja) */}
+              {/* el signo VIVO: idle respirando; bajo 50% HP se enfurece (anim más rápida y roja).
+                  La CARA (ojos/cejas/boca) va sobre el centro del signo: parpadea y mira en idle,
+                  cejas en V + grito al atacar/enfurecerse, ojos en X al ser derrotado. */}
               <div className={'boss-sign' + (boss.hp <= 0 ? ' defeated' : (boss.max && boss.hp / boss.max <= 0.5 ? ' enraged' : ''))}>
                 {boss.sign === '−' ? <span className="minus-bar" /> : boss.sign}
+                <div className="boss-face" aria-hidden="true">
+                  <span className="bf-brow l" /><span className="bf-brow r" />
+                  <span className="bf-eye l"><span className="bf-pupil" /></span>
+                  <span className="bf-eye r"><span className="bf-pupil" /></span>
+                  <span className="bf-mouth" />
+                </div>
               </div>
               <div className="boss-side">
                 <div className="boss-hpbar">

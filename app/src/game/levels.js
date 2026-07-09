@@ -57,7 +57,9 @@ export const LEVELS = [
   // final; `infestAt` = fracción de HP donde empieza la fase 2. Este jefe NO usa el freeze.
   // 3 objetivos [8,10,12] (misma cantidad que todos los jefes): se apoyan en lo recién visto
   // (12 = nivel 8, 10/8 previos); no retrocede a números tempranos → acompaña el progreso.
-  { name: 'El Rey +', size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [8, 10, 12], boss: { hp: 500, expandTo: 7, infestAt: 0.5 }, quota: 99 },
+  // HP 400: expansiones cada 50 HP (350/300/250/200, los umbrales caen solos con infestAt=0.375)
+  // y FASE 2 (infestación) a 150 HP → etapa final más corta, hay chances reales de ganar.
+  { name: 'El Rey +', size: 5, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [8, 10, 12], boss: { hp: 400, expandTo: 7, infestAt: 0.375 }, quota: 99 },
 
   // ================= MUNDO RESTA (niveles 11-19 + hito) — RAMPA DE DIFICULTAD =================
   // Mundo 2: resta de 1 cifra, resultados ≥0. Rampa balanceada a mano (2026-07-05).

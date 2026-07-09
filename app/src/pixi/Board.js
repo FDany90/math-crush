@@ -377,6 +377,20 @@ export class Board {
       for (let c = 0; c < this.cols; c++) if (this.tiles[r]?.[c]?.bomb) s.add(r + ',' + c);
     return s;
   }
+  // EXPLOTAR TODO el tablero (reintento contra el jefe: la invasión vuela y cae tablero nuevo).
+  // Las fichas se achican a 0 con delays al azar + algunos bursts + temblor. Devuelve promesa.
+  async explodeAll() {
+    this.shake(10);
+    const proms = [];
+    for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      const t = this.tiles[r]?.[c];
+      if (!t) continue;
+      if (Math.random() < 0.22) this.burst(t.x, t.y, 0xf4f1e8);
+      proms.push(tween(t.scale, { x: 0, y: 0 }, 0.2 + Math.random() * 0.16, 'back.in(1.8)'));
+    }
+    await Promise.all(proms);
+  }
+
   // EXPLOSIÓN de la bomba: onda expansiva naranja + flash del 3×3 + burst central
   bombBlast(r, c) {
     const x = this.px(c), y = this.py(r);

@@ -27,9 +27,18 @@ export const BOSS_KINDS = {
   '+': {
     startAttacks: (ctrl) => ctrl._startScatter(),   // fase 1: esparce + aislados cada 10s
     onRetry: (ctrl) => {
-      ctrl._breakAllStates()                        // limpia TODA la infestación de +
-      ctrl.hooks.toast?.('¡Limpiaste la invasión! Seguí sumando')
-      if (ctrl.infest) ctrl._startInfest()
+      // REINTENTO = tablero NUEVO: la invasión entera EXPLOTA y caen fichas frescas. (Antes solo
+      // se limpiaba el estado y las fichas quedaban idénticas hasta el próximo movimiento — se
+      // sentía roto, bug de playtest.)
+      ctrl._breakAllStates()
+      ctrl.board.locked = true
+      ctrl.board.explodeAll().then(() => {
+        ctrl.board.locked = false
+        if (ctrl.ended) return
+        ctrl._rebuild()                             // tablero nuevo, saneado y con jugadas garantizadas
+        ctrl.hooks.toast?.('🧹 ¡Limpiaste la invasión! Tablero nuevo')
+        if (ctrl.infest) ctrl._startInfest()
+      })
     },
     phase: (ctrl, frac) => {
       const b = ctrl.boss

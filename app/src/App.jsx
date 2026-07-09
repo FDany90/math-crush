@@ -8,7 +8,7 @@ import { initMetrics, getNick, setNick, trackEvent } from './metrics.js'
 import { WORLDS, zoneColor, isWip, worldOf, MAP_EQS, buildMapDoodles, ChalkDoodle, Mascota, MAP_W, mapGeometry, MapBridge, Stars } from './mapView.jsx'
 import { tokenColor, fmtMMSS, buildDoodles, buildConfetti } from './uiHelpers.js'
 import { loadProgress, saveProgress, loadHearts, saveHearts, HEARTS_MAX, heartsNextInSec } from './storage.js'
-import { CoachBubble, WinScreen, StartPopup, ResultCard, SettingsPopup, DailyPopup, NickPopup, WipPopup } from './Popups.jsx'
+import { CoachBubble, WinScreen, StartPopup, TargetPicker, ResultCard, SettingsPopup, DailyPopup, NickPopup, WipPopup } from './Popups.jsx'
 
 export default function App() {
   const mountRef = useRef(null)
@@ -172,6 +172,7 @@ export default function App() {
   const [nickOpen, setNickOpen] = useState(false)                 // pop-up "Ingresá tu Nick" (nivel 3)
   const [nickInput, setNickInput] = useState('')
   const [coach, setCoach] = useState(null)           // mensajes flotantes (tutorial/avisos); array de pasos
+  const [picker, setPicker] = useState(null)         // "elegí tu objetivo": { pool, max } | null
   const [inventory, setInventory] = useState([])
   const [result, setResult] = useState(null)          // {index,score,stars,win}
   const menuDoodles = useMemo(() => buildDoodles(), [screen])   // nuevos garabatos cada vez que se abre el menú
@@ -212,6 +213,7 @@ export default function App() {
         setBoss: (b) => setBoss(b),
         bossAttack: bossAttackFx,
         coach: (steps) => setCoach(steps),
+        chooseTarget: (p) => setPicker(p),   // nivel "elegí tu objetivo": abre el picker de números
         onHintUsed: (index) => trackEvent('hint', index),
         onAddMinute: (index) => trackEvent('continue', index),
         setGoal: (g) => setGoal(g),
@@ -369,7 +371,7 @@ export default function App() {
   const playLevel = (i) => {
     if (!isUnlocked(i)) return
     clearTimeout(startPopupTimer.current)
-    setStartPopup(null); setCoach(null); setCurIdx(i); setResult(null); setScreen('game')
+    setStartPopup(null); setCoach(null); setPicker(null); setCurIdx(i); setResult(null); setScreen('game')
     ctrlRef.current?.startLevel(i)
     trackEvent('start', i)
     // Pedir el nick al empezar el nivel 3 (índice 2), solo si no lo puso aún.
@@ -665,13 +667,16 @@ export default function App() {
 
       <StartPopup index={startPopup} onClose={() => setStartPopup(null)} onPlay={playLevel} />
 
+      {/* picker "elegí tu objetivo": el nivel arranca recién cuando el jugador elige sus números */}
+      <TargetPicker picker={picker} onConfirm={(sel) => { setPicker(null); ctrlRef.current?.applyChosenTargets(sel) }} />
+
       <ResultCard result={result} hearts={hearts}
         onRetry={() => { spendHeart(); ctrlRef.current?.resumeWithBonus() }}
         onExit={() => { setResult(null); setScreen('map') }} />
 
       {settingsOpen && (
         <SettingsPopup levelNum={target.level} onClose={() => setSettingsOpen(false)}
-          onLeave={() => { ctrlRef.current?.abandon(); setSettingsOpen(false); setCoach(null); setResult(null); setScreen('map') }} />
+          onLeave={() => { ctrlRef.current?.abandon(); setSettingsOpen(false); setCoach(null); setPicker(null); setResult(null); setScreen('map') }} />
       )}
 
       {dailyOpen && (

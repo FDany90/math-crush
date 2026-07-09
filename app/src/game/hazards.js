@@ -60,7 +60,7 @@ export const BOSS_KINDS = {
               else ctrl.board.addCol(ctrl.gen.randTile)               // par = columna derecha
             }
             ctrl.board.shake(8)
-            ctrl.hooks.toast?.('🟩 ¡El Rey + agranda el tablero!')
+            ctrl.hooks.toast?.('🟩 ¡El + agranda el tablero!')
             if (ctrl.fixedTargets != null) ctrl._healFixedBoard()  // re-saneo target-rich en el nuevo tamaño
             // sin coach: el telegrafiado (embestida + destello del marco) + la ola de fichas lo cuentan solos
           })
@@ -91,7 +91,7 @@ export const BOSS_KINDS = {
       ctrl._breakAllStates()                                    // los signos tachados vuelven a ser usables
       ctrl._noReplenish = false
       if (ctrl.fixedTargets != null) ctrl._healFixedBoard()     // repone una tanda sana de signos
-      ctrl.hooks.toast?.('✏️ ¡Signos repuestos! Seguí atacando al Rey −')
+      ctrl.hooks.toast?.('✏️ ¡Signos repuestos! Seguí atacando al −')
       if (ctrl._erasing) { ctrl._noReplenish = true; ctrl._startErase() }   // y sigue borrando
     },
     phase: (ctrl, frac) => {
@@ -115,7 +115,7 @@ export const BOSS_KINDS = {
               else ctrl.board.removeCol()               // par = columna derecha
             }
             ctrl.board.shake(8)
-            ctrl.hooks.toast?.('🧽 ¡El Rey − achica el tablero!')
+            ctrl.hooks.toast?.('🧽 ¡El − achica el tablero!')
             // NO re-sanear al achicar: sólo se sacan celdas del borde (no crea cuentas formadas), y
             // el próximo movimiento ya corre el mantenimiento normal → menos cambios de fichas de golpe.
             // Sin coach: el telegrafiado + el borrón del borde lo cuentan solos.
@@ -222,7 +222,7 @@ export const hazardMethods = {
       this.hooks.toast?.('❄️ ¡El jefe congeló ' + toFreeze.length + ' ficha' + (toFreeze.length > 1 ? 's' : '') + '!')
       if (!this.ended && !this._coachedFreeze) {
         this._coachedFreeze = true
-        this._coach([{ text: 'El Rey ' + (this.level.ops?.[0] ?? '+') + ' CONGELA fichas ❄️. Las que tienen hielo no se pueden usar ni mover. Formá una cuenta al lado para romper el hielo 💥.' }])
+        this._coach([{ text: 'El jefe CONGELA fichas ❄️. Las que tienen hielo no se pueden usar ni mover. Formá una cuenta al lado para romper el hielo 💥.' }])
       }
     }
     this._bossCheckStuck()   // ¿te dejó sin movimientos? → perdés

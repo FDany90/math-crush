@@ -73,7 +73,7 @@ export const BOSS_KINDS = {
             { text: '¡El Rey + se cansó y quiere hacerte perder! Ahora sube FILAS enteras. ¡Apurate a derrotarlo antes de que tape el tablero!' },
           ])
         }
-        ctrl._startInfest(3500)   // primera fila apenas termine la cinemática/coach; luego cada INFEST_MS
+        ctrl._startInfest(1500)   // primera fila APENAS se cierre la cinemática/coach (el tick reintenta cada 1s si siguen abiertos); luego cada INFEST_MS
       }
     },
   },
@@ -279,7 +279,11 @@ export const hazardMethods = {
     for (const { r, c } of cells)
       for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const rr = r + dr, cc = c + dc, k = rr + ',' + cc
-        if (blocked.has(k) && this.board.tiles[rr]?.[cc]?.state !== 'erased') { toBreak.push({ r: rr, c: cc }); blocked.delete(k) }
+        const st = this.board.tiles[rr]?.[cc]?.state
+        // SOLO se rompe por contacto el HIELO. 'erased' es permanente y 'infested' (los + del
+        // jefe) NO se rompe: si se rompiera, quedaban como + comunes y el saneo los convertía
+        // en números (bug visto en playtest: "los + del jefe desaparecen tras una suma cerca").
+        if (blocked.has(k) && st !== 'erased' && st !== 'infested') { toBreak.push({ r: rr, c: cc }); blocked.delete(k) }
       }
     if (toBreak.length) this.board.clearState(toBreak)
   },
@@ -294,8 +298,14 @@ export const hazardMethods = {
   _infestTick() {
     this._infestId = null
     if (this.ended) return
-    if (this._telegraphing) { this._infestId = setTimeout(() => this._infestTick(), 1200); return }   // hay otro ataque animándose: reintentar en breve
-    if (this.started && !this.busy && !this.coachActive) this._infestRise()
+    // Si la subida está BLOQUEADA (coach/cinemática en pantalla, cascada, otro ataque animándose),
+    // NO perder el turno: reintentar en ~1 s hasta poder subir. Antes se saltaba y esperaba otros
+    // 15 s enteros → la primera fila llegaba desconectada de la cinemática de fase.
+    if (this._telegraphing || !this.started || this.busy || this.coachActive) {
+      this._infestId = setTimeout(() => this._infestTick(), 1000)
+      return
+    }
+    this._infestRise()
     this._infestId = setTimeout(() => this._infestTick(), INFEST_MS)
   },
   // sube el frente: en cada columna infesta la celda LIBRE más abajo (llena de abajo hacia arriba;

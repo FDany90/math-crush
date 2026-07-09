@@ -123,8 +123,10 @@ export class Controller {
     this.coachedTutorialFirst = false      // ya se mostró el 2do paso del tutorial (nivel 1)
     this.coachActive = false               // hay un mensaje del coach en pantalla (pausa pistas/manito)
     this._madeSuper = false                // se acaba de generar una súper ficha (para su coach)
+    this._madeBomb = false                 // se acaba de generar una ficha bomba (para su coach)
     this._pendingComboGuide = false        // hay que telegrafiar una jugada de 2 operadores (tutorial súper)
     this._coachedSuperMade = false         // ya se explicó "súper ficha creada" (una vez POR PARTIDA)
+    this._coachedBombMade = false          // ya se explicó "ficha bomba creada" (una vez POR PARTIDA)
     this._coachedFreeze = false            // ya se explicó el ataque CONGELAR del jefe (una vez POR PARTIDA)
     this.moves = 0                         // movimientos hechos (para límite de pistas)
     this.autoHintCount = 0                 // pistas automáticas ya mostradas
@@ -369,6 +371,15 @@ export class Controller {
         return
       }
     }
+    // FICHA BOMBA recién generada (dos cuentas conectadas): la primera vez, explicarla.
+    if (this._madeBomb) {
+      this._madeBomb = false
+      if (!this._coachedBombMade) {
+        this._coachedBombMade = true
+        this._coach([{ text: '💣 ¡Formaste DOS cuentas conectadas y creaste una FICHA BOMBA! Es el + naranja. Usalo en una cuenta y explota todo alrededor.' }])
+        return
+      }
+    }
     if (consumed.size > 0 && this._maybeSwitchTarget()) return   // el objetivo cambió: coach + pausa
     // Tutorial (nivel 1): 2do paso, recién DESPUÉS del primer acierto (no todo junto al arrancar).
     if (this.tutorial && consumed.size > 0 && !this.coachedTutorialFirst) {
@@ -452,6 +463,46 @@ export class Controller {
         for (const { r, c } of superSpawn) all.delete(r + ',' + c)   // no limpiar: se vuelve súper
       }
 
+      // ---- FICHA BOMBA 💣 ----
+      // DETONAR: si una bomba participa de esta cuenta, explota TODO el 3×3 alrededor y
+      // suma a los puntos el valor de los números que rompe (como la cruz de la súper).
+      let bombSum = 0
+      for (const key of [...all]) {
+        const [r, c] = key.split(',').map(Number)
+        if (!this.board.isBomb(r, c)) continue
+        this.board.bombBlast(r, c)
+        this.board.shake(10)
+        for (let rr = r - 1; rr <= r + 1; rr++) for (let cc = c - 1; cc <= c + 1; cc++) {
+          if (rr < 0 || cc < 0 || rr >= this.board.rows || cc >= this.board.cols) continue
+          const k = rr + ',' + cc
+          if (all.has(k)) continue
+          all.add(k)
+          const ch = grid[rr]?.[cc]
+          if (ch && ch >= '0' && ch <= '9') bombSum += Number(ch)   // sólo números (no operadores)
+        }
+      }
+      if (bombSum > 0) this.hooks.toast?.('💣 ¡BOOM! +' + bombSum + ' puntos')
+      // GENERAR: DOS cuentas CONECTADAS (en L o en cruz) en el mismo movimiento → la celda
+      // COMPARTIDA se convierte en ficha bomba '+'. Solo jugada deliberada (no cascadas).
+      let bombSpawn = null
+      if (combo === 0) {   // se evalúa ANTES de incrementar combo (abajo): 0 = jugada del jugador
+        const segs = findTargetSegments(mgrid, this.targets, this.md, this.mo)
+        const isRow = (s) => s.cells.length >= 2 && s.cells[0].r === s.cells[1].r
+        outer: for (const a of segs) for (const b of segs) {
+          if (a === b || isRow(a) === isRow(b)) continue          // una fila + una columna
+          const setA = new Set(a.cells.map(({ r, c }) => r + ',' + c))
+          const shared = b.cells.find(({ r, c }) => setA.has(r + ',' + c))
+          if (shared) { bombSpawn = shared; break outer }
+        }
+        if (bombSpawn) {
+          const k = bombSpawn.r + ',' + bombSpawn.c
+          // no convertir si esa celda ya es especial o va a ser súper
+          if (this.board.isSuper(bombSpawn.r, bombSpawn.c) || this.board.isBomb(bombSpawn.r, bombSpawn.c) ||
+            superSpawn.some(({ r, c }) => r + ',' + c === k)) bombSpawn = null
+          else all.delete(k)                                       // no limpiar: se vuelve bomba
+        }
+      }
+
       combo++; this.combo = combo
       // cuentas por SEGMENTO (no por valor distinto): formar el objetivo 2 veces en un
       // movimiento cuenta 2.
@@ -463,7 +514,7 @@ export class Controller {
       // jugador o combo. Ya NO se suma tiempo por cuenta (el reloj sólo cuenta hacia atrás).
       // En "Fiebre de combos" (comboFever) el combo suma DOBLE valor.
       // barra = valor de la cuenta (+ x2 en comboFever) + BONUS de la cruz (súper ficha).
-      const barAdd = ((!deliberate && this.level.comboFever) ? tg.sum * 2 : tg.sum) + crossSum
+      const barAdd = ((!deliberate && this.level.comboFever) ? tg.sum * 2 : tg.sum) + crossSum + bombSum
       const dec = (!deliberate && this.level.comboFever) ? cuentas * 2 : cuentas
       if (cuentas > 0) {
         // Se actualiza el total INTERNO (para la victoria); el llenado VISIBLE de la barra
@@ -504,6 +555,11 @@ export class Controller {
         for (const { r, c } of superSpawn) this.board.makeSuper(r, c)
         this._madeSuper = true                            // para el coach "¡súper ficha creada!" en _afterMove
         this.hooks.toast?.('✨ ¡Súper ficha +! Usala en una cuenta para explotar en cruz')
+      }
+      if (bombSpawn) {
+        this.board.makeBomb(bombSpawn.r, bombSpawn.c)
+        this._madeBomb = true                             // para el coach "¡ficha bomba!" en _afterMove
+        this.hooks.toast?.('💣 ¡Doble cuenta conectada! Creaste una FICHA BOMBA')
       }
       await this.board.collapse(this.gen.randTile)
       this._applyTidy()

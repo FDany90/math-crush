@@ -25,7 +25,7 @@ export const maintenanceMethods = {
     if (this._noReplenish) {
       const grid = this.board.gridChars()
       const changed = breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo)
-      const protectedK = new Set([...this.board.cellsWithState(), ...this.board.superCells()])
+      const protectedK = new Set([...this.board.cellsWithState(), ...this.board.superCells(), ...this.board.bombCells()])
       const bg = changed.filter(([r, c]) => !protectedK.has(r + ',' + c))
       if (bg.length) this.board.applyCharsPlain(bg, grid)
       return
@@ -113,7 +113,7 @@ export const maintenanceMethods = {
     // NUNCA modificar fichas con estado (hielo/infestación) NI súper fichas: el mantenimiento las
     // saltea (si no, setChar borraría su look y se cambiaría una ficha especial del jugador).
     const stateKeys = this.board.cellsWithState()
-    const protectedK = new Set([...stateKeys, ...this.board.superCells()])
+    const protectedK = new Set([...stateKeys, ...this.board.superCells(), ...this.board.bombCells()])
     // mantenimiento de fondo: escondido en el temblor (sin animación), excluyendo lo sembrado
     const bg = [...new Map(changed.map(([r, c]) => [r + ',' + c, [r, c]])).values()]
       .filter(([r, c]) => !seededKeys.has(r + ',' + c) && !protectedK.has(r + ',' + c))

@@ -1242,3 +1242,20 @@ sobre el glifo, tanto en el HUD como en las cinemáticas). Estados propuestos (m
 Impl sugerida: componente `BossFace` (SVG con grupos cejas/ojos/boca, transiciones CSS por clase de
 estado) + un hook `bossMood(state)` desde el controller en los mismos puntos donde hoy se disparan
 telegrafiado/daño/fallo. Sin assets externos (todo SVG de tiza, coherente con el tema pizarrón).
+
+## 21. FICHA BOMBA 💣 (dos cuentas conectadas en L/cruz) — IMPLEMENTADA (2026-07-06)
+
+**Regla:** si en el MISMO movimiento (jugada deliberada, no cascadas) se forman **DOS cuentas
+CONECTADAS** — una en fila y una en columna que comparten una celda (forma de L o de cruz) — la
+**celda compartida** se convierte en una **FICHA BOMBA**: un `+` usable con **aura naranja + 💣**
+y latido de mecha. **Usarla en una cuenta** hace explotar **todo el 3×3** alrededor y **suma a los
+puntos el valor de los números** que rompe (paralelo exacto de la súper ficha, que es cruz entera).
+
+**Impl (espejo de la súper):** `Tile.bomb` + `_applyBomb` (decoración) · `Board.makeBomb/isBomb/
+bombCells/bombBlast` (FX: zona 3×3 + onda + burst naranja) · detección y spawn en
+`Controller._resolve` (detonar: agrega el 3×3 a `all` + `bombSum` a la barra; generar: intersección
+de un segmento-fila con un segmento-columna vía `findTargetSegments`, solo con `combo === 0`).
+Protegida del mantenimiento (`bombCells` en los sets protegidos de `boardMaintenance`) y de la
+infestación del jefe (`applyInfest` saltea súper/bomba). Coach 1 vez por partida (`_coachedBombMade`).
+**Activa en TODOS los niveles de objetivo fijo** (es rara: requiere doble cuenta conectada). Si el
+playtest muestra que regala mucho, gatearla por nivel con un flag (`bombTile`).

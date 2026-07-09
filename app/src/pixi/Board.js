@@ -29,10 +29,13 @@ function tween(target, props, dur = 0.2, ease = 'power2.out') {
 }
 
 class Tile extends Container {
-  constructor(ch) { super(); this.r = 0; this.c = 0; this.state = null; this._overlay = null; this.super = false; this._superTl = null; this.setChar(ch); }
-  // matar el latido de la súper (al re-dibujar la ficha o al destruirla) para no dejar
+  constructor(ch) { super(); this.r = 0; this.c = 0; this.state = null; this._overlay = null; this.super = false; this._superTl = null; this.bomb = false; this._bombTl = null; this.setChar(ch); }
+  // matar los latidos (súper/bomba) al re-dibujar la ficha o destruirla, para no dejar
   // tweens corriendo sobre gráficos ya borrados.
-  _killSuperPulse() { if (this._superTl) { this._superTl.kill(); this._superTl = null; } }
+  _killSuperPulse() {
+    if (this._superTl) { this._superTl.kill(); this._superTl = null; }
+    if (this._bombTl) { this._bombTl.kill(); this._bombTl = null; }
+  }
   destroy(opts) { this._killSuperPulse(); super.destroy(opts); }
   // SÚPER FICHA (mecánica tipo Candy Crush): un operador "cargado". Se ve especial (dorado + ✨
   // + aura). setChar re-dibuja la ficha, así que esto se re-aplica después de cada setChar.
@@ -57,6 +60,24 @@ class Tile extends Container {
     for (const sp of sparks) this._superTl.to(sp.scale, { x: 1.35, y: 1.35, duration: 0.68, ease: 'sine.inOut' }, 0);
   }
   setSuper(v) { this.super = !!v; this.setChar(this.ch); }
+  // FICHA BOMBA 💣: se crea al formar DOS cuentas conectadas (L o cruz) en un movimiento.
+  // Usarla en una cuenta explota TODO el 3×3 alrededor. Look: aura naranja + mecha 💣.
+  _applyBomb() {
+    const s = TILE - 8, rad = 13;
+    const aura = new Graphics();
+    aura.roundRect(-s / 2, -s / 2, s, s, rad).fill({ color: 0xff7a29, alpha: 0.2 });
+    aura.roundRect(-s / 2 - 3, -s / 2 - 3, s + 6, s + 6, rad + 3).stroke({ color: 0xff9550, width: 3, alpha: 0.95 });
+    aura.roundRect(-s / 2 - 1, -s / 2 - 1, s + 2, s + 2, rad + 1).stroke({ color: 0xffd8b0, width: 1.5, alpha: 0.7 });
+    this.addChild(aura);
+    const fuse = new Text({ text: '💣', style: { fontFamily: 'sans-serif', fontSize: 16 } });
+    fuse.anchor.set(0.5); fuse.x = s / 2 - 8; fuse.y = -s / 2 + 8; this.addChild(fuse);
+    // LATIDO de mecha encendida (más nervioso que el de la súper)
+    this._bombTl = gsap.timeline({ repeat: -1, yoyo: true });
+    this._bombTl.to(aura.scale, { x: 1.1, y: 1.1, duration: 0.4, ease: 'sine.inOut' }, 0)
+      .to(aura, { alpha: 0.55, duration: 0.4, ease: 'sine.inOut' }, 0)
+      .to(fuse.scale, { x: 1.4, y: 1.4, duration: 0.4, ease: 'sine.inOut' }, 0);
+  }
+  setBomb(v) { this.bomb = !!v; this.setChar(this.ch); }
   // aplica el overlay visual del estado actual (si tiene). setChar borra los hijos, así que
   // esto se vuelve a llamar tras cada setChar para conservar el efecto.
   _applyOverlay() {
@@ -90,8 +111,9 @@ class Tile extends Container {
     }
     const tex = getTileTexture(ch, this.super);   // súper = número dorado (variante propia)
     if (tex) this._sprite.texture = tex;
-    // re-pintar decoraciones sobre el sprite (súper ficha y/o estado como el hielo)
+    // re-pintar decoraciones sobre el sprite (súper/bomba y/o estado como el hielo)
     if (this.super) this._applySuper();
+    if (this.bomb) this._applyBomb();
     this._overlay = null;
     if (this.state) this._applyOverlay();
   }
@@ -263,7 +285,7 @@ export class Board {
   applyInfest(cells) {
     for (const { r, c } of cells) {
       const t = this.tiles[r]?.[c];
-      if (!t || t.state) continue;               // no pisar fichas con otro estado
+      if (!t || t.state || t.super || t.bomb) continue;   // no pisar estados NI fichas especiales del jugador
       t.setChar('+');
       t.setState('infested');
       // aparición NOTORIA: pop grande + destello (se ve el intercambio de ficha por un +)
@@ -337,6 +359,40 @@ export class Board {
     for (let r = 0; r < this.rows; r++)
       for (let c = 0; c < this.cols; c++) if (this.tiles[r]?.[c]?.super) s.add(r + ',' + c);
     return s;
+  }
+
+  // ---------- FICHA BOMBA 💣 (dos cuentas conectadas en L/cruz en un movimiento) ----------
+  makeBomb(r, c) {
+    const t = this.tiles[r]?.[c];
+    if (!t || t.bomb || t.super) return;
+    t.setChar('+');            // la bomba es un operador '+' usable
+    t.setBomb(true);
+    gsap.fromTo(t.scale, { x: 1.4, y: 1.4 }, { x: 1, y: 1, duration: 0.45, ease: 'back.out(2.2)' });
+    this.burst(t.x, t.y, 0xff9550);
+  }
+  isBomb(r, c) { return !!this.tiles[r]?.[c]?.bomb; }
+  bombCells() {
+    const s = new Set();
+    for (let r = 0; r < this.rows; r++)
+      for (let c = 0; c < this.cols; c++) if (this.tiles[r]?.[c]?.bomb) s.add(r + ',' + c);
+    return s;
+  }
+  // EXPLOSIÓN de la bomba: onda expansiva naranja + flash del 3×3 + burst central
+  bombBlast(r, c) {
+    const x = this.px(c), y = this.py(r);
+    const zone = new Graphics();
+    zone.roundRect(-TILE * 1.5, -TILE * 1.5, TILE * 3, TILE * 3, 14).fill({ color: 0xffa15e, alpha: 0.5 });
+    zone.x = x; zone.y = y;
+    this.fx.addChild(zone);
+    gsap.fromTo(zone.scale, { x: 0.3, y: 0.3 }, { x: 1, y: 1, duration: 0.18, ease: 'power2.out' });
+    gsap.to(zone, { alpha: 0, duration: 0.55, ease: 'power2.out', onComplete: () => { if (!zone.destroyed) zone.destroy(); } });
+    const wave = new Graphics();
+    wave.circle(0, 0, TILE * 0.5).stroke({ color: 0xffc08a, width: 7, alpha: 0.95 });
+    wave.x = x; wave.y = y;
+    this.fx.addChild(wave);
+    gsap.to(wave.scale, { x: 3.4, y: 3.4, duration: 0.5, ease: 'power2.out' });
+    gsap.to(wave, { alpha: 0, duration: 0.5, ease: 'power2.out', onComplete: () => { if (!wave.destroyed) wave.destroy(); } });
+    this.burst(x, y, 0xff9550);
   }
   // destello en CRUZ (fila + columna) al detonar una súper ficha: haces dorados que se
   // ensanchan + onda expansiva + burst dorado en el centro. Épico pero sin exagerar.

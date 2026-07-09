@@ -7,7 +7,7 @@
 import {
   ensureMinOperators, breakFormedTargets, plantTargetMove, countTargetMoves,
   addTargetMovesSubtle, destrandOperators, seedTargetMovesNear, findHintFallback,
-  countComboMoves, plantComboMove, pickTargets,
+  countComboMoves, plantComboMove, pickTargets, ensureSignDensity,
 } from './logic.js'
 
 const NEAR_MOVES = 3   // cuentas fáciles que se siembran (visibles) alrededor de donde jugás
@@ -38,6 +38,10 @@ export const maintenanceMethods = {
     // Resta: dígitos que se volvían '−'). Solo si cambiar números NO alcanza (faltan operadores para
     // armar jugadas) reponemos operadores como FALLBACK (más abajo).
     changed.push(...destrandOperators(grid, this.gen))
+    // DENSIDAD por ZONA (regla de playtest): ninguna ventana 3×3 sin signo / 4×4 con menos de 2.
+    // Evita zonas "muertas" de puros números donde no se puede jugar (feedback 2026-07-09).
+    // Va ANTES de breakFormedTargets: si un signo nuevo arma una cuenta, se rompe ahí.
+    changed.push(...ensureSignDensity(grid, this.gen))
     // romper cuentas YA formadas: el tablero se entrega resuelto (solo jugadas a un movimiento).
     changed.push(...breakFormedTargets(grid, this.gen, this.targets, this.md, this.mo))
     // asegurar el mínimo de jugadas. Dos garantías:

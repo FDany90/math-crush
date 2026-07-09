@@ -225,6 +225,38 @@ export function destrandOperators(grid, gen) {
   return changed;
 }
 
+// DENSIDAD de signos por ZONA (regla de playtest 2026-07-09): si una ventana de 3×3 no
+// tiene NINGÚN signo, se convierte un dígito de esa zona en signo (1 por ventana); si una
+// de 4×4 queda con menos de 2, se completa. Evita "desiertos" de números sin nada que hacer
+// (el nivel 1 se quedaba con 1 solo '+'). Elige celdas donde el signo SIRVE (opUsableAt)
+// y repartidas (pocos signos vecinos). Devuelve celdas cambiadas.
+export function ensureSignDensity(grid, gen) {
+  const [ROWS, COLS] = dimsOf(grid);
+  const changed = [];
+  const isOp = (r, c) => OPS.includes(grid[r][c]);
+  const fillWindow = (r0, c0, n, need) => {
+    let guard = 0;
+    const count = () => { let k = 0; for (let r = r0; r < r0 + n; r++) for (let c = c0; c < c0 + n; c++) if (isOp(r, c)) k++; return k; };
+    while (count() < need && guard++ < 6) {
+      let best = null, bestScore = Infinity;
+      for (let r = r0; r < r0 + n; r++) for (let c = c0; c < c0 + n; c++) {
+        if (isSpecial(grid[r][c]) || grid[r][c] === '#') continue;   // '#': ficha con estado (enmascarada)
+        if (!opUsableAt(grid, r, c, ROWS, COLS)) continue;           // que no quede varado
+        const adj = (OPS.includes(grid[r]?.[c - 1]) ? 1 : 0) + (OPS.includes(grid[r]?.[c + 1]) ? 1 : 0)
+          + (OPS.includes(grid[r - 1]?.[c]) ? 1 : 0) + (OPS.includes(grid[r + 1]?.[c]) ? 1 : 0);
+        const score = adj * 2 + Math.random();
+        if (score < bestScore) { bestScore = score; best = [r, c]; }
+      }
+      if (!best) break;
+      grid[best[0]][best[1]] = gen.ops[Math.floor(Math.random() * gen.ops.length)];
+      changed.push(best);
+    }
+  };
+  for (let r0 = 0; r0 + 3 <= ROWS; r0++) for (let c0 = 0; c0 + 3 <= COLS; c0++) fillWindow(r0, c0, 3, 1);
+  for (let r0 = 0; r0 + 4 <= ROWS; r0++) for (let c0 = 0; c0 + 4 <= COLS; c0++) fillWindow(r0, c0, 4, 2);
+  return changed;
+}
+
 // Mantiene un mínimo de operadores en el tablero (repone tras consumirlos).
 // Sólo AGREGA operadores (convierte dígitos); nunca los quita. Elige celdas donde el
 // operador SIRVE (centro de una cuenta) y REPARTIDAS (evita amontonarlos). Devuelve celdas.

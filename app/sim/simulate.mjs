@@ -12,7 +12,7 @@ import { LEVELS, makeGen } from '../src/game/levels.js'
 import {
   newGrid, destrandOperators, ensureMinOperators, breakFormedTargets, countTargetMoves,
   addTargetMovesSubtle, findHintFallback, findMatchesMulti, findTargetCellsMulti,
-  plantTargetMove, OPS,
+  plantTargetMove, ensureSignDensity, OPS,
 } from '../src/game/logic.js'
 
 const isOp = (ch) => OPS.includes(ch)
@@ -37,6 +37,7 @@ function heal(grid, gen, targets, md, mo, size) {
   const eachMin = 2, perTarget = targets.length > 1
   const changed = []
   destrandOperators(grid, gen)
+  ensureSignDensity(grid, gen)   // regla de densidad por zona (3×3 ≥1 signo, 4×4 ≥2) — igual que el juego
   breakFormedTargets(grid, gen, targets, md, mo)
   const ensureMoves = () => {
     for (let pass = 0; pass < 4; pass++) {

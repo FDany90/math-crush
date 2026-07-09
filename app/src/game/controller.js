@@ -155,20 +155,55 @@ export class Controller {
       // el jefe se entiende visualmente: HP baja al absorber fichas, ataques telegrafiados con
       // embestida + proyectiles, y el signo del HUD está vivo (idle/furia).
       this._coach([{ cine: 'intro', sign: this.level.ops?.[0] ?? '+' }])
-    } else if (this.level.superTile) {
-      // TUTORIAL de SÚPER FICHA (primera vez): explicá la cuenta de 2 operadores y, al cerrar
-      // el coach, dejá la manito guía sobre una jugada de 2 operadores YA preparada.
+    } else if (this.level.superTile && this._coachOnce('math_coached_super')) {
+      // TUTORIAL de SÚPER FICHA: UNA sola vez en todo el juego (playtest 2026-07-09: se repetía
+      // en el nivel siguiente y sobraba texto). Mensaje mínimo + manito guía sobre una jugada
+      // de 2 operadores YA preparada al cerrarlo; la súper ficha se aprende usándola.
       this._pendingComboGuide = true
-      this._coach([
-        { text: 'Nuevo truco: podés formar el número con DOS operadores. En vez de 4+8, probá 3+4+5 = 12.', highlight: 'target' },
-        { text: 'Una cuenta de 2 operadores crea una SÚPER FICHA ✨. Te muestro una jugada preparada 👇' },
-      ])
+      this._coach([{ text: 'Podés formar cuentas con 2 operadores.', highlight: 'target' }])
     } else if (this.level.orderCoach) {
       // SOLO en el 1er nivel de una operación NO conmutativa (resta/división): el ORDEN importa.
       // En el resto NO se muestra (ya se entiende por las flechas, que sí van en todos). Se aclara
       // la DIRECCIÓN —no el tamaño—: más adelante habrá negativos donde el grande NO va primero.
       this._coach([{ text: 'Ojo: acá el ORDEN importa. La cuenta se arma en el sentido de las flechas: → de izquierda a derecha, ↓ de arriba a abajo.' }])
     }
+    // ELEGÍ TU OBJETIVO (twist `choose`): antes de jugar, el picker (overlay en App) deja
+    // elegir los números a formar. coachActive bloquea pistas/manito mientras está abierto.
+    if (this.level.choose) {
+      this.coachActive = true
+      this._clearAutoHint()
+      this.hooks.chooseTarget?.({ pool: this.level.choose.pool, max: this.level.choose.max ?? 2 })
+    }
+    this._startAutoHint()
+  }
+
+  // ¿primera vez que se muestra este coach? (marca localStorage y devuelve true solo la 1ra vez)
+  _coachOnce(key) {
+    try {
+      if (localStorage.getItem(key)) return false
+      localStorage.setItem(key, '1')
+      return true
+    } catch { return true }
+  }
+
+  // ELEGÍ TU OBJETIVO: el jugador confirmó en el picker. Rearma el nivel alrededor de lo
+  // elegido: objetivos fijos, generador sesgado, meta escalada (goalFactor × promedio elegido
+  // ≈ mismas cuentas elijas números chicos o grandes) y tablero nuevo target-rich.
+  applyChosenTargets(nums) {
+    this.coachActive = false
+    if (this.ended || !this.level.choose || !nums?.length) { this._startAutoHint(); return }
+    const chosen = [...new Set(nums.map(Number))].slice(0, this.level.choose.max ?? 2)
+    this.level = { ...this.level, target: chosen }
+    this.fixedTargets = [...chosen]
+    this.gen = makeGen(this.level, this.cfg)
+    const f = this.level.choose.goalFactor
+    if (f) {
+      this.goalNeed = Math.round((f * chosen.reduce((a, b) => a + b, 0)) / chosen.length)
+      this.left = Math.max(0, this.goalNeed - this.goalDone)
+    }
+    this._rebuild()
+    this._pickTargets()
+    this._pushHud()
     this._startAutoHint()
   }
 

@@ -26,29 +26,38 @@ const shuffleArr = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = M
 //   comboFever:true→ los combos (cascadas por piezas nuevas) cuentan DOBLE al objetivo.
 //                    (Los combos SIEMPRE cuentan al objetivo; acá valen x2.)
 //   targetTo:N     → el objetivo CAMBIA a N al llegar a media quota (objetivo que cambia).
+//   choose:{pool,max,goalFactor} → ELEGÍ TU OBJETIVO: al arrancar, el jugador elige hasta
+//                    `max` números del `pool` y ésos pasan a ser los objetivos del nivel.
+//                    La meta se recalcula a goalFactor × promedio elegido (así elegir números
+//                    chicos no es un grind ni elegir grandes un regalo). `target` = default
+//                    para el sim y fallback si no hay elección.
 export const LEVELS = [
   // ================= MUNDO SUMA (niveles 1-10, objetivo fijo + twists) =================
   // Todo suma, 1 cifra, 1 operador. Números elegidos por SIGNIFICADO (10 = número héroe,
   // 5/dobles), no por escalera. Cada 2-3 niveles un twist rompe la monotonía (teach→test→
   // twist). La dificultad viene de tablero/quota/twist, no de +1 al objetivo. Ver DISEÑO §5.
-  // teach→test→twist: se enseñan 4,5,6,8 sueltos (1-4) y desde el nivel 5 los twists
-  // aparecen intercalados (un giro sí / uno no) para cortar la monotonía. La suma sigue
-  // siendo de 1 cifra; los twists cambian la EXPERIENCIA, no la carga matemática.
+  // teach→test→twist: se enseñan 4,5,6,10 sueltos (1-4) y desde el nivel 5 los twists
+  // aparecen intercalados (elegí tu objetivo → reloj → doble → súper) para cortar la
+  // monotonía. La suma sigue siendo de 1 cifra; los twists cambian la EXPERIENCIA,
+  // no la carga matemática. (Reorden 2026-07-09: contrarreloj pasó de 5.º a 6.º.)
   { name: 'Primeros pasos',   size: 4, digits: range(1, 3), ops: ['+'], eq: false, maxDigits: 1, target: 4,        quota: 10, tutorial: true, goal: 50 },  // tutorial corto: barra a 50 (~13 cuentas)
   { name: 'Amigos del 5',     size: 5, digits: range(1, 4), ops: ['+'], eq: false, maxDigits: 1, target: 5,        quota: 10 },  // fichas 1-4 (más pares posibles = menos secado): 5 = 2+3,1+4
   { name: 'Media docena',     size: 5, digits: range(1, 4), ops: ['+'], eq: false, maxDigits: 1, target: 6,        quota: 10 },  // fichas 1-4: 6 = 2+4,3+3
-  { name: 'Solo pares',       size: 5, digits: ['2', '4', '6'], ops: ['+'], eq: false, maxDigits: 1, target: 8,   quota: 10, goal: 170 },  // solo pares → 8 = 2+6,4+4 (medido: con [6,8] los combos regalaban 60% → objetivo único + goal más alto)
-  // 🎁 CONTRARRELOJ (nivel 5 de cada mundo: 5/15/25/35): nivel ESPECIAL con RELOJ y
-  // tablero un poco más grande. Si se acaba el tiempo → "+1 minuto" (reintento).
+  { name: 'Solo pares',       size: 5, digits: ['2', '4', '6', '8'], ops: ['+'], eq: false, maxDigits: 1, target: 10,   quota: 10, goal: 200 },  // solo pares → 10 = 2+8,4+6 (playtest 2026-07-09: con [2,4,6]→8 los combos regalaban 39% y era muy fácil; con 4 operandos y 10 hay que BUSCAR el par; goal 200 ≈ 12.6 movs medidos)
+  // 🎁 ELEGÍ TU OBJETIVO (twist, playtest 2026-07-09): al empezar, el jugador elige 1 o 2
+  // números del pool y ésos son los objetivos del nivel. `target` = default (sim/fallback);
+  // goalFactor = meta escalada al promedio elegido (~20 cuentas siempre, elijas 3 o 10).
+  { name: 'Elegí tu objetivo 🎯', size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 8], choose: { pool: [3, 4, 5, 6, 7, 8, 9, 10], max: 2, goalFactor: 20 }, goal: 150 },
+  // 🎁 CONTRARRELOJ (nivel especial con RELOJ, tablero un poco más grande). Iba 5to; pasó a 6to
+  // (playtest 2026-07-09: el nivel que lo seguía era muy fácil → el reloj queda como test del bloque).
   { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 7), ops: ['+'], eq: false, maxDigits: 1, target: [5, 10],  timed: true, time: 80, goal: 150 },  // ⏱ doble 5/10, fichas 1-7 (medido 18.4 movs: 60s era brutal → 80s + goal 150)
-  // 🎁 Objetivo múltiple (varios números a la vez): 5, 8 y 10 juntos.
-  { name: 'Triple objetivo',  size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 8, 10], goal: 200 },
-  { name: 'La docena',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12,        goal: 200 },  // normal: enseña el 12 antes de la súper ficha
-  // ✨ SÚPER FICHA (mecánica tipo Candy Crush): acá se INTRODUCE. Doble objetivo alto [10,12] para
-  // que las cuentas de 2 operadores (ej. 3+4+5=12, 2+3+5=10) sean viables y se aprovechen. Formar
+  { name: 'La docena',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [10, 12],  goal: 230 },  // 🎁 doble alto (playtest 2026-07-09: con 12 solo quedaba fácil) — enseña 10/12 antes de la súper ficha
+  // ✨ SÚPER FICHA (mecánica tipo Candy Crush): acá se INTRODUCE. Doble objetivo alto IMPAR [11,13]
+  // (playtest 2026-07-09: [10,12] era fácil; los impares tienen pares menos obvios: 11=2+9,3+8,4+7,5+6;
+  // 13=4+9,5+8,6+7) y las cuentas de 2 operadores (ej. 2+4+5=11) siguen siendo viables. Formar
   // una con 2 operadores deja una súper ficha '+'; usarla explota en CRUZ. El motor garantiza
   // siempre ≥1 jugada de 2 operadores. Tablero 6×6 (a+b+c son 5 celdas, entran). Ver DISEÑO §16.
-  { name: 'Súper doble ✨',    size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [10, 12], maxOps: 2, superTile: true, goal: 200 },
+  { name: 'Súper doble ✨',    size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [11, 13], maxOps: 2, superTile: true, goal: 230 },
   // ✨ SÚPER FICHA (continúa la mecánica del nivel 8) con TRIPLE objetivo alto: 10/12/14 tienen
   // muchísimas cuentas de 2 operadores (14=5+5+4,6+4+4; 12=3+4+5; 10=3+3+4,2+3+5) → generar súper es viable.
   { name: 'Súper triple ✨',   size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [10, 12, 14], maxOps: 2, superTile: true, goal: 250 },
@@ -72,7 +81,8 @@ export const LEVELS = [
   { name: 'Primera resta',    size: 5, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 1,       quota: 10, goal: 10, orderCoach: true },   // solo 1-4; 1 = 2−1,3−2,4−3. Goal 10 (medido: con 20 eran 15.6 movs de puro 2−1 = grind). orderCoach: explica el ORDEN
   { name: 'Segunda resta',    size: 6, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 2,       quota: 10, goal: 24 },   // 6×6 (medido: en 5×5 era el más apretado, 3.9 opciones y 12.5% de secado) + goal 24
   { name: 'Tercera resta',    size: 6, digits: range(1, 6), ops: ['−'], eq: false, maxDigits: 1, target: 3,        quota: 10, goal: 50 },   // 6×6, fichas 1-6, objetivo único 3
-  { name: 'Resta doble',      size: 6, digits: range(1, 6), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3],  quota: 10, goal: 50 },   // 🎁 doble, fichas 1-6
+  // 🎁 ELEGÍ TU OBJETIVO en resta (twist, playtest 2026-07-09): elegís 1 o 2 diferencias del pool.
+  { name: 'Elegí tu resta 🎯', size: 6, digits: range(1, 6), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3], choose: { pool: [1, 2, 3, 4, 5], max: 2, goalFactor: 20 }, quota: 10, goal: 50 },
   { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 7), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5],   timed: true, time: 80, goal: 75 },  // ⏱ doble impar 3/5, fichas 1-7 (medido 20.1 movs en 60s = brutal → 80s + goal 75); el tablero CRECE a 7×7 después
   // --- desde acá la rampa aprieta: 7×7, impares/altos, triples y MENOS intentos (goal 120 parejo, medido ~20-30 movs con 150) ---
   { name: 'Resta difícil',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [5, 7],  quota: 15, goal: 120, tries: 4 },  // 7×7, 7 = solo 8−1,9−2

@@ -391,22 +391,45 @@ export class Board {
     await Promise.all(proms);
   }
 
-  // EXPLOSIÓN de la bomba: onda expansiva naranja + flash del 3×3 + burst central
+  // EXPLOSIÓN de la bomba — VIOLENTA a propósito (feedback: "que se sienta bomba"):
+  // flash de TODO el tablero + fogonazo central + zona 3×3 + DOBLE onda expansiva + metralla
+  // de bursts en las diagonales. El temblor fuerte (shake 17) y las piezas despedidas
+  // (clear con `blasts`) los dispara el controller.
   bombBlast(r, c) {
     const x = this.px(c), y = this.py(r);
+    // 1) FLASH de todo el tablero (fogonazo blanco instantáneo)
+    const flash = new Graphics();
+    flash.rect(0, 0, this.cols * TILE, this.rows * TILE).fill({ color: 0xffffff, alpha: 0.55 });
+    this.fx.addChild(flash);
+    gsap.to(flash, { alpha: 0, duration: 0.3, ease: 'power1.out', onComplete: () => { if (!flash.destroyed) flash.destroy(); } });
+    // 2) fogonazo central (bola de fuego que crece y se apaga)
+    const fire = new Graphics();
+    fire.circle(0, 0, TILE * 0.7).fill({ color: 0xffd23f, alpha: 0.9 });
+    fire.circle(0, 0, TILE * 0.45).fill({ color: 0xffffff, alpha: 0.95 });
+    fire.x = x; fire.y = y;
+    this.fx.addChild(fire);
+    gsap.fromTo(fire.scale, { x: 0.2, y: 0.2 }, { x: 1.8, y: 1.8, duration: 0.22, ease: 'power3.out' });
+    gsap.to(fire, { alpha: 0, duration: 0.34, delay: 0.06, ease: 'power2.out', onComplete: () => { if (!fire.destroyed) fire.destroy(); } });
+    // 3) zona 3×3 marcada
     const zone = new Graphics();
-    zone.roundRect(-TILE * 1.5, -TILE * 1.5, TILE * 3, TILE * 3, 14).fill({ color: 0xffa15e, alpha: 0.5 });
+    zone.roundRect(-TILE * 1.5, -TILE * 1.5, TILE * 3, TILE * 3, 14).fill({ color: 0xffa15e, alpha: 0.6 });
     zone.x = x; zone.y = y;
     this.fx.addChild(zone);
-    gsap.fromTo(zone.scale, { x: 0.3, y: 0.3 }, { x: 1, y: 1, duration: 0.18, ease: 'power2.out' });
-    gsap.to(zone, { alpha: 0, duration: 0.55, ease: 'power2.out', onComplete: () => { if (!zone.destroyed) zone.destroy(); } });
-    const wave = new Graphics();
-    wave.circle(0, 0, TILE * 0.5).stroke({ color: 0xffc08a, width: 7, alpha: 0.95 });
-    wave.x = x; wave.y = y;
-    this.fx.addChild(wave);
-    gsap.to(wave.scale, { x: 3.4, y: 3.4, duration: 0.5, ease: 'power2.out' });
-    gsap.to(wave, { alpha: 0, duration: 0.5, ease: 'power2.out', onComplete: () => { if (!wave.destroyed) wave.destroy(); } });
+    gsap.fromTo(zone.scale, { x: 0.3, y: 0.3 }, { x: 1, y: 1, duration: 0.16, ease: 'power3.out' });
+    gsap.to(zone, { alpha: 0, duration: 0.5, ease: 'power2.out', onComplete: () => { if (!zone.destroyed) zone.destroy(); } });
+    // 4) DOBLE onda expansiva (la segunda sale con delay)
+    for (const [delay, width, col] of [[0, 9, 0xffc08a], [0.09, 5, 0xffffff]]) {
+      const wave = new Graphics();
+      wave.circle(0, 0, TILE * 0.5).stroke({ color: col, width, alpha: 0.95 });
+      wave.x = x; wave.y = y;
+      this.fx.addChild(wave);
+      gsap.to(wave.scale, { x: 4.2, y: 4.2, duration: 0.55, delay, ease: 'power2.out' });
+      gsap.to(wave, { alpha: 0, duration: 0.55, delay, ease: 'power2.out', onComplete: () => { if (!wave.destroyed) wave.destroy(); } });
+    }
+    // 5) metralla de polvo: bursts en el centro y las 4 diagonales del 3×3
     this.burst(x, y, 0xff9550);
+    for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
+      this.burst(x + dx * TILE, y + dy * TILE, 0xffb27a);
   }
   // destello en CRUZ (fila + columna) al detonar una súper ficha: haces dorados que se
   // ensanchan + onda expansiva + burst dorado en el centro. Épico pero sin exagerar.
@@ -544,13 +567,32 @@ export class Board {
     for (const ring of rings) if (ring && !ring.destroyed) ring.destroy();
   }
 
-  async clear(cells) {
+  // `blasts` = centros de bombas detonadas: las piezas a ≤1 de un centro NO se achican suave,
+  // salen DESPEDIDAS del centro girando (metralla) — la explosión tiene que sentirse bomba.
+  async clear(cells, blasts = []) {
     const proms = [];
+    const nearBlast = (r, c) => blasts.find((b) => Math.max(Math.abs(b.r - r), Math.abs(b.c - c)) <= 1);
     for (const { r, c } of cells) {
       const t = this.tiles[r][c];
       if (!t) continue;
       this.tiles[r][c] = null;
       this.burst(t.x, t.y, colorFor(t.ch));
+      const b = blasts.length ? nearBlast(r, c) : null;
+      if (b) {
+        // METRALLA: dirección radial desde la bomba (el centro vuela hacia arriba), giro y fade
+        let dx = c - b.c, dy = r - b.r;
+        if (!dx && !dy) { dx = Math.random() - 0.5; dy = -1; }
+        const len = Math.hypot(dx, dy) || 1;
+        const tx = t.x + (dx / len) * TILE * (1.8 + Math.random() * 1.1);
+        const ty = t.y + (dy / len) * TILE * (1.8 + Math.random() * 1.1);
+        this.fx.addChild(t);   // vuela POR ENCIMA del tablero (mismo origen de coordenadas)
+        const p = Promise.all([
+          tween(t, { x: tx, y: ty, rotation: (Math.random() - 0.5) * 4, alpha: 0 }, 0.42 + Math.random() * 0.14, 'power2.out'),
+          tween(t.scale, { x: 0.35, y: 0.35 }, 0.5, 'power2.in'),
+        ]).then(() => t.destroy());
+        proms.push(p);
+        continue;
+      }
       // pop rápido: la ficha "despega" y el token DOM sigue el viaje al objetivo
       const p = tween(t.scale, { x: 1.2, y: 1.2 }, 0.1, 'power2.out')
         .then(() => Promise.all([tween(t.scale, { x: 0, y: 0 }, 0.18, 'back.in(2)'), tween(t, { alpha: 0 }, 0.18)]))

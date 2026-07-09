@@ -438,14 +438,16 @@ export class Controller {
       }
 
       // ---- FICHA BOMBA 💣 ----
-      // DETONAR: si una bomba participa de esta cuenta, explota TODO el 3×3 alrededor y
-      // suma a los puntos el valor de los números que rompe (como la cruz de la súper).
+      // DETONAR: si una bomba participa de esta cuenta, EXPLOTA el 3×3 alrededor con violencia
+      // (flash + onda + metralla: las piezas salen despedidas — ver Board.clear con `blasts`)
+      // y suma a los puntos el valor de los números que rompe.
       let bombSum = 0
+      const bombCenters = []
       for (const key of [...all]) {
         const [r, c] = key.split(',').map(Number)
         if (!this.board.isBomb(r, c)) continue
+        bombCenters.push({ r, c })
         this.board.bombBlast(r, c)
-        this.board.shake(10)
         for (let rr = r - 1; rr <= r + 1; rr++) for (let cc = c - 1; cc <= c + 1; cc++) {
           if (rr < 0 || cc < 0 || rr >= this.board.rows || cc >= this.board.cols) continue
           const k = rr + ',' + cc
@@ -455,11 +457,12 @@ export class Controller {
           if (ch && ch >= '0' && ch <= '9') bombSum += Number(ch)   // sólo números (no operadores)
         }
       }
+      if (bombCenters.length) this.board.shake(17)                  // temblor FUERTE de explosión
       if (bombSum > 0) this.hooks.toast?.('💣 ¡BOOM! +' + bombSum + ' puntos')
-      // GENERAR: DOS cuentas CONECTADAS (en L o en cruz) en el mismo movimiento → la celda
-      // COMPARTIDA se convierte en ficha bomba '+'. Solo jugada deliberada (no cascadas).
+      // GENERAR: DOS cuentas CONECTADAS (en L o en cruz) en el mismo paso → la celda COMPARTIDA
+      // se convierte en ficha bomba '+'. También en CASCADAS/combos (pedido de playtest).
       let bombSpawn = null
-      if (combo === 0) {   // se evalúa ANTES de incrementar combo (abajo): 0 = jugada del jugador
+      {
         const segs = findTargetSegments(mgrid, this.targets, this.md, this.mo)
         const isRow = (s) => s.cells.length >= 2 && s.cells[0].r === s.cells[1].r
         outer: for (const a of segs) for (const b of segs) {
@@ -522,7 +525,7 @@ export class Controller {
       // ROMPER estados por CONTACTO: una cuenta descongela las fichas adyacentes (antes de
       // colapsar, con las posiciones aún válidas). Así se destraba el tablero jugando cerca.
       if (this.boss) this._breakStatesNear(cells)   // jugar cerca rompe el hielo del jefe (la infestación NO se rompe)
-      await this.board.clear(cells)
+      await this.board.clear(cells, bombCenters)   // con bombas: las piezas del 3×3 salen DESPEDIDAS
       // GENERAR súper ficha: convertir el operador conservado ANTES del colapso (aún en su celda);
       // la ficha ya súper cae con el colapso conservando su estado.
       // Fichas especiales SIN coach ni explicación: el look (aura + latido) y probarlas enseñan solos.

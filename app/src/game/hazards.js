@@ -18,7 +18,7 @@ const BOSS_FREEZE_N = 3       // cuántas fichas congela por ataque
 const ATTACK_MS = 760         // duración del TELEGRAFIADO (embestida + proyectiles) antes de aplicar el ataque
 const INFEST_MS = 15000      // cada cuánto sube el frente de la infestación de + (fila nueva)
 const SCATTER_MS = 10000     // cada cuánto el Rey + (fase 1) esparce + aislados
-const ERASE_MS = 4500        // cada cuánto el Rey − (fase 2) borra una ficha (a la mitad de 9s: ahora también borra NÚMEROS, patrón 2 números por 1 signo)
+const ERASE_MS = 9000        // cada cuánto el Rey − (fase 2) borra una ficha (patrón 2 números por 1 signo). Se probó 4.5s y era demasiado rápido/difícil (playtest 2026-07-06) → vuelve a 9s.
 
 // ---------- REGISTRO de jefes por signo ----------
 export const BOSS_KINDS = {

@@ -120,11 +120,7 @@ export class Controller {
     this.coachedFirstCuenta = false        // ya se mostró el coach de "cuentas restantes" (nivel 2)
     this.coachedTutorialFirst = false      // ya se mostró el 2do paso del tutorial (nivel 1)
     this.coachActive = false               // hay un mensaje del coach en pantalla (pausa pistas/manito)
-    this._madeSuper = false                // se acaba de generar una súper ficha (para su coach)
-    this._madeBomb = false                 // se acaba de generar una ficha bomba (para su coach)
     this._pendingComboGuide = false        // hay que telegrafiar una jugada de 2 operadores (tutorial súper)
-    this._coachedSuperMade = false         // ya se explicó "súper ficha creada" (una vez POR PARTIDA)
-    this._coachedBombMade = false          // ya se explicó "ficha bomba creada" (una vez POR PARTIDA)
     this._coachedFreeze = false            // ya se explicó el ataque CONGELAR del jefe (una vez POR PARTIDA)
     this.moves = 0                         // movimientos hechos (para límite de pistas)
     this.autoHintCount = 0                 // pistas automáticas ya mostradas
@@ -356,25 +352,8 @@ export class Controller {
     this._pickTargets(consumed)
     this._bossCheckStuck()          // ¿el hielo dejó el tablero sin jugadas? → perdés
     if (this.boss) this._bossPhaseCheck()   // jefe Suma: expansión (fase 1) / infestación (fase 2)
-    // SÚPER FICHA recién generada: la primera vez, marcarla y explicar cómo usarla.
-    if (this._madeSuper) {
-      this._madeSuper = false
-      if (!this._coachedSuperMade) {
-        this._coachedSuperMade = true
-        this.board.markSupers()
-        this._coach([{ text: '¡Súper ficha creada! ✨ Es el + dorado brillante. Usalo en cualquier cuenta y explota en CRUZ: rompe toda la fila y la columna.' }])
-        return
-      }
-    }
-    // FICHA BOMBA recién generada (dos cuentas conectadas): la primera vez, explicarla.
-    if (this._madeBomb) {
-      this._madeBomb = false
-      if (!this._coachedBombMade) {
-        this._coachedBombMade = true
-        this._coach([{ text: '💣 ¡Formaste DOS cuentas conectadas y creaste una FICHA BOMBA! Es el + naranja. Usalo en una cuenta y explota todo alrededor.' }])
-        return
-      }
-    }
+    // Fichas especiales (súper/bomba): SIN coach al crearlas — se aprenden solas (decisión
+    // 2026-07-06: el look especial + el efecto al usarlas enseñan mejor que un cartel).
     if (consumed.size > 0 && this._maybeSwitchTarget()) return   // el objetivo cambió: coach + pausa
     // Tutorial (nivel 1): 2do paso, recién DESPUÉS del primer acierto (no todo junto al arrancar).
     if (this.tutorial && consumed.size > 0 && !this.coachedTutorialFirst) {
@@ -546,15 +525,14 @@ export class Controller {
       await this.board.clear(cells)
       // GENERAR súper ficha: convertir el operador conservado ANTES del colapso (aún en su celda);
       // la ficha ya súper cae con el colapso conservando su estado.
+      // Fichas especiales SIN coach ni explicación: el look (aura + latido) y probarlas enseñan solos.
       if (superSpawn.length) {
         for (const { r, c } of superSpawn) this.board.makeSuper(r, c)
-        this._madeSuper = true                            // para el coach "¡súper ficha creada!" en _afterMove
-        this.hooks.toast?.('✨ ¡Súper ficha +! Usala en una cuenta para explotar en cruz')
+        this.hooks.toast?.('✨ ¡Súper ficha!')
       }
       if (bombSpawn) {
         this.board.makeBomb(bombSpawn.r, bombSpawn.c)
-        this._madeBomb = true                             // para el coach "¡ficha bomba!" en _afterMove
-        this.hooks.toast?.('💣 ¡Doble cuenta conectada! Creaste una FICHA BOMBA')
+        this.hooks.toast?.('💣 ¡Ficha bomba!')
       }
       await this.board.collapse(this.gen.randTile)
       this._applyTidy()

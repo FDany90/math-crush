@@ -248,13 +248,17 @@ export class Board {
   }
   _eraseCells(tiles) {
     if (!tiles.length) { this._resizeCanvas(); return; }
+    // OLA suave: las fichas del borde se disuelven UNA TRAS OTRA (no todas de golpe) — la
+    // encogida del Rey − se lee gradual y menos brusca. El canvas se ajusta recién al final.
     let done = 0;
-    for (const t of tiles) {
-      this.burst(t.x, t.y, 0xf4f1e8);
-      gsap.to(t.scale, { x: 0, y: 0, duration: 0.32, ease: 'back.in(2)',
+    tiles.forEach((t, i) => {
+      const delay = i * 0.055;
+      gsap.delayedCall(delay, () => { if (!t.destroyed) this.burst(t.x, t.y, 0xf4f1e8); });
+      gsap.to(t.scale, { x: 0, y: 0, duration: 0.34, delay, ease: 'power2.in' });
+      gsap.to(t, { alpha: 0, duration: 0.3, delay: delay + 0.06, ease: 'power1.in',
         onComplete: () => { if (!t.destroyed) t.destroy(); if (++done >= tiles.length) this._resizeCanvas(); } });
-    }
-    this.shake(6);
+    });
+    this.shake(5);
   }
 
   // ---------- estados de casillero (efectos del tablero, genérico) ----------
@@ -362,10 +366,11 @@ export class Board {
   }
 
   // ---------- FICHA BOMBA 💣 (dos cuentas conectadas en L/cruz en un movimiento) ----------
-  makeBomb(r, c) {
+  // `ch` = el OPERADOR del nivel (en resta la bomba es un '−' usable, no un '+').
+  makeBomb(r, c, ch = '+') {
     const t = this.tiles[r]?.[c];
     if (!t || t.bomb || t.super) return;
-    t.setChar('+');            // la bomba es un operador '+' usable
+    t.setChar(ch);             // la bomba es un operador usable del nivel
     t.setBomb(true);
     gsap.fromTo(t.scale, { x: 1.4, y: 1.4 }, { x: 1, y: 1, duration: 0.45, ease: 'back.out(2.2)' });
     this.burst(t.x, t.y, 0xff9550);

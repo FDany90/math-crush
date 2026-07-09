@@ -104,6 +104,7 @@ export class Controller {
     // telegrafiado de ataques del jefe: invalidar cualquier animación pendiente de la partida anterior
     this._telegraphing = false
     this._teleSeq = (this._teleSeq || 0) + 1
+    this._eraseCount = 0                   // rotación del borrón del Rey − (2 números : 1 signo)
     // BARRA de objetivo: en modo normal hay UNA sola barra que suma el VALOR del resultado
     // formado (contás "de N en N", ej sumar 5 → 5,10,15…) hasta GOAL_NORMAL (1000). Cualquier
     // objetivo (en el doble) cuenta al mismo total. Override por nivel con `goal`.
@@ -459,8 +460,10 @@ export class Controller {
       }
       if (bombCenters.length) this.board.shake(17)                  // temblor FUERTE de explosión
       if (bombSum > 0) this.hooks.toast?.('💣 ¡BOOM! +' + bombSum + ' puntos')
-      // GENERAR: DOS cuentas CONECTADAS (en L o en cruz) en el mismo paso → la celda COMPARTIDA
-      // se convierte en ficha bomba '+'. También en CASCADAS/combos (pedido de playtest).
+      // GENERAR: DOS cuentas CONECTADAS (fila + columna) en el mismo paso → ficha bomba con el
+      // OPERADOR del nivel. "Conectadas" = comparten una celda (cruz/T/L por la punta) O están
+      // PEGADAS ortogonalmente (L sin celda compartida — bug de playtest: no se generaba).
+      // También en CASCADAS/combos.
       let bombSpawn = null
       {
         const segs = findTargetSegments(mgrid, this.targets, this.md, this.mo)
@@ -470,6 +473,10 @@ export class Controller {
           const setA = new Set(a.cells.map(({ r, c }) => r + ',' + c))
           const shared = b.cells.find(({ r, c }) => setA.has(r + ',' + c))
           if (shared) { bombSpawn = shared; break outer }
+          // L "pegada": ninguna celda compartida, pero una ficha de A toca una de B
+          for (const pa of a.cells) for (const pb of b.cells) {
+            if (Math.abs(pa.r - pb.r) + Math.abs(pa.c - pb.c) === 1) { bombSpawn = pa; break outer }
+          }
         }
         if (bombSpawn) {
           const k = bombSpawn.r + ',' + bombSpawn.c
@@ -534,7 +541,7 @@ export class Controller {
         this.hooks.toast?.('✨ ¡Súper ficha!')
       }
       if (bombSpawn) {
-        this.board.makeBomb(bombSpawn.r, bombSpawn.c)
+        this.board.makeBomb(bombSpawn.r, bombSpawn.c, this.level.ops?.[0] ?? '+')   // bomba del operador del nivel (resta → '−')
         this.hooks.toast?.('💣 ¡Ficha bomba!')
       }
       await this.board.collapse(this.gen.randTile)

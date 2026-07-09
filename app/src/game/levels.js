@@ -81,7 +81,9 @@ export const LEVELS = [
   { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 120, tries: 3 },  // 🎁 triple, solo 3 intentos
   // 👹 EL REY − (opuesto del Rey +): FASE 1 el tablero ENCOGE 7×7→5×5 (shrinkTo); FASE 2 (desde
   // eraseAt=50% HP) BORRA signos − (tachados permanentes → si te quedás sin jugadas, perdés). Daño = diferencia formada.
-  { name: 'El Rey −', size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 5, 6], boss: { hp: 200, shrinkTo: 5, eraseAt: 0.5 }, quota: 99 },
+  // HP 180: encoge cada 20 HP (160/140/120/100, umbrales exactos con eraseAt=4/9) y FASE 2
+  // (borrón, ahora 2 números por 1 signo cada 4.5s) recién a 80 HP → final ganable.
+  { name: 'El Rey −', size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 5, 6], boss: { hp: 180, shrinkTo: 5, eraseAt: 4 / 9 }, quota: 99 },
 
   // ================= MUNDO MULTIPLICACIÓN (21-30, objetivo fijo) =================
   // Productos de 1 cifra. Empieza con tablas chicas (2×3=6) y sube. Dobles intercalados.

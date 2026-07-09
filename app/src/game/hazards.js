@@ -18,7 +18,7 @@ const BOSS_FREEZE_N = 3       // cuántas fichas congela por ataque
 const ATTACK_MS = 760         // duración del TELEGRAFIADO (embestida + proyectiles) antes de aplicar el ataque
 const INFEST_MS = 15000      // cada cuánto sube el frente de la infestación de + (fila nueva)
 const SCATTER_MS = 10000     // cada cuánto el Rey + (fase 1) esparce + aislados
-const ERASE_MS = 9000        // cada cuánto el Rey − (fase 2) borra un signo −
+const ERASE_MS = 4500        // cada cuánto el Rey − (fase 2) borra una ficha (a la mitad de 9s: ahora también borra NÚMEROS, patrón 2 números por 1 signo)
 
 // ---------- REGISTRO de jefes por signo ----------
 export const BOSS_KINDS = {
@@ -155,7 +155,7 @@ export const hazardMethods = {
     this._telegraphing = true
     this.board.locked = true
     const seq = this._teleSeq
-    this.hooks.bossAttack?.({ cells, rows: this.board.rows, cols: this.board.cols, kind })
+    this.hooks.bossAttack?.({ cells, rows: this.board.rows, cols: this.board.cols, kind, sign: this.level?.ops?.[0] ?? '+' })
     setTimeout(() => {
       if (seq !== this._teleSeq) return          // el nivel se reinició: descartar (start() resetea flags)
       this._telegraphing = false
@@ -228,8 +228,10 @@ export const hazardMethods = {
     this._bossCheckStuck()   // ¿te dejó sin movimientos? → perdés
   },
 
-  // ---------- ataque del Rey − (fase 2): BORRAR signos − ----------
-  // Loop propio: cada ERASE_MS tacha un signo − usable (permanente). El reintento los repone.
+  // ---------- ataque del Rey − (fase 2): BORRAR fichas ----------
+  // Loop propio: cada ERASE_MS borra UNA ficha (permanente), TELEGRAFIADO como todo ataque
+  // (embestida + proyectil − del signo a la celda). Patrón "2 números por 1 signo −"
+  // (rotación num→num→signo): los signos escasean 3× más lento → el jugador tiene tiempo.
   _startErase() {
     if (!this._erasing || this._eraseId) return
     this._eraseId = setTimeout(() => this._eraseTick(), ERASE_MS)
@@ -237,20 +239,38 @@ export const hazardMethods = {
   _eraseTick() {
     this._eraseId = null
     if (this.ended) return
-    if (this.started && !this.busy && !this.coachActive && !this._telegraphing) this._eraseSign()
+    // bloqueado (coach/cascada/otro ataque animándose): reintentar pronto, sin perder el turno
+    if (this._telegraphing || !this.started || this.busy || this.coachActive) {
+      this._eraseId = setTimeout(() => this._eraseTick(), 900)
+      return
+    }
+    this._eraseSign()
     this._eraseId = setTimeout(() => this._eraseTick(), ERASE_MS)
   },
   _eraseSign() {
     const chars = this.board.gridChars()
     const blocked = this.board.cellsWithState()
-    const signs = []
+    const free = (r, c) => !blocked.has(r + ',' + c) && !this.board.isSuper(r, c) && !this.board.isBomb(r, c)
+    const signs = [], digits = []
     for (let r = 0; r < this.board.rows; r++)
-      for (let c = 0; c < this.board.cols; c++)
-        if (chars[r]?.[c] === '−' && !blocked.has(r + ',' + c)) signs.push({ r, c })
-    if (signs.length) {
-      const pick = signs[(Math.random() * signs.length) | 0]
-      this.board.applyErase([pick])   // mancha + animación de borrador
-      this.hooks.toast?.('🧽 ¡El Rey borró un signo −!')
+      for (let c = 0; c < this.board.cols; c++) {
+        const ch = chars[r]?.[c]
+        if (!free(r, c)) continue
+        if (ch === '−') signs.push({ r, c })
+        else if (ch >= '0' && ch <= '9') digits.push({ r, c })
+      }
+    // rotación 2 números : 1 signo (cada 3er ataque va al signo); si no hay del tipo, cae al otro
+    this._eraseCount = (this._eraseCount ?? 0) + 1
+    const wantSign = this._eraseCount % 3 === 0
+    const pool = wantSign ? (signs.length ? signs : digits) : (digits.length ? digits : signs)
+    if (pool.length) {
+      const pick = pool[(Math.random() * pool.length) | 0]
+      // TELEGRAFIADO: el signo embiste y un proyectil − vuela hasta la ficha; recién ahí la borra
+      this._bossTelegraph([pick], 'erase', () => {
+        this.board.applyErase([pick])   // mancha + animación de borrador
+        this._bossCheckStuck()          // sin jugadas usables → perdés
+      })
+      return
     }
     this._bossCheckStuck()   // sin jugadas usables → perdés
   },

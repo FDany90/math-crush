@@ -74,15 +74,15 @@ export default function App() {
   // dispara PROYECTILES '+' que vuelan del signo a las celdas que va a infestar. Así se VE
   // que lo que pasa en el tablero lo causa el jefe (sin depender de mensajes del coach).
   // kind: 'scatter' | 'infest' (con celdas) | 'grow' (sin celdas: embestida + destello del marco).
-  const bossAttackFx = useCallback(({ cells, rows, cols, kind }) => {
-    const sign = document.querySelector('.boss-sign')
+  const bossAttackFx = useCallback(({ cells, rows, cols, kind, sign = '+' }) => {
+    const signEl = document.querySelector('.boss-sign')
     // cara de MALDAD durante el ataque (cejas en V + grito, clase .attacking sobre el signo)
-    if (sign) {
-      sign.classList.add('attacking')
-      setTimeout(() => sign.classList.remove('attacking'), 800)
+    if (signEl) {
+      signEl.classList.add('attacking')
+      setTimeout(() => signEl.classList.remove('attacking'), 800)
     }
     // 1) wind-up + embestida del signo (crece, tiembla y golpea hacia abajo/el tablero)
-    if (sign) sign.animate([
+    if (signEl) signEl.animate([
       { transform: 'scale(1) rotate(0deg)', filter: 'brightness(1)' },
       { transform: 'scale(1.45) rotate(-9deg)', filter: 'brightness(1.55) drop-shadow(0 0 14px #ff6b6b)', offset: 0.3 },
       { transform: 'scale(1.5) rotate(7deg)', filter: 'brightness(1.55) drop-shadow(0 0 16px #ff6b6b)', offset: 0.48 },
@@ -102,15 +102,16 @@ export default function App() {
     const canvas = mountRef.current?.querySelector('canvas')
     if (!overlay || !canvas || !cells?.length) return
     const cr = canvas.getBoundingClientRect()
-    const sr = sign?.getBoundingClientRect()
+    const sr = signEl?.getBoundingClientRect()
     const sx = sr ? sr.left + sr.width / 2 : cr.left + cr.width / 2
     const sy = sr ? sr.top + sr.height / 2 : cr.top - 30
     cells.forEach(({ r, c }, i) => {
       const tx = cr.left + ((c + 0.5) / cols) * cr.width
       const ty = cr.top + ((r + 0.5) / rows) * cr.height
       const el = document.createElement('div')
-      el.className = 'boss-shot'
-      el.textContent = '+'
+      // el proyectil lleva el SIGNO del jefe; el '−' va como barra dibujada (el glifo Tiza cae bajo)
+      el.className = 'boss-shot' + (sign === '−' ? ' minus' : '')
+      if (sign !== '−') el.textContent = sign
       el.style.left = sx + 'px'; el.style.top = sy + 'px'
       overlay.appendChild(el)
       el.animate([
@@ -416,7 +417,7 @@ export default function App() {
               {/* el signo VIVO: idle respirando; bajo 50% HP se enfurece (anim más rápida y roja).
                   La CARA (ojos/cejas/boca) va sobre el centro del signo: parpadea y mira en idle,
                   cejas en V + grito al atacar/enfurecerse, ojos en X al ser derrotado. */}
-              <div className={'boss-sign' + (boss.hp <= 0 ? ' defeated' : (boss.max && boss.hp / boss.max <= 0.5 ? ' enraged' : ''))}>
+              <div className={'boss-sign' + (boss.sign === '−' ? ' minus' : '') + (boss.hp <= 0 ? ' defeated' : (boss.max && boss.hp / boss.max <= 0.5 ? ' enraged' : ''))}>
                 {boss.sign === '−' ? <span className="minus-bar" /> : boss.sign}
                 <div className="boss-face" aria-hidden="true">
                   <span className="bf-brow l" /><span className="bf-brow r" />

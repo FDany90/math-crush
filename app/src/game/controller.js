@@ -103,6 +103,9 @@ export class Controller {
     this.ended = false
     this.busy = false
     this.started = false
+    // telegrafiado de ataques del jefe: invalidar cualquier animación pendiente de la partida anterior
+    this._telegraphing = false
+    this._teleSeq = (this._teleSeq || 0) + 1
     // BARRA de objetivo: en modo normal hay UNA sola barra que suma el VALOR del resultado
     // formado (contás "de N en N", ej sumar 5 → 5,10,15…) hasta GOAL_NORMAL (1000). Cualquier
     // objetivo (en el doble) cuenta al mismo total. Override por nivel con `goal`.
@@ -151,9 +154,13 @@ export class Controller {
     if (this.tutorial) {
       this._coach([{ text: 'Mové las fichas para formar el número de arriba.', highlight: 'target' }])
     } else if (this.boss) {
-      // Llegaste al JEFE: explicá qué hacer (formar los resultados que marca = daño) y que
-      // va a atacar. El detalle del ataque CONGELAR se explica en la primera congelada.
-      this._coach([{ text: '¡Llegaste al Rey ' + (this.level.ops?.[0] ?? '+') + '! 👹 Formá los resultados que marca arriba: cada cuenta le baja la vida. ¡Dejalo en 0 para ganar!' }])
+      // JEFE: primero la PRESENTACIÓN estilo videojuego (cinemática ~3s: banner + el signo ruge,
+      // paso `cine` del coach, se renderiza en App) y después el coach con qué hacer.
+      const sign = this.level.ops?.[0] ?? '+'
+      this._coach([
+        { cine: 'intro', sign },
+        { text: '¡Llegaste al Rey ' + sign + '! 👹 Formá los resultados que marca arriba: cada cuenta le baja la vida. ¡Dejalo en 0 para ganar!' },
+      ])
     } else if (this.level.superTile) {
       // TUTORIAL de SÚPER FICHA (primera vez): explicá la cuenta de 2 operadores y, al cerrar
       // el coach, dejá la manito guía sobre una jugada de 2 operadores YA preparada.

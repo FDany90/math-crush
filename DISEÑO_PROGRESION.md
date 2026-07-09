@@ -1203,3 +1203,42 @@ ya anotado en **DOCUMENTACION.md §15** (progreso indexado por POSICIÓN). Plan 
 seguimos con el camino lineal (Suma 1-10, Resta 11-19+jefe, Mult/Div `wip`) y balanceando niveles. El
 primer paso barato (`id` estable, §19.2.1) se puede hacer cuando se quiera **sin romper nada visual** y
 es el que habilita todo lo demás. Cuando se encare, esta sección + DOCUMENTACION §15 son el plan.
+
+## 20. Presencia del JEFE: telegrafiado, cinemáticas y personaje con emociones (2026-07-06)
+
+**Problema (playtest):** los ataques del jefe ocurrían "de la nada" — nada conectaba la CAUSA (el
+jefe) con el EFECTO (tablero crece / aparecen +, etc.). La gente preguntaba "¿por qué pasó eso?".
+Los mensajes del coach NO deben ser necesarios para entender al jefe: el juego debe LEERSE solo.
+
+### 20.1 ✅ IMPLEMENTADO — telegrafiado + cinemáticas (estilo videojuego)
+1. **Telegrafiado de ataque** (`hazards._bossTelegraph` + hook `bossAttack` en App.jsx): antes de
+   CADA ataque, el signo del HUD hace wind-up + EMBESTIDA (crece, tiembla, destella rojo) y dispara
+   **proyectiles `+`** que vuelan del signo a las celdas exactas afectadas (capa DOM fly-overlay).
+   El tablero queda bloqueado ~760 ms durante la animación (sin razas de posiciones). Aplica a:
+   scatter (fase 1 Rey +), filas de infestación (fase 2), crecer (Rey +, kind 'grow' = embestida +
+   destello del marco) y achicar (Rey −, kind 'shrink'). `_teleSeq` invalida animaciones pendientes
+   si el nivel se reinicia.
+2. **Expansión más sutil:** las filas/columnas nuevas entran en OLA escalonada (`Board._popIn` con
+   delay por ficha) en vez de aparecer todas de golpe.
+3. **Cinemáticas** (paso `{ cine, sign }` del pipeline del coach → `BossCine` en Popups.jsx, ~3 s,
+   auto-avanza, tocar saltea, pausa el juego como cualquier coach):
+   - **'intro'** al entrar al nivel: pantalla oscura + el signo entra RUGIENDO (slam + rage) +
+     banner "¡EL REY +!" — presentación clásica de boss fight.
+   - **'phase'** al cambiar de fase (infestación del + / borrón del −): flash rojo + el signo se
+     ENFURECE (shake rápido) + banner "¡EL REY X SE ENFURECE!".
+   - **Desenlace** en la pantalla de victoria: el signo KO (gris, mareado 💫) gira y CAE
+     (`.defeat-sign` en WinScreen) + título "¡Rey X derrotado!".
+
+### 20.2 🔜 SIGUIENTE PASO — el signo como PERSONAJE con emociones
+Convertir el signo del jefe en un personaje animado con **ojos y expresiones** (cara SVG overlay
+sobre el glifo, tanto en el HUD como en las cinemáticas). Estados propuestos (máquina simple):
+- **idle** (respira, parpadea cada 3-5 s; mirada sigue el dedo/último toque)
+- **maldad al atacar** (cejas en V + sonrisa torcida — dispara con el telegrafiado)
+- **dolor al ser golpeado** (ojos apretados + mueca — se dispara en la absorción de fichas, donde
+  hoy pulsa el signo en flyTokens)
+- **risa** cuando el jugador falla un movimiento (gasta tiza)
+- **enojo creciente** por fase (fase 2 = cejas permanentes, respiración agitada)
+- **KO** en la derrota (ojos X + lengua afuera, reemplaza al glifo gris del desenlace)
+Impl sugerida: componente `BossFace` (SVG con grupos cejas/ojos/boca, transiciones CSS por clase de
+estado) + un hook `bossMood(state)` desde el controller en los mismos puntos donde hoy se disparan
+telegrafiado/daño/fallo. Sin assets externos (todo SVG de tiza, coherente con el tema pizarrón).

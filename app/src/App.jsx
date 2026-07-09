@@ -65,6 +65,53 @@ export default function App() {
     if (applyBar) setTimeout(applyBar, 320)
   }, [])
 
+  // TELEGRAFIADO del ataque del jefe: el signo del HUD hace un wind-up y "embiste", y
+  // dispara PROYECTILES '+' que vuelan del signo a las celdas que va a infestar. Así se VE
+  // que lo que pasa en el tablero lo causa el jefe (sin depender de mensajes del coach).
+  // kind: 'scatter' | 'infest' (con celdas) | 'grow' (sin celdas: embestida + destello del marco).
+  const bossAttackFx = useCallback(({ cells, rows, cols, kind }) => {
+    const sign = document.querySelector('.boss-sign')
+    // 1) wind-up + embestida del signo (crece, tiembla y golpea hacia abajo/el tablero)
+    if (sign) sign.animate([
+      { transform: 'scale(1) rotate(0deg)', filter: 'brightness(1)' },
+      { transform: 'scale(1.45) rotate(-9deg)', filter: 'brightness(1.55) drop-shadow(0 0 14px #ff6b6b)', offset: 0.3 },
+      { transform: 'scale(1.5) rotate(7deg)', filter: 'brightness(1.55) drop-shadow(0 0 16px #ff6b6b)', offset: 0.48 },
+      { transform: 'scale(0.9) translateY(12px)', filter: 'brightness(1.25)', offset: 0.7 },
+      { transform: 'scale(1)', filter: 'brightness(1)' },
+    ], { duration: 740, easing: 'ease-in-out' })
+    if (kind === 'grow' || kind === 'shrink') {
+      // aviso de CAMBIO DE TAMAÑO del tablero: el marco destella en el color del jefe
+      mountRef.current?.animate([
+        { boxShadow: '0 0 0 0 rgba(255,107,107,0)' },
+        { boxShadow: '0 0 36px 10px rgba(255,107,107,.8)', offset: 0.5 },
+        { boxShadow: '0 0 0 0 rgba(255,107,107,0)' },
+      ], { duration: 950, easing: 'ease-in-out' })
+    }
+    // 2) proyectiles '+' del signo a cada celda afectada (aterrizan cuando se aplica el estado)
+    const overlay = overlayRef.current
+    const canvas = mountRef.current?.querySelector('canvas')
+    if (!overlay || !canvas || !cells?.length) return
+    const cr = canvas.getBoundingClientRect()
+    const sr = sign?.getBoundingClientRect()
+    const sx = sr ? sr.left + sr.width / 2 : cr.left + cr.width / 2
+    const sy = sr ? sr.top + sr.height / 2 : cr.top - 30
+    cells.forEach(({ r, c }, i) => {
+      const tx = cr.left + ((c + 0.5) / cols) * cr.width
+      const ty = cr.top + ((r + 0.5) / rows) * cr.height
+      const el = document.createElement('div')
+      el.className = 'boss-shot'
+      el.textContent = '+'
+      el.style.left = sx + 'px'; el.style.top = sy + 'px'
+      overlay.appendChild(el)
+      el.animate([
+        { transform: 'translate(-50%,-50%) scale(0.4)', opacity: 0 },
+        { transform: 'translate(-50%,-50%) scale(1.3)', opacity: 1, offset: 0.28 },
+        { transform: `translate(calc(-50% + ${tx - sx}px), calc(-50% + ${ty - sy}px)) scale(1)`, opacity: 1 },
+      ], { duration: 420, delay: 260 + i * 24, easing: 'cubic-bezier(.5,0,.65,1)', fill: 'forwards' })
+        .onfinish = () => el.remove()
+    })
+  }, [])
+
   // "+Ns" flotando sobre el reloj cuando una cuenta suma tiempo
   const showTimeBonus = useCallback((sec) => {
     const overlay = overlayRef.current
@@ -152,6 +199,7 @@ export default function App() {
         setMode: (m) => setMode(m),
         setAccum: (a) => setAccum(a),
         setBoss: (b) => setBoss(b),
+        bossAttack: bossAttackFx,
         coach: (steps) => setCoach(steps),
         onHintUsed: (index) => trackEvent('hint', index),
         onAddMinute: (index) => trackEvent('continue', index),
@@ -186,7 +234,8 @@ export default function App() {
             // ganó: pantalla de victoria con estrellas (~3,4 s) y luego auto-avanza
             // al mapa + pop-up de inicio del siguiente nivel (estilo Candy Crush).
             setResult(null)
-            setWinScreen({ index, stars })
+            // si era JEFE: la pantalla de victoria muestra el desenlace (signo derrotado que cae)
+            setWinScreen({ index, stars, bossSign: boss ? (LEVELS[index]?.ops?.[0] ?? '+') : null })
             clearTimeout(winTimer.current)
             winTimer.current = setTimeout(() => advanceFromWin(index), 3400)
           } else {

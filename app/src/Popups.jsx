@@ -9,15 +9,33 @@ import { levelBrief, fmtMMSS } from './uiHelpers.js'
 import { heartsNextInSec } from './storage.js'
 import { Stars } from './mapView.jsx'
 
-// mensaje flotante del coach (tutorial / avisos; pausa el reloj)
+// mensaje flotante del coach (tutorial / avisos; pausa el reloj). Un paso puede ser una
+// CINEMÁTICA de jefe ({ cine: 'intro'|'phase', sign }) → se renderiza BossCine en su lugar.
 export function CoachBubble({ coach, onDismiss }) {
   if (!coach || !coach[0]) return null
+  if (coach[0].cine) return <BossCine step={coach[0]} onDismiss={onDismiss} />
   return (
     <div className="coach" onClick={onDismiss}>
       <div className={'coach-bubble' + (coach[0].highlight ? ' point-' + coach[0].highlight : '')}>
         <div className="coach-text">{coach[0].text}</div>
         <div className="coach-hint">{coach.length > 1 ? 'tocá para seguir →' : 'tocá para continuar'}</div>
       </div>
+    </div>
+  )
+}
+
+// CINEMÁTICA de jefe (~3 s, estilo videojuego), como paso especial del coach (pausa el juego
+// igual que un mensaje): 'intro' = presentación (el signo entra RUGIENDO + banner con el nombre);
+// 'phase' = cambio de fase (el signo se ENFURECE, flash rojo). Auto-avanza a los 3 s; tocar saltea.
+function BossCine({ step, onDismiss }) {
+  React.useEffect(() => { const id = setTimeout(onDismiss, 3000); return () => clearTimeout(id) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  const signEl = step.sign === '−' ? <span className="minus-bar cine" /> : step.sign
+  return (
+    <div className={'boss-cine ' + step.cine} onClick={onDismiss}>
+      <div className="cine-flash" aria-hidden="true" />
+      <div className="cine-sign">{signEl}</div>
+      <div className="cine-banner">{step.cine === 'intro' ? `¡EL REY ${step.sign}!` : `¡EL REY ${step.sign} SE ENFURECE!`}</div>
+      {step.cine === 'intro' ? <div className="cine-sub">¡Bajale toda la vida para ganar! 👹</div> : <div className="cine-sub">¡Ahora ataca más fuerte!</div>}
     </div>
   )
 }
@@ -37,8 +55,15 @@ export function WinScreen({ win, confetti, onAdvance }) {
         ))}
       </div>
       <div className="win-inner">
-        <div className="win-title">¡Nivel superado!</div>
-        <div className="win-sub">¡Buen trabajo! Seguí así 🎉</div>
+        {/* DESENLACE de jefe (estilo videojuego): el signo derrotado se marea, se pone gris y CAE */}
+        {win.bossSign && (
+          <div className="defeat-sign" aria-hidden="true">
+            <span className="defeat-glyph">{win.bossSign === '−' ? <span className="minus-bar cine" /> : win.bossSign}</span>
+            <span className="defeat-dizzy">💫</span>
+          </div>
+        )}
+        <div className="win-title">{win.bossSign ? `¡Rey ${win.bossSign} derrotado!` : '¡Nivel superado!'}</div>
+        <div className="win-sub">{win.bossSign ? '¡Lo venciste! Sos más fuerte que el Rey 👑' : '¡Buen trabajo! Seguí así 🎉'}</div>
         <div className="win-stars"><Stars n={win.stars} size={58} /></div>
         <div className="win-hint">tocá para seguir</div>
       </div>

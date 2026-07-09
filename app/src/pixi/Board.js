@@ -192,7 +192,9 @@ export class Board {
   // CRECER en vivo de a UNO (para la fase 1 del jefe Suma), conservando las fichas existentes. El
   // tablero puede quedar NO cuadrado entre pasos (el canvas ajusta ancho/alto). refill() = char nuevo.
   _resizeCanvas() { if (this.onResize) this.onResize(this.cols * TILE, this.rows * TILE); }
-  _popIn(tiles) { for (const t of tiles) { t.scale.set(0, 0); gsap.to(t.scale, { x: 1, y: 1, duration: 0.36, ease: 'back.out(2)' }); } }
+  // entrada en OLA (escalonada): las fichas nuevas aparecen una tras otra, no todas de golpe —
+  // hace el crecimiento del tablero (jefe +) más sutil y legible.
+  _popIn(tiles) { tiles.forEach((t, i) => { t.scale.set(0, 0); gsap.to(t.scale, { x: 1, y: 1, duration: 0.36, delay: i * 0.05, ease: 'back.out(2)' }); }); }
   addRow(refill) {              // fila nueva ABAJO
     const r = this.rows; this.rows = r + 1; this.tiles.push([]);
     const fresh = []; for (let c = 0; c < this.cols; c++) fresh.push(this._newTile(r, c, refill()));

@@ -15,6 +15,7 @@ import { countTargetMoves, lineFormsTarget } from './logic.js'
 
 const BOSS_FREEZE_MS = 10000 // cada cuánto ataca el jefe genérico (congela fichas)
 const BOSS_FREEZE_N = 3       // cuántas fichas congela por ataque
+const ATTACK_MS = 760         // duración del TELEGRAFIADO (embestida + proyectiles) antes de aplicar el ataque
 const INFEST_MS = 15000      // cada cuánto sube el frente de la infestación de + (fila nueva)
 const SCATTER_MS = 10000     // cada cuánto el Rey + (fase 1) esparce + aislados
 const ERASE_MS = 9000        // cada cuánto el Rey − (fase 2) borra un signo −
@@ -34,35 +35,45 @@ export const BOSS_KINDS = {
       const b = ctrl.boss
       const infestAt = b.infestAt ?? 0
       // FASE 1 — EXPANSIÓN: agrega de a UNO (fila, luego columna, alternando) en cada umbral hasta
-      // `expandTo`. De 5×5 a 7×7 = 4 pasos (+fila,+col,+fila,+col), repartidos en (infestAt, 1].
-      if (b.expandTo) {
+      // `expandTo`. TELEGRAFIADA: el jefe embiste + el marco destella, y recién ahí crece el tablero
+      // (las fichas nuevas entran en OLA escalonada, ver Board._popIn) → menos brusco y con autor claro.
+      if (b.expandTo && !ctrl._telegraphing) {
         const adds = Math.max(0, (b.expandTo - ctrl.level.size) * 2)
+        const steps = []
         for (let k = 1; k <= adds; k++) {
           const thr = 1 - (1 - infestAt) * (k / (adds + 1))
-          if (frac <= thr && ctrl._grownCount < k) {
-            ctrl._grownCount = k
-            if (k % 2 === 1) ctrl.board.addRow(ctrl.gen.randTile)   // impar = fila abajo
-            else ctrl.board.addCol(ctrl.gen.randTile)               // par = columna derecha
+          if (frac <= thr && ctrl._grownCount < k) { ctrl._grownCount = k; steps.push(k) }
+        }
+        if (steps.length) {
+          ctrl._bossTelegraph([], 'grow', () => {
+            for (const k of steps) {
+              if (k % 2 === 1) ctrl.board.addRow(ctrl.gen.randTile)   // impar = fila abajo
+              else ctrl.board.addCol(ctrl.gen.randTile)               // par = columna derecha
+            }
             ctrl.board.shake(8)
-            ctrl.hooks.toast?.('🟩 ¡El tablero crece!')
+            ctrl.hooks.toast?.('🟩 ¡El Rey + agranda el tablero!')
             if (ctrl.fixedTargets != null) ctrl._healFixedBoard()  // re-saneo target-rich en el nuevo tamaño
             if (!ctrl._coachedExpand) {
               ctrl._coachedExpand = true
               ctrl._coach([{ text: '¡El Rey + agranda el tablero! 🟩 Va sumando filas y columnas para complicarla. Seguí bajándole la vida.' }])
             }
-          }
+          })
         }
       }
       // FASE 2 — INFESTACIÓN: al cruzar infestAt (ej. 50% HP) empiezan a subir los +.
+      // Entra con CINEMÁTICA de cambio de fase (el jefe se enfurece) + coach; la primera fila
+      // sube al cerrarse (primer tick corto de _startInfest, que espera si hay coach en pantalla).
       if (b.infestAt != null && frac <= b.infestAt && !ctrl._infestStarted) {
         ctrl._infestStarted = true
         ctrl.infest = true
-        ctrl._infestRise()      // la PRIMERA fila apenas llega al 50%
-        ctrl._startInfest()     // y sigue subiendo una fila cada INFEST_MS
         if (!ctrl._coachedInfest) {
           ctrl._coachedInfest = true
-          ctrl._coach([{ text: '¡El Rey + se cansó y quiere hacerte perder! Ahora sube FILAS enteras. ¡Apurate a derrotarlo antes de que tape el tablero!' }])
+          ctrl._coach([
+            { cine: 'phase', sign: '+' },
+            { text: '¡El Rey + se cansó y quiere hacerte perder! Ahora sube FILAS enteras. ¡Apurate a derrotarlo antes de que tape el tablero!' },
+          ])
         }
+        ctrl._startInfest(3500)   // primera fila apenas termine la cinemática/coach; luego cada INFEST_MS
       }
     },
   },
@@ -86,36 +97,46 @@ export const BOSS_KINDS = {
       // FASE 1 — ENCOGER: saca de a UNO (fila abajo, luego columna derecha) en cada umbral, de `size`
       // a `shrinkTo`. De 7×7 a 5×5 = 4 pasos, repartidos en (eraseAt, 1]. El mantenimiento SIGUE ON
       // (tablero más chico pero jugable) hasta la fase 2.
-      if (b.shrinkTo) {
-        const steps = Math.max(0, (ctrl.level.size - b.shrinkTo) * 2)
-        for (let k = 1; k <= steps; k++) {
-          const thr = 1 - (1 - eraseAt) * (k / (steps + 1))
-          if (frac <= thr && ctrl._shrunkCount < k) {
-            ctrl._shrunkCount = k
-            if (k % 2 === 1) ctrl.board.removeRow()   // impar = fila de abajo
-            else ctrl.board.removeCol()               // par = columna derecha
+      if (b.shrinkTo && !ctrl._telegraphing) {
+        const total = Math.max(0, (ctrl.level.size - b.shrinkTo) * 2)
+        const steps = []
+        for (let k = 1; k <= total; k++) {
+          const thr = 1 - (1 - eraseAt) * (k / (total + 1))
+          if (frac <= thr && ctrl._shrunkCount < k) { ctrl._shrunkCount = k; steps.push(k) }
+        }
+        if (steps.length) {
+          // TELEGRAFIADO (igual que el crecer del Rey +): embestida + destello del marco → achica.
+          ctrl._bossTelegraph([], 'shrink', () => {
+            for (const k of steps) {
+              if (k % 2 === 1) ctrl.board.removeRow()   // impar = fila de abajo
+              else ctrl.board.removeCol()               // par = columna derecha
+            }
             ctrl.board.shake(8)
-            ctrl.hooks.toast?.('🧽 ¡El tablero se achica!')
+            ctrl.hooks.toast?.('🧽 ¡El Rey − achica el tablero!')
             // NO re-sanear al achicar: sólo se sacan celdas del borde (no crea cuentas formadas), y
             // el próximo movimiento ya corre el mantenimiento normal → menos cambios de fichas de golpe.
             if (!ctrl._coachedShrink) {
               ctrl._coachedShrink = true
               ctrl._coach([{ text: '¡El Rey − achica el tablero! 🧽 Va quitando filas y columnas. ¡Seguí bajándole la vida!' }])
             }
-          }
+          })
         }
       }
       // FASE 2 — BORRÓN: al cruzar eraseAt deja de reponer signos y arranca a tacharlos.
+      // Entra con CINEMÁTICA de cambio de fase (el jefe se enfurece) + coach.
       if (b.eraseAt != null && frac <= b.eraseAt && !ctrl._eraseStarted) {
         ctrl._eraseStarted = true
         ctrl._erasing = true
         ctrl._noReplenish = true      // deja de reponer signos: ahora escasean de verdad
-        ctrl._eraseSign()             // borra el primero al cruzar
-        ctrl._startErase()            // y sigue cada ERASE_MS
         if (!ctrl._coachedErase) {
           ctrl._coachedErase = true
-          ctrl._coach([{ text: '¡El Rey − se enoja y BORRA los signos −! 🧽 Quedan tachados y no se pueden usar. ¡Derrotalo antes de quedarte sin signos!' }])
+          ctrl._coach([
+            { cine: 'phase', sign: '−' },
+            { text: '¡El Rey − se enoja y BORRA los signos −! 🧽 Quedan tachados y no se pueden usar. ¡Derrotalo antes de quedarte sin signos!' },
+          ])
         }
+        ctrl._eraseSign()             // borra el primero al cruzar
+        ctrl._startErase()            // y sigue cada ERASE_MS
       }
     },
   },
@@ -127,6 +148,23 @@ export const hazardMethods = {
   _addBoss(value) {
     this.bossHp = Math.max(0, this.bossHp - value)
     this.left = this.bossHp   // dispara la victoria por los checks existentes de left<=0
+  },
+
+  // TELEGRAFIADO del ataque: primero la ANIMACIÓN (hook bossAttack: el signo embiste y
+  // dispara proyectiles a las celdas) con el tablero BLOQUEADO, y recién después se aplica
+  // el efecto. Así el jugador VE que el cambio lo causa el jefe, sin depender del coach.
+  // `_teleSeq` (bumpeado en start()) invalida el apply si el nivel se reinició en el medio.
+  _bossTelegraph(cells, kind, apply) {
+    this._telegraphing = true
+    this.board.locked = true
+    const seq = this._teleSeq
+    this.hooks.bossAttack?.({ cells, rows: this.board.rows, cols: this.board.cols, kind })
+    setTimeout(() => {
+      if (seq !== this._teleSeq) return          // el nivel se reinició: descartar (start() resetea flags)
+      this._telegraphing = false
+      if (!this.busy) this.board.locked = false  // no pisar el lock de una cascada en curso
+      if (!this.ended) apply()
+    }, ATTACK_MS)
   },
 
   // ---------- despacho por tipo de jefe (registro BOSS_KINDS) ----------
@@ -161,8 +199,8 @@ export const hazardMethods = {
   _bossTick() {
     this._bossAtkId = null
     if (this.ended) return
-    // no atacar si el tablero está ocupado (cascada) o hay un mensaje del coach: se reprograma
-    if (this.started && !this.busy && !this.coachActive) this._bossAttack()
+    // no atacar si el tablero está ocupado (cascada), hay coach o hay OTRO ataque telegrafiándose
+    if (this.started && !this.busy && !this.coachActive && !this._telegraphing) this._bossAttack()
     this._bossAtkId = setTimeout(() => this._bossTick(), BOSS_FREEZE_MS)
   },
   // ATAQUE "congelar": congela hasta BOSS_FREEZE_N fichas libres AL AZAR. SIN guardrail: el jefe
@@ -202,7 +240,7 @@ export const hazardMethods = {
   _eraseTick() {
     this._eraseId = null
     if (this.ended) return
-    if (this.started && !this.busy && !this.coachActive) this._eraseSign()
+    if (this.started && !this.busy && !this.coachActive && !this._telegraphing) this._eraseSign()
     this._eraseId = setTimeout(() => this._eraseTick(), ERASE_MS)
   },
   _eraseSign() {
@@ -249,19 +287,21 @@ export const hazardMethods = {
   // ---------- INFESTACIÓN de + (Rey + fase 2 / escenario Suma) ----------
   // Loop propio: cada INFEST_MS el frente de + sube UNA fila (una celda por columna). Los +
   // infestados se usan a mano pero son INMUTABLES para el mantenimiento. Ver DISEÑO §18.6.
-  _startInfest() {
+  _startInfest(first = INFEST_MS) {   // `first` corto = primera fila apenas termina la cinemática de fase
     if (!this.infest || this._infestId) return
-    this._infestId = setTimeout(() => this._infestTick(), INFEST_MS)
+    this._infestId = setTimeout(() => this._infestTick(), first)
   },
   _infestTick() {
     this._infestId = null
     if (this.ended) return
+    if (this._telegraphing) { this._infestId = setTimeout(() => this._infestTick(), 1200); return }   // hay otro ataque animándose: reintentar en breve
     if (this.started && !this.busy && !this.coachActive) this._infestRise()
     this._infestId = setTimeout(() => this._infestTick(), INFEST_MS)
   },
   // sube el frente: en cada columna infesta la celda LIBRE más abajo (llena de abajo hacia arriba;
   // salta las ya infestadas). No pisa fichas con otro estado.
   _infestRise() {
+    if (this._telegraphing) return                  // ya hay un ataque animándose (el tick reintenta)
     const toInfest = []
     for (let c = 0; c < this.board.cols; c++) {
       for (let r = this.board.rows - 1; r >= 0; r--) {
@@ -272,8 +312,14 @@ export const hazardMethods = {
         toInfest.push({ r, c }); break              // primera libre desde abajo → infestar
       }
     }
-    if (toInfest.length) { this.board.applyInfest(toInfest); this.board.shake(5) }
-    this._infestCheckLoss()
+    if (toInfest.length) {
+      // TELEGRAFIADO: embestida + una FILA de proyectiles + que vuelan a las celdas del frente
+      this._bossTelegraph(toInfest, 'infest', () => {
+        this.board.applyInfest(toInfest)
+        this.board.shake(5)
+        this._infestCheckLoss()
+      })
+    } else this._infestCheckLoss()
   },
 
   // ---------- FASE 1 del Rey +: esparcir + AISLADOS ----------
@@ -286,7 +332,7 @@ export const hazardMethods = {
   _scatterTick() {
     this._scatterId = null
     if (this.ended || this._infestStarted) return   // fase 2: para el scatter (sube el frente)
-    if (this.started && !this.busy && !this.coachActive) this._scatterPlus(2)
+    if (this.started && !this.busy && !this.coachActive && !this._telegraphing) this._scatterPlus(2)
     this._scatterId = setTimeout(() => this._scatterTick(), SCATTER_MS)
   },
   _scatterPlus(n = 2) {
@@ -303,11 +349,15 @@ export const hazardMethods = {
     for (let i = cands.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[cands[i], cands[j]] = [cands[j], cands[i]] }
     const pick = cands.slice(0, n)
     if (pick.length) {
-      this.board.applyInfest(pick)
-      if (!this._coachedScatter) {
-        this._coachedScatter = true
-        this._coach([{ text: 'El Rey + empieza a ensuciar el tablero con signos +. Se van acumulando… ¡usalos en tus sumas!' }])
-      }
+      // TELEGRAFIADO: el jefe embiste y los + VUELAN del signo a las celdas; el tablero queda
+      // bloqueado durante la animación, así las posiciones elegidas siguen siendo válidas.
+      this._bossTelegraph(pick, 'scatter', () => {
+        this.board.applyInfest(pick)
+        if (!this._coachedScatter) {
+          this._coachedScatter = true
+          this._coach([{ text: 'El Rey + empieza a ensuciar el tablero con signos +. Se van acumulando… ¡usalos en tus sumas!' }])
+        }
+      })
     }
   },
   // perdés cuando la fila de arriba (row 0) queda TODA infestada (la marea de + llegó al techo)

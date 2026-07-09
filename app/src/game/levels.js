@@ -35,12 +35,12 @@ export const LEVELS = [
   // aparecen intercalados (un giro sí / uno no) para cortar la monotonía. La suma sigue
   // siendo de 1 cifra; los twists cambian la EXPERIENCIA, no la carga matemática.
   { name: 'Primeros pasos',   size: 4, digits: range(1, 3), ops: ['+'], eq: false, maxDigits: 1, target: 4,        quota: 10, tutorial: true, goal: 50 },  // tutorial corto: barra a 50 (~13 cuentas)
-  { name: 'Amigos del 5',     size: 5, digits: range(1, 3), ops: ['+'], eq: false, maxDigits: 1, target: 5,        quota: 10 },  // fichas 1-3 (onboarding gradual): 5 = 2+3
+  { name: 'Amigos del 5',     size: 5, digits: range(1, 4), ops: ['+'], eq: false, maxDigits: 1, target: 5,        quota: 10 },  // fichas 1-4 (más pares posibles = menos secado): 5 = 2+3,1+4
   { name: 'Media docena',     size: 5, digits: range(1, 4), ops: ['+'], eq: false, maxDigits: 1, target: 6,        quota: 10 },  // fichas 1-4: 6 = 2+4,3+3
-  { name: 'Solo pares',       size: 5, digits: ['2', '4', '6'], ops: ['+'], eq: false, maxDigits: 1, target: [6, 8], quota: 10, goal: 150 },  // 🎁 doble, solo pares → 6=2+4, 8=2+6,4+4
-  // 🎁 CONTRARRELOJ (nivel 5 de cada mundo: 5/15/25/35): nivel ESPECIAL con RELOJ (1 min) y
+  { name: 'Solo pares',       size: 5, digits: ['2', '4', '6'], ops: ['+'], eq: false, maxDigits: 1, target: 8,   quota: 10, goal: 170 },  // solo pares → 8 = 2+6,4+4 (medido: con [6,8] los combos regalaban 60% → objetivo único + goal más alto)
+  // 🎁 CONTRARRELOJ (nivel 5 de cada mundo: 5/15/25/35): nivel ESPECIAL con RELOJ y
   // tablero un poco más grande. Si se acaba el tiempo → "+1 minuto" (reintento).
-  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 7), ops: ['+'], eq: false, maxDigits: 1, target: [5, 10],  timed: true, time: 60, goal: 200 },  // ⏱ doble 5/10, fichas 1-7
+  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 7), ops: ['+'], eq: false, maxDigits: 1, target: [5, 10],  timed: true, time: 80, goal: 150 },  // ⏱ doble 5/10, fichas 1-7 (medido 18.4 movs: 60s era brutal → 80s + goal 150)
   // 🎁 Objetivo múltiple (varios números a la vez): 5, 8 y 10 juntos.
   { name: 'Triple objetivo',  size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: [5, 8, 10], goal: 200 },
   { name: 'La docena',        size: 6, digits: range(1, 9), ops: ['+'], eq: false, maxDigits: 1, target: 12,        goal: 200 },  // normal: enseña el 12 antes de la súper ficha
@@ -62,20 +62,21 @@ export const LEVELS = [
   // ================= MUNDO RESTA (niveles 11-19 + hito) — RAMPA DE DIFICULTAD =================
   // Mundo 2: resta de 1 cifra, resultados ≥0. Rampa balanceada a mano (2026-07-05).
   // 11-15 = intro MUY gradual (fichas y objetivos chicos, 5×5→6×6):
-  //   11 (target 1, 1-4) · 12 (target 2, 1-4) · 13 (target 3, 1-6) · 14 ([2,3], 1-6) · 15 ([3,5], 1-7, ⏱).
-  //   Goals cortos: 20 · 30 · 50 · 50 · 100. La barra suma el VALOR (resultado) → cuentas ≈ goal/objetivo.
-  // 16-19 = rampa dura: 7×7, fichas 1-9, dobles/triples altos, goal 150 parejo y MENOS intentos (4/4/4/3).
-  //   En resta objetivo alto = MENOS pares (7 solo 8−1,9−2). Ver DISEÑO §7.
-  { name: 'Primera resta',    size: 5, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 1,       quota: 10, goal: 20, orderCoach: true },   // solo 1-4; 1 = 2−1,3−2,4−3 (goal bajo). orderCoach: explica el ORDEN (1ra resta del juego)
-  { name: 'Segunda resta',    size: 5, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 2,       quota: 10, goal: 30 },   // solo 1-4; 2 = 3−1,4−2
+  //   11 (target 1, 1-4) · 12 (target 2, 1-4, 6×6) · 13 (target 3, 1-6) · 14 ([2,3], 1-6) · 15 ([3,5], 1-7, ⏱).
+  //   Goals cortos: 10 · 24 · 50 · 50 · 75. La barra suma el VALOR (resultado) → cuentas ≈ goal/objetivo.
+  // 16-19 = rampa dura: 7×7, fichas 1-9, dobles/triples altos, goal 120 parejo y MENOS intentos (4/4/4/3).
+  //   En resta objetivo alto = MENOS pares (7 solo 8−1,9−2). Balanceado por SIMULACIÓN (sim/simulate.mjs,
+  //   2026-07-06): movidas para ganar, secado del tablero, % combos. Ver DISEÑO §7.
+  { name: 'Primera resta',    size: 5, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 1,       quota: 10, goal: 10, orderCoach: true },   // solo 1-4; 1 = 2−1,3−2,4−3. Goal 10 (medido: con 20 eran 15.6 movs de puro 2−1 = grind). orderCoach: explica el ORDEN
+  { name: 'Segunda resta',    size: 6, digits: range(1, 4), ops: ['−'], eq: false, maxDigits: 1, target: 2,       quota: 10, goal: 24 },   // 6×6 (medido: en 5×5 era el más apretado, 3.9 opciones y 12.5% de secado) + goal 24
   { name: 'Tercera resta',    size: 6, digits: range(1, 6), ops: ['−'], eq: false, maxDigits: 1, target: 3,        quota: 10, goal: 50 },   // 6×6, fichas 1-6, objetivo único 3
   { name: 'Resta doble',      size: 6, digits: range(1, 6), ops: ['−'], eq: false, maxDigits: 1, target: [2, 3],  quota: 10, goal: 50 },   // 🎁 doble, fichas 1-6
-  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 7), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5],   timed: true, time: 60, goal: 100 },  // ⏱ contrarreloj; doble impar 3/5, fichas 1-7; el tablero CRECE a 7×7 después
-  // --- desde acá la rampa aprieta: 7×7, impares/altos, triples y MENOS intentos (goal 150 parejo) ---
-  { name: 'Resta difícil',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [5, 7],  quota: 15, goal: 150, tries: 4 },  // 7×7, 7 = solo 8−1,9−2
-  { name: 'Doble combos',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7],  quota: 15, goal: 150, comboFever: true, tries: 4 },  // 🎁 combos x2, 7×7
-  { name: 'Triple resta',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 4, 6], quota: 15, goal: 150, tries: 4 },  // 🎁 triple
-  { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 150, tries: 3 },  // 🎁 triple, solo 3 intentos
+  { name: 'Contrarreloj ⏱',   size: 6, digits: range(1, 7), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5],   timed: true, time: 80, goal: 75 },  // ⏱ doble impar 3/5, fichas 1-7 (medido 20.1 movs en 60s = brutal → 80s + goal 75); el tablero CRECE a 7×7 después
+  // --- desde acá la rampa aprieta: 7×7, impares/altos, triples y MENOS intentos (goal 120 parejo, medido ~20-30 movs con 150) ---
+  { name: 'Resta difícil',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [5, 7],  quota: 15, goal: 120, tries: 4 },  // 7×7, 7 = solo 8−1,9−2
+  { name: 'Doble combos',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 7],  quota: 15, goal: 120, comboFever: true, tries: 4 },  // 🎁 combos x2, 7×7
+  { name: 'Triple resta',     size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [2, 4, 6], quota: 15, goal: 120, tries: 4 },  // 🎁 triple
+  { name: 'Resta maestra',    size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [3, 5, 7], quota: 15, goal: 120, tries: 3 },  // 🎁 triple, solo 3 intentos
   // 👹 EL REY − (opuesto del Rey +): FASE 1 el tablero ENCOGE 7×7→5×5 (shrinkTo); FASE 2 (desde
   // eraseAt=50% HP) BORRA signos − (tachados permanentes → si te quedás sin jugadas, perdés). Daño = diferencia formada.
   { name: 'El Rey −', size: 7, digits: range(1, 9), ops: ['−'], eq: false, maxDigits: 1, target: [4, 5, 6], boss: { hp: 200, shrinkTo: 5, eraseAt: 0.5 }, quota: 99 },

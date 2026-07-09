@@ -53,27 +53,21 @@ export const BOSS_KINDS = {
             ctrl.board.shake(8)
             ctrl.hooks.toast?.('🟩 ¡El Rey + agranda el tablero!')
             if (ctrl.fixedTargets != null) ctrl._healFixedBoard()  // re-saneo target-rich en el nuevo tamaño
-            if (!ctrl._coachedExpand) {
-              ctrl._coachedExpand = true
-              ctrl._coach([{ text: '¡El Rey + agranda el tablero! 🟩 Va sumando filas y columnas para complicarla. Seguí bajándole la vida.' }])
-            }
+            // sin coach: el telegrafiado (embestida + destello del marco) + la ola de fichas lo cuentan solos
           })
         }
       }
       // FASE 2 — INFESTACIÓN: al cruzar infestAt (ej. 50% HP) empiezan a subir los +.
-      // Entra con CINEMÁTICA de cambio de fase (el jefe se enfurece) + coach; la primera fila
-      // sube al cerrarse (primer tick corto de _startInfest, que espera si hay coach en pantalla).
+      // Entra SOLO con la CINEMÁTICA de furia (sin texto: la primera fila sube apenas se cierra
+      // y los proyectiles del telegrafiado muestran qué hace el jefe).
       if (b.infestAt != null && frac <= b.infestAt && !ctrl._infestStarted) {
         ctrl._infestStarted = true
         ctrl.infest = true
         if (!ctrl._coachedInfest) {
           ctrl._coachedInfest = true
-          ctrl._coach([
-            { cine: 'phase', sign: '+' },
-            { text: '¡El Rey + se cansó y quiere hacerte perder! Ahora sube FILAS enteras. ¡Apurate a derrotarlo antes de que tape el tablero!' },
-          ])
+          ctrl._coach([{ cine: 'phase', sign: '+' }])
         }
-        ctrl._startInfest(1500)   // primera fila APENAS se cierre la cinemática/coach (el tick reintenta cada 1s si siguen abiertos); luego cada INFEST_MS
+        ctrl._startInfest(1500)   // primera fila APENAS se cierre la cinemática (el tick reintenta cada 1s si sigue abierta); luego cada INFEST_MS
       }
     },
   },
@@ -115,10 +109,7 @@ export const BOSS_KINDS = {
             ctrl.hooks.toast?.('🧽 ¡El Rey − achica el tablero!')
             // NO re-sanear al achicar: sólo se sacan celdas del borde (no crea cuentas formadas), y
             // el próximo movimiento ya corre el mantenimiento normal → menos cambios de fichas de golpe.
-            if (!ctrl._coachedShrink) {
-              ctrl._coachedShrink = true
-              ctrl._coach([{ text: '¡El Rey − achica el tablero! 🧽 Va quitando filas y columnas. ¡Seguí bajándole la vida!' }])
-            }
+            // Sin coach: el telegrafiado + el borrón del borde lo cuentan solos.
           })
         }
       }
@@ -130,10 +121,7 @@ export const BOSS_KINDS = {
         ctrl._noReplenish = true      // deja de reponer signos: ahora escasean de verdad
         if (!ctrl._coachedErase) {
           ctrl._coachedErase = true
-          ctrl._coach([
-            { cine: 'phase', sign: '−' },
-            { text: '¡El Rey − se enoja y BORRA los signos −! 🧽 Quedan tachados y no se pueden usar. ¡Derrotalo antes de quedarte sin signos!' },
-          ])
+          ctrl._coach([{ cine: 'phase', sign: '−' }])   // solo la cinemática de furia; el borrador barriendo se explica solo
         }
         ctrl._eraseSign()             // borra el primero al cruzar
         ctrl._startErase()            // y sigue cada ERASE_MS
@@ -361,13 +349,8 @@ export const hazardMethods = {
     if (pick.length) {
       // TELEGRAFIADO: el jefe embiste y los + VUELAN del signo a las celdas; el tablero queda
       // bloqueado durante la animación, así las posiciones elegidas siguen siendo válidas.
-      this._bossTelegraph(pick, 'scatter', () => {
-        this.board.applyInfest(pick)
-        if (!this._coachedScatter) {
-          this._coachedScatter = true
-          this._coach([{ text: 'El Rey + empieza a ensuciar el tablero con signos +. Se van acumulando… ¡usalos en tus sumas!' }])
-        }
-      })
+      // sin coach: la embestida + los proyectiles que aterrizan como '+' se explican solos
+      this._bossTelegraph(pick, 'scatter', () => this.board.applyInfest(pick))
     }
   },
   // perdés cuando la fila de arriba (row 0) queda TODA infestada (la marea de + llegó al techo)

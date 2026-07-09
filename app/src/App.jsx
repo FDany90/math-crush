@@ -403,7 +403,8 @@ export default function App() {
                de los resultados para golpearlo; a 0 HP se derrota. */
             <div className="boss">
               {/* el glifo '−' de la fuente tiza queda muy bajo → barra dibujada y centrada */}
-              <div className={'boss-sign' + (boss.hp <= 0 ? ' defeated' : '')}>
+              {/* el signo VIVO: idle respirando; bajo 50% HP se enfurece (anim más rápida y roja) */}
+              <div className={'boss-sign' + (boss.hp <= 0 ? ' defeated' : (boss.max && boss.hp / boss.max <= 0.5 ? ' enraged' : ''))}>
                 {boss.sign === '−' ? <span className="minus-bar" /> : boss.sign}
               </div>
               <div className="boss-side">

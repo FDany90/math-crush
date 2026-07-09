@@ -94,12 +94,10 @@ export class Controller {
     this._eraseStarted = false             // ya arrancó el borrón (fase 2)
     this._erasing = false                  // loop de borrado activo
     this._noReplenish = false              // deja de reponer signos (fase 2 del Rey −)
-    // coaches del jefe (una vez POR PARTIDA, se muestran al ocurrir cada etapa)
-    this._coachedScatter = false           // aviso del 1er + esparcido (Rey +, fase 1)
-    this._coachedExpand = false            // aviso de la 1ra expansión (Rey +, fase 1)
-    this._coachedInfest = false            // aviso del arranque de la fase 2 (Rey +)
-    this._coachedShrink = false            // aviso del 1er achique (Rey −, fase 1)
-    this._coachedErase = false             // aviso del arranque del borrón (Rey −, fase 2)
+    // cinemáticas de cambio de fase del jefe (una vez POR PARTIDA). Los ataques individuales
+    // ya no tienen coach: el telegrafiado (embestida + proyectiles) los explica visualmente.
+    this._coachedInfest = false            // cinemática de furia al arrancar la fase 2 (Rey +)
+    this._coachedErase = false             // cinemática de furia al arrancar el borrón (Rey −, fase 2)
     this.ended = false
     this.busy = false
     this.started = false
@@ -156,13 +154,10 @@ export class Controller {
     if (this.tutorial) {
       this._coach([{ text: 'Mové las fichas para formar el número de arriba.', highlight: 'target' }])
     } else if (this.boss) {
-      // JEFE: primero la PRESENTACIÓN estilo videojuego (cinemática ~3s: banner + el signo ruge,
-      // paso `cine` del coach, se renderiza en App) y después el coach con qué hacer.
-      const sign = this.level.ops?.[0] ?? '+'
-      this._coach([
-        { cine: 'intro', sign },
-        { text: '¡Llegaste al Rey ' + sign + '! 👹 Formá los resultados que marca arriba: cada cuenta le baja la vida. ¡Dejalo en 0 para ganar!' },
-      ])
+      // JEFE: SOLO la presentación estilo videojuego (cinemática ~3s). Sin coach explicativo —
+      // el jefe se entiende visualmente: HP baja al absorber fichas, ataques telegrafiados con
+      // embestida + proyectiles, y el signo del HUD está vivo (idle/furia).
+      this._coach([{ cine: 'intro', sign: this.level.ops?.[0] ?? '+' }])
     } else if (this.level.superTile) {
       // TUTORIAL de SÚPER FICHA (primera vez): explicá la cuenta de 2 operadores y, al cerrar
       // el coach, dejá la manito guía sobre una jugada de 2 operadores YA preparada.

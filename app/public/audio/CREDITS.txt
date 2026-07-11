@@ -2,9 +2,11 @@ Música de Math Crush — créditos y licencias
 ===========================================
 
 Loops de música (licencia Creative Commons Zero / CC0, uso libre sin atribución):
-  - map.ogg   = "Italian Mom"     — Kenney (kenney.nl), pack "Music Loops"
-  - level.ogg = "Wacky Waiting"   — Kenney (kenney.nl), pack "Music Loops"
-  - boss.ogg  = "Drumming Sticks" — Kenney (kenney.nl), pack "Music Loops"
+  - map.ogg   = "Swinging Pants"   — Kenney (kenney.nl), pack "Music Loops"
+  - map2.ogg  = "Mishief Stroll"   — Kenney (kenney.nl), pack "Music Loops"
+  - level.ogg = "German Virtue"    — Kenney (kenney.nl), pack "Music Loops"
+  - boss.ogg  = "Infinite Descent" — Kenney (kenney.nl), pack "Music Loops"
+  (el mapa alterna map.ogg/map2.ogg al azar en cada visita)
   Descargados del espejo gamesounds.xyz (Kenney's Sound Pack / Music Loops / Loops).
 
 Efectos de sonido y jingles: sintetizados en tiempo real con ZzFX

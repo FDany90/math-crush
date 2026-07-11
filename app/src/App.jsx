@@ -235,7 +235,7 @@ export default function App() {
           setTarget(t)
         },
         onCuenta: ({ cells, rows, cols, value, bar }) => {
-          sound.play(bar?.boss ? 'bossHurt' : 'cuenta')   // ✔ cuenta formada (o golpe al jefe)
+          sound.play('cuenta')   // ✔ cuenta formada — MISMO sonido en niveles y jefes (playtest 2026-07-11: el golpe distinto no gustó)
           flyTokens(cells, rows, cols, value, bar)
         },
         addTime: (sec) => showTimeBonus(sec),

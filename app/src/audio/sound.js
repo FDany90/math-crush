@@ -30,8 +30,7 @@ const SFX = {
   boom:     [1.1, .1, 65, .01, .14, .65, 4, 1.4, , , , , , 1.6, , .4, , .9, .14],      // 💣 explosión de bomba
   zap:      [.8, , 430, .01, .18, .32, 2, 2, 9, , , , .06, , , , , .7, .09],           // ✨ cruz de la súper ficha
   rumble:   [.8, .2, 48, .02, .22, .5, 4, .9, , , , , , 2.4, , .3, , .8, .18],         // 🔳 temblor: tablero crece/encoge
-  bossAtk:  [.8, .1, 115, .02, .11, .38, 3, 1.5, -5, , , , , .7, , .2, , .8, .09],     // 👹 embestida del jefe
-  bossHurt: [.7, , 175, .01, .06, .18, 2, 1.4, 3, , , , , .5, , , , .7, .05],          // 👹 el jefe recibe el golpe
+  bossAtk:  [.8, .1, 115, .02, .11, .38, 3, 1.5, -5, , , , , .7, , .2, , .8, .09],     // 👹 embestida del jefe (las cuentas contra el jefe usan 'cuenta', igual que en niveles)
   cine:     [1, , 72, .03, .22, .75, 4, 1.1, , , , , , 1.1, , .5, .09, .9, .18],       // 🎬 slam de cinemática
   erase:    [.6, .3, 880, .02, .1, .18, 4, .5, , , , , .03, 2.2],                      // 🧽 borrador del jefe −
   infest:   [.6, , 145, .05, .18, .38, 2, .9, 2.2, .4],                                // ➕ sube la infestación
@@ -55,22 +54,27 @@ const JINGLES = {
 // de los SFX pero NO su gain maestro (mutear SFX no muta la música y viceversa).
 // Si el navegador no decodifica .ogg (iOS Safari) queda en silencio sin romper nada.
 const MUSIC_VOL = { map: .4, level: .3, boss: .45 }
-const trackUrl = (scene) => import.meta.env.BASE_URL + 'audio/' + scene + '.ogg'
+// VARIANTES por escena (elección del playtest 2026-07-11): cada vez que se entra a la
+// escena suena UNA al azar — el mapa alterna dos pistas "para no cansar".
+// map.ogg = "Swinging Pants" · map2.ogg = "Mishief Stroll" · level.ogg = "German Virtue"
+// · boss.ogg = "Infinite Descent" (todas CC0 de Kenney, ver CREDITS.txt).
+const TRACKS = { map: ['map', 'map2'], level: ['level'], boss: ['boss'] }
+const trackUrl = (file) => import.meta.env.BASE_URL + 'audio/' + file + '.ogg'
 let curScene = null      // escena pedida (se recuerda aunque la música esté OFF)
 let cur = null           // { src, gain, scene } del loop sonando
-const bufCache = {}      // scene → Promise<AudioBuffer> (cachea fetch+decode)
+const bufCache = {}      // archivo → Promise<AudioBuffer> (cachea fetch+decode)
 
 // HMR de Vite (dev): al recargarse este módulo, la instancia nueva silencia el loop de la
 // vieja (antes quedaba huérfano sonando hasta el F5: "se solapan todas las músicas").
 try { window.__mcMusicStop?.() } catch { /* nada sonando */ }
 window.__mcMusicStop = () => stopMusic(true)
 
-function loadBuffer(scene) {
+function loadBuffer(file) {
   const ctx = zzfxContext()
-  return (bufCache[scene] ||= fetch(trackUrl(scene))
+  return (bufCache[file] ||= fetch(trackUrl(file))
     .then((r) => r.arrayBuffer())
     .then((ab) => ctx.decodeAudioData(ab))
-    .catch((e) => { delete bufCache[scene]; throw e }))
+    .catch((e) => { delete bufCache[file]; throw e }))
 }
 
 function stopMusic(hard = false) {
@@ -90,8 +94,10 @@ function stopMusic(hard = false) {
 async function startMusic() {
   if (!curScene || !musicOn) return
   const scene = curScene
+  const files = TRACKS[scene] || [scene]
+  const file = files[(Math.random() * files.length) | 0]   // variante al azar por visita
   let buf
-  try { buf = await loadBuffer(scene) } catch { return }   // sin red o formato no soportado: silencio
+  try { buf = await loadBuffer(file) } catch { return }   // sin red o formato no soportado: silencio
   // mientras decodificaba pudo cambiar la escena, apagarse la música o arrancar otro loop
   if (scene !== curScene || !musicOn || cur) return
   const ctx = zzfxContext()

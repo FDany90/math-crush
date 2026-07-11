@@ -55,9 +55,23 @@ let audioEl = null       // <audio> del loop actual
 let curScene = null      // escena pedida (se recuerda aunque la música esté OFF)
 let pendingPlay = false  // play() bloqueado por autoplay → reintentar en el próximo gesto
 
-// Cada <audio> lleva SU PROPIO intervalo de fade (el._fadeId). Con un id compartido, el
-// fade-in del loop nuevo mataba el fade-out del anterior y quedaban los dos sonando
-// (bug de playtest 2026-07-11: música del mapa y del nivel solapadas).
+// REGISTRO GLOBAL de loops vivos (en window, sobrevive al módulo): TODO <audio> creado acá
+// se anota, y cualquier "zombie" (loop que ya no es el actual) se mata en seco. Cubre:
+//  - el bug original (fades con un intervalo compartido que se pisaban),
+//  - carreras de play() asíncrono al cambiar rápido de escena,
+//  - HMR de Vite en dev: la instancia nueva del módulo mata los loops huérfanos de la
+//    vieja (antes seguían sonando hasta el F5 — "se solapan todas las músicas" en local).
+const LIVE = (window.__mcMusicLive ||= new Set())
+function killEl(el) {
+  clearInterval(el._fadeId)
+  try { el.pause() } catch { /* ya muerto */ }
+  el.src = ''
+  LIVE.delete(el)
+}
+for (const el of [...LIVE]) killEl(el)   // módulo recién cargado (o HMR): silencio garantizado
+
+// Cada <audio> lleva SU PROPIO intervalo de fade (el._fadeId); con uno compartido, el
+// fade-in del loop nuevo mataba el fade-out del anterior y quedaban los dos sonando.
 function fadeTo(el, target, ms, then) {
   clearInterval(el._fadeId)
   const steps = Math.max(1, ms / 40)
@@ -69,12 +83,14 @@ function fadeTo(el, target, ms, then) {
 }
 
 function stopMusic() {
-  if (!audioEl) return
+  // barrido: cualquier loop vivo que NO sea el actual es un zombie → en seco
+  for (const el of [...LIVE]) if (el !== audioEl) killEl(el)
   const el = audioEl
   audioEl = null
+  if (!el) return
   clearInterval(el._fadeId)
-  if (el.paused) { el.src = ''; return }              // nunca llegó a sonar (autoplay bloqueado)
-  fadeTo(el, 0, 350, () => { el.pause(); el.src = '' })
+  if (el.paused) { killEl(el); return }               // nunca llegó a sonar (autoplay bloqueado)
+  fadeTo(el, 0, 350, () => killEl(el))
 }
 
 function startMusic() {
@@ -84,10 +100,11 @@ function startMusic() {
   el.loop = true
   el.volume = 0
   audioEl = el
+  LIVE.add(el)
   // guard `el === audioEl`: si la escena cambió antes de que el play() resuelva (async),
-  // este loop ya fue reemplazado → pausarlo en vez de subirle el volumen (se solapaba).
+  // este loop ya fue reemplazado → matarlo en vez de subirle el volumen (se solapaba).
   el.play().then(() => {
-    if (el !== audioEl) { el.pause(); el.src = ''; return }
+    if (el !== audioEl) { killEl(el); return }
     pendingPlay = false
     fadeTo(el, MUSIC_VOL[scene] ?? .35, 600)
   }).catch(() => { if (el === audioEl) pendingPlay = true })   // autoplay bloqueado: unlock() reintenta
@@ -100,7 +117,7 @@ export const sound = {
     if (pendingPlay && musicOn && curScene && audioEl) {
       const el = audioEl, scene = curScene
       el.play().then(() => {
-        if (el !== audioEl) { el.pause(); el.src = ''; return }
+        if (el !== audioEl) { killEl(el); return }
         pendingPlay = false
         fadeTo(el, MUSIC_VOL[scene] ?? .35, 600)
       }).catch(() => {})

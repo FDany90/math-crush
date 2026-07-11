@@ -54,15 +54,17 @@ const trackUrl = (scene) => import.meta.env.BASE_URL + 'audio/' + scene + '.ogg'
 let audioEl = null       // <audio> del loop actual
 let curScene = null      // escena pedida (se recuerda aunque la música esté OFF)
 let pendingPlay = false  // play() bloqueado por autoplay → reintentar en el próximo gesto
-let fadeId = null
 
+// Cada <audio> lleva SU PROPIO intervalo de fade (el._fadeId). Con un id compartido, el
+// fade-in del loop nuevo mataba el fade-out del anterior y quedaban los dos sonando
+// (bug de playtest 2026-07-11: música del mapa y del nivel solapadas).
 function fadeTo(el, target, ms, then) {
-  clearInterval(fadeId)
+  clearInterval(el._fadeId)
   const steps = Math.max(1, ms / 40)
   const d = (target - el.volume) / steps
-  fadeId = setInterval(() => {
+  el._fadeId = setInterval(() => {
     el.volume = Math.max(0, Math.min(1, el.volume + d))
-    if ((d >= 0 && el.volume >= target) || (d < 0 && el.volume <= target)) { clearInterval(fadeId); then?.() }
+    if ((d >= 0 && el.volume >= target) || (d < 0 && el.volume <= target)) { clearInterval(el._fadeId); then?.() }
   }, 40)
 }
 
@@ -70,17 +72,25 @@ function stopMusic() {
   if (!audioEl) return
   const el = audioEl
   audioEl = null
+  clearInterval(el._fadeId)
+  if (el.paused) { el.src = ''; return }              // nunca llegó a sonar (autoplay bloqueado)
   fadeTo(el, 0, 350, () => { el.pause(); el.src = '' })
 }
 
 function startMusic() {
   if (!curScene || !musicOn) return
-  const el = new Audio(trackUrl(curScene))
+  const scene = curScene
+  const el = new Audio(trackUrl(scene))
   el.loop = true
   el.volume = 0
   audioEl = el
-  el.play().then(() => { pendingPlay = false; fadeTo(el, MUSIC_VOL[curScene] ?? .35, 600) })
-    .catch(() => { pendingPlay = true })   // autoplay bloqueado: unlock() reintenta
+  // guard `el === audioEl`: si la escena cambió antes de que el play() resuelva (async),
+  // este loop ya fue reemplazado → pausarlo en vez de subirle el volumen (se solapaba).
+  el.play().then(() => {
+    if (el !== audioEl) { el.pause(); el.src = ''; return }
+    pendingPlay = false
+    fadeTo(el, MUSIC_VOL[scene] ?? .35, 600)
+  }).catch(() => { if (el === audioEl) pendingPlay = true })   // autoplay bloqueado: unlock() reintenta
 }
 
 export const sound = {
@@ -88,7 +98,12 @@ export const sound = {
   unlock() {
     if (sfxOn) zzfxResume()
     if (pendingPlay && musicOn && curScene && audioEl) {
-      audioEl.play().then(() => { pendingPlay = false; fadeTo(audioEl, MUSIC_VOL[curScene] ?? .35, 600) }).catch(() => {})
+      const el = audioEl, scene = curScene
+      el.play().then(() => {
+        if (el !== audioEl) { el.pause(); el.src = ''; return }
+        pendingPlay = false
+        fadeTo(el, MUSIC_VOL[scene] ?? .35, 600)
+      }).catch(() => {})
     }
   },
   // efecto de sonido o jingle por nombre (no rompe nunca: audio es decorativo)

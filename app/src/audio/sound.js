@@ -10,7 +10,7 @@
 //  - PREFERENCIAS: math_music / math_sfx en localStorage ('0' = apagado); toggles
 //    en Ajustes y en el mapa.
 // ====================================================================
-import { zzfx, zzfxResume, zzfxVolume } from './zzfx.js'
+import { zzfx, zzfxResume, zzfxVolume, zzfxContext } from './zzfx.js'
 
 // ---------- preferencias ----------
 const pref = (k) => { try { return localStorage.getItem(k) !== '0' } catch { return true } }
@@ -48,80 +48,71 @@ const JINGLES = {
   star: () => seq([[1319, .4, .1], [1568, .4, .18]], 80),        // ⭐ brillito
 }
 
-// ---------- música por escena ----------
+// ---------- música por escena (Web Audio: loop GAPLESS) ----------
+// Antes iba por <audio loop>, que deja un micro-silencio al reiniciar ("se nota el loop",
+// playtest 2026-07-11). Ahora el track se decodifica a un AudioBuffer y loopea con
+// precisión de sample (BufferSource.loop) + fades por GainNode. Comparte el AudioContext
+// de los SFX pero NO su gain maestro (mutear SFX no muta la música y viceversa).
+// Si el navegador no decodifica .ogg (iOS Safari) queda en silencio sin romper nada.
 const MUSIC_VOL = { map: .4, level: .3, boss: .45 }
 const trackUrl = (scene) => import.meta.env.BASE_URL + 'audio/' + scene + '.ogg'
-let audioEl = null       // <audio> del loop actual
 let curScene = null      // escena pedida (se recuerda aunque la música esté OFF)
-let pendingPlay = false  // play() bloqueado por autoplay → reintentar en el próximo gesto
+let cur = null           // { src, gain, scene } del loop sonando
+const bufCache = {}      // scene → Promise<AudioBuffer> (cachea fetch+decode)
 
-// REGISTRO GLOBAL de loops vivos (en window, sobrevive al módulo): TODO <audio> creado acá
-// se anota, y cualquier "zombie" (loop que ya no es el actual) se mata en seco. Cubre:
-//  - el bug original (fades con un intervalo compartido que se pisaban),
-//  - carreras de play() asíncrono al cambiar rápido de escena,
-//  - HMR de Vite en dev: la instancia nueva del módulo mata los loops huérfanos de la
-//    vieja (antes seguían sonando hasta el F5 — "se solapan todas las músicas" en local).
-const LIVE = (window.__mcMusicLive ||= new Set())
-function killEl(el) {
-  clearInterval(el._fadeId)
-  try { el.pause() } catch { /* ya muerto */ }
-  el.src = ''
-  LIVE.delete(el)
-}
-for (const el of [...LIVE]) killEl(el)   // módulo recién cargado (o HMR): silencio garantizado
+// HMR de Vite (dev): al recargarse este módulo, la instancia nueva silencia el loop de la
+// vieja (antes quedaba huérfano sonando hasta el F5: "se solapan todas las músicas").
+try { window.__mcMusicStop?.() } catch { /* nada sonando */ }
+window.__mcMusicStop = () => stopMusic(true)
 
-// Cada <audio> lleva SU PROPIO intervalo de fade (el._fadeId); con uno compartido, el
-// fade-in del loop nuevo mataba el fade-out del anterior y quedaban los dos sonando.
-function fadeTo(el, target, ms, then) {
-  clearInterval(el._fadeId)
-  const steps = Math.max(1, ms / 40)
-  const d = (target - el.volume) / steps
-  el._fadeId = setInterval(() => {
-    el.volume = Math.max(0, Math.min(1, el.volume + d))
-    if ((d >= 0 && el.volume >= target) || (d < 0 && el.volume <= target)) { clearInterval(el._fadeId); then?.() }
-  }, 40)
+function loadBuffer(scene) {
+  const ctx = zzfxContext()
+  return (bufCache[scene] ||= fetch(trackUrl(scene))
+    .then((r) => r.arrayBuffer())
+    .then((ab) => ctx.decodeAudioData(ab))
+    .catch((e) => { delete bufCache[scene]; throw e }))
 }
 
-function stopMusic() {
-  // barrido: cualquier loop vivo que NO sea el actual es un zombie → en seco
-  for (const el of [...LIVE]) if (el !== audioEl) killEl(el)
-  const el = audioEl
-  audioEl = null
-  if (!el) return
-  clearInterval(el._fadeId)
-  if (el.paused) { killEl(el); return }               // nunca llegó a sonar (autoplay bloqueado)
-  fadeTo(el, 0, 350, () => killEl(el))
+function stopMusic(hard = false) {
+  if (!cur) return
+  const { src, gain } = cur
+  cur = null
+  try {
+    const t = zzfxContext().currentTime
+    gain.gain.cancelScheduledValues(t)
+    if (hard) { src.stop(); return }
+    gain.gain.setValueAtTime(gain.gain.value, t)
+    gain.gain.linearRampToValueAtTime(0, t + .35)   // fade out
+    src.stop(t + .4)
+  } catch { /* ya parado */ }
 }
 
-function startMusic() {
+async function startMusic() {
   if (!curScene || !musicOn) return
   const scene = curScene
-  const el = new Audio(trackUrl(scene))
-  el.loop = true
-  el.volume = 0
-  audioEl = el
-  LIVE.add(el)
-  // guard `el === audioEl`: si la escena cambió antes de que el play() resuelva (async),
-  // este loop ya fue reemplazado → matarlo en vez de subirle el volumen (se solapaba).
-  el.play().then(() => {
-    if (el !== audioEl) { killEl(el); return }
-    pendingPlay = false
-    fadeTo(el, MUSIC_VOL[scene] ?? .35, 600)
-  }).catch(() => { if (el === audioEl) pendingPlay = true })   // autoplay bloqueado: unlock() reintenta
+  let buf
+  try { buf = await loadBuffer(scene) } catch { return }   // sin red o formato no soportado: silencio
+  // mientras decodificaba pudo cambiar la escena, apagarse la música o arrancar otro loop
+  if (scene !== curScene || !musicOn || cur) return
+  const ctx = zzfxContext()
+  const src = ctx.createBufferSource()
+  src.buffer = buf
+  src.loop = true
+  const gain = ctx.createGain()
+  const t = ctx.currentTime
+  gain.gain.setValueAtTime(0, t)
+  gain.gain.linearRampToValueAtTime(MUSIC_VOL[scene] ?? .35, t + .6)   // fade in
+  src.connect(gain)
+  gain.connect(ctx.destination)
+  src.start()   // con el contexto suspendido (sin gesto aún) queda en cola y arranca al resumir
+  cur = { src, gain, scene }
 }
 
 export const sound = {
-  // llamar en CADA gesto del usuario (barato): desbloquea el contexto y reintenta la música
+  // llamar en CADA gesto del usuario (barato): resume el contexto (autoplay de mobile);
+  // los loops ya arrancados con el contexto suspendido empiezan a sonar solos al resumir
   unlock() {
-    if (sfxOn) zzfxResume()
-    if (pendingPlay && musicOn && curScene && audioEl) {
-      const el = audioEl, scene = curScene
-      el.play().then(() => {
-        if (el !== audioEl) { killEl(el); return }
-        pendingPlay = false
-        fadeTo(el, MUSIC_VOL[scene] ?? .35, 600)
-      }).catch(() => {})
-    }
+    if (sfxOn || musicOn) zzfxResume()
   },
   // efecto de sonido o jingle por nombre (no rompe nunca: audio es decorativo)
   play(name) {
@@ -143,7 +134,7 @@ export const sound = {
   setMusicOn(v) {
     musicOn = !!v; setPref('math_music', musicOn)
     if (!musicOn) stopMusic()
-    else if (!audioEl) startMusic()
+    else if (!cur) { zzfxResume(); startMusic() }
   },
   setSfxOn(v) {
     sfxOn = !!v; setPref('math_sfx', sfxOn)

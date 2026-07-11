@@ -33,6 +33,12 @@ export function zzfxVolume(v) {
   try { ensureCtx(); out.gain.value = v } catch { /* sin audio */ }
 }
 
+// contexto compartido (lo usa también la música, para loops gapless por Web Audio)
+export function zzfxContext() {
+  ensureCtx()
+  return ctx
+}
+
 const zzfxV = .3   // volumen base del synth (igual que el original)
 
 // eslint-disable-next-line max-params

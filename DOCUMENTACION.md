@@ -838,10 +838,16 @@ Igual que 24.6 (pérdidas → jefes ×÷ → súper multi-op → personaje fase 
   contexto + reintento de `play()` de la música si el navegador lo bloqueó).
 
 ### 26.2 Música (loops CC0 de Kenney, `app/public/audio/`, créditos en CREDITS.txt)
-Por ESCENA con fade in/out (HTMLAudio, loop): **map.ogg** ("Farm Frolics") en el mapa,
+Por ESCENA con fade in/out: **map.ogg** ("Italian Mom"; "Farm Frolics" no gustó) en el mapa,
 **level.ogg** ("Wacky Waiting") en niveles, **boss.ogg** ("Drumming Sticks") en jefes.
 Menú = silencio. Volúmenes en `MUSIC_VOL`. La escena se decide en App (useEffect sobre
 `[screen, !!boss]`). Cambiar una pista = reemplazar el .ogg (mismo nombre) o el mapa `trackUrl`.
+**Reproducción por WEB AUDIO (no `<audio loop>`)**: el track se decodifica a AudioBuffer y
+loopea gapless (el tag `<audio>` mete un micro-corte al reiniciar, se notaba). Fades por
+GainNode. ⚠ iOS Safari no decodifica .ogg → queda en silencio (pendiente: convertir a .m4a).
+Fixes de playtest 2026-07-11: las músicas se SOLAPABAN al cambiar de escena (fade con
+intervalo compartido + loops huérfanos tras HMR en dev) → registro global `__mcMusicStop`
++ guards de carrera en el arranque async.
 
 ### 26.3 SFX (dónde suena cada uno)
 `cuenta`/`bossHurt` (onCuenta) · `fail` (triesPop) · `win`/`lose` (onLevelEnd; jingles = mini
@@ -852,7 +858,8 @@ toggles) · `hint` (pista) · `daily`/`star` (regalo). El temblor del ATERRIZAJE
 cada cuenta) va SIN sonido a propósito (sería ruido en cada movida; `cuenta` ya marca el momento).
 
 ### 26.4 Controles de usuario
-- Mapa: botón 🎵/🔇 (solo música). Ajustes (en el nivel): toggles 🎵 Música y 🔊 Sonidos.
+- Mapa: botón 🔊/🔇 = MUTE TOTAL (música + sonidos). Ajustes (en el nivel): toggles finos
+  🎵 Música y 🔊 Sonidos por separado.
 
 ### 26.5 CÓMO SEGUIR (sonido)
 1. Playtest: ajustar recetas ZzFX (volúmenes/timbres) y elección de loops con feedback real.

@@ -178,7 +178,7 @@ export default function App() {
   const [nickInput, setNickInput] = useState('')
   const [coach, setCoach] = useState(null)           // mensajes flotantes (tutorial/avisos); array de pasos
   const [picker, setPicker] = useState(null)         // "elegí tu objetivo": { pool, max } | null
-  const [musicOnUi, setMusicOnUi] = useState(() => sound.musicOn())   // espejo UI del toggle de música
+  const [audioOnUi, setAudioOnUi] = useState(() => sound.musicOn() || sound.sfxOn())   // espejo UI del MUTE total del mapa
   const [inventory, setInventory] = useState([])
   const [result, setResult] = useState(null)          // {index,score,stars,win}
   const menuDoodles = useMemo(() => buildDoodles(), [screen])   // nuevos garabatos cada vez que se abre el menú
@@ -565,10 +565,10 @@ export default function App() {
               {hearts.n < HEARTS_MAX && <span className="hearts-timer">{fmtMMSS(heartsNextInSec(hearts))}</span>}
             </span>
             <span className="map-hints">💡 {hintPool}</span>
-            {/* toggle rápido de MÚSICA (el de SFX vive en Ajustes, dentro del nivel) */}
-            <button className="music-btn" aria-label="Música"
-              onClick={() => { const v = !musicOnUi; setMusicOnUi(v); sound.setMusicOn(v); if (v) sound.play('chip') }}>
-              {musicOnUi ? '🎵' : '🔇'}
+            {/* MUTE total (música + sonidos); los toggles finos viven en Ajustes ⚙ dentro del nivel */}
+            <button className="music-btn" aria-label="Silenciar sonido"
+              onClick={() => { const v = !audioOnUi; setAudioOnUi(v); sound.setMusicOn(v); sound.setSfxOn(v); if (v) sound.play('chip') }}>
+              {audioOnUi ? '🔊' : '🔇'}
             </button>
             <button className="daily-btn" onClick={() => { sound.play('click'); setDailyOpen(true) }} aria-label="Regalo del día">
               🎁{!dailyClaimed() && <span className="daily-dot" />}

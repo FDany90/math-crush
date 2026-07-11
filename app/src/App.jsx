@@ -9,6 +9,7 @@ import { WORLDS, zoneColor, isWip, worldOf, MAP_EQS, buildMapDoodles, ChalkDoodl
 import { tokenColor, fmtMMSS, buildDoodles, buildConfetti } from './uiHelpers.js'
 import { loadProgress, saveProgress, loadHearts, saveHearts, HEARTS_MAX, heartsNextInSec } from './storage.js'
 import { CoachBubble, WinScreen, StartPopup, TargetPicker, ResultCard, SettingsPopup, DailyPopup, NickPopup, WipPopup } from './Popups.jsx'
+import { sound } from './audio/sound.js'
 
 export default function App() {
   const mountRef = useRef(null)
@@ -75,6 +76,10 @@ export default function App() {
   // que lo que pasa en el tablero lo causa el jefe (sin depender de mensajes del coach).
   // kind: 'scatter' | 'infest' (con celdas) | 'grow' (sin celdas: embestida + destello del marco).
   const bossAttackFx = useCallback(({ cells, rows, cols, kind, sign = '+' }) => {
+    // SFX del ataque: embestida ya, y el efecto específico cuando ATERRIZA (~760ms, ver ATTACK_MS)
+    sound.play('bossAtk')
+    const landSfx = { grow: 'rumble', shrink: 'rumble', erase: 'erase', infest: 'infest' }[kind]
+    if (landSfx) setTimeout(() => sound.play(landSfx), 740)
     const signEl = document.querySelector('.boss-sign')
     // cara de MALDAD durante el ataque (cejas en V + grito, clase .attacking sobre el signo)
     if (signEl) {
@@ -173,6 +178,7 @@ export default function App() {
   const [nickInput, setNickInput] = useState('')
   const [coach, setCoach] = useState(null)           // mensajes flotantes (tutorial/avisos); array de pasos
   const [picker, setPicker] = useState(null)         // "elegí tu objetivo": { pool, max } | null
+  const [musicOnUi, setMusicOnUi] = useState(() => sound.musicOn())   // espejo UI del toggle de música
   const [inventory, setInventory] = useState([])
   const [result, setResult] = useState(null)          // {index,score,stars,win}
   const menuDoodles = useMemo(() => buildDoodles(), [screen])   // nuevos garabatos cada vez que se abre el menú
@@ -228,7 +234,10 @@ export default function App() {
           // monta un nodo nuevo y ahí sí corre chipIn. Sin hacks manuales de animación.
           setTarget(t)
         },
-        onCuenta: ({ cells, rows, cols, value, bar }) => flyTokens(cells, rows, cols, value, bar),
+        onCuenta: ({ cells, rows, cols, value, bar }) => {
+          sound.play(bar?.boss ? 'bossHurt' : 'cuenta')   // ✔ cuenta formada (o golpe al jefe)
+          flyTokens(cells, rows, cols, value, bar)
+        },
         addTime: (sec) => showTimeBonus(sec),
         setConfig: () => {},
         setOverlay: (o) => { if (!o.show) setResult(null) },
@@ -243,6 +252,7 @@ export default function App() {
               return next
             })
           }
+          sound.play(completed ? 'win' : 'lose')
           if (completed) {
             // ganó: pantalla de victoria con estrellas (~3,4 s) y luego auto-avanza
             // al mapa + pop-up de inicio del siguiente nivel (estilo Candy Crush).
@@ -277,6 +287,17 @@ export default function App() {
   }, [])
 
   useEffect(() => { initMetrics() }, [])                          // ID anónimo + upsert jugador
+  // AUDIO: cada gesto desbloquea el contexto (mobile) y reintenta la música si el
+  // navegador bloqueó el autoplay. Listener barato, vive toda la sesión.
+  useEffect(() => {
+    const unlock = () => sound.unlock()
+    window.addEventListener('pointerdown', unlock)
+    return () => window.removeEventListener('pointerdown', unlock)
+  }, [])
+  // MÚSICA por escena: mapa / nivel / jefe (con fade). En el menú, silencio.
+  useEffect(() => {
+    sound.music(screen === 'map' ? 'map' : screen === 'game' ? (boss ? 'boss' : 'level') : null)
+  }, [screen, !!boss])   // eslint-disable-line react-hooks/exhaustive-deps
   // CORAZONES: persistir la regen al montar y refrescar cada 20s (regen + contador)
   useEffect(() => {
     saveHearts(hearts)
@@ -295,6 +316,7 @@ export default function App() {
   // marcar el error. La tiza consumida además se desvanece por su transición CSS (la barra baja).
   useEffect(() => {
     if (triesPop <= 0) return
+    sound.play('fail')   // ✘ movimiento que no formó cuenta
     const el = document.querySelector('.lives')
     if (!el) return
     el.animate([
@@ -318,7 +340,7 @@ export default function App() {
   // de Suma+Resta. El dev triple-clic (abajo) sigue sirviendo para probarlos a mano.
   const isUnlocked = (i) => i === 0 || devUnlocked.has(i) || (!isWip(i) && (progress.stars[i - 1] || 0) >= 1)
   // tocar un nodo del mapa abre el pop-up de inicio del nivel (estilo Candy Crush)
-  const openStart = (i) => { clearTimeout(startPopupTimer.current); if (isUnlocked(i)) setStartPopup(i) }
+  const openStart = (i) => { clearTimeout(startPopupTimer.current); if (isUnlocked(i)) { sound.play('click'); setStartPopup(i) } }
   // MODO TEST (secreto, solo para desarrollo): TRIPLE clic en un nivel BLOQUEADO lo abre igual.
   // No persiste (se pierde al recargar) → ningún jugador real lo activa sin querer.
   const handleNode = (i) => {
@@ -346,6 +368,7 @@ export default function App() {
   const dailyClaimed = () => { if (DAILY_UNLIMITED) return false; try { return !!localStorage.getItem(dayKey()) } catch { return false } }
   const claimDaily = () => {
     if (dailyClaimed()) return
+    sound.play('daily')
     if (!DAILY_UNLIMITED) { try { localStorage.setItem(dayKey(), '1') } catch { /* sin localStorage */ } }
     setHintPoolState(setHintPool(getHintPool() + DAILY_HINTS))   // repone pistas (tope HINTS_MAX)
     addHearts(HEARTS_MAX)                                        // repone las vidas al máximo (tope HEARTS_MAX)
@@ -371,6 +394,7 @@ export default function App() {
   const playLevel = (i) => {
     if (!isUnlocked(i)) return
     clearTimeout(startPopupTimer.current)
+    sound.play('click')
     setStartPopup(null); setCoach(null); setPicker(null); setCurIdx(i); setResult(null); setScreen('game')
     ctrlRef.current?.startLevel(i)
     trackEvent('start', i)
@@ -507,10 +531,10 @@ export default function App() {
 
         <div className="controls">
           <button className="hint-btn" disabled={hints <= 0}
-            onClick={() => ctrlRef.current?.hint()}>
+            onClick={() => { sound.play('hint'); ctrlRef.current?.hint() }}>
             💡 Pista <span className="hint-n">{hints}</span>
           </button>
-          <button className="gear-btn" aria-label="Ajustes" onClick={() => setSettingsOpen(true)}>⚙</button>
+          <button className="gear-btn" aria-label="Ajustes" onClick={() => { sound.play('click'); setSettingsOpen(true) }}>⚙</button>
         </div>
       </div>
 
@@ -527,7 +551,7 @@ export default function App() {
           </div>
           <h1>Math <span>Crush</span></h1>
           <p className="tagline">Formá el resultado · armá cuentas · subí de nivel</p>
-          <button className="big-btn" onClick={() => setScreen('map')}>Jugar</button>
+          <button className="big-btn" onClick={() => { sound.play('click'); setScreen('map') }}>Jugar</button>
         </div>
       )}
 
@@ -541,7 +565,12 @@ export default function App() {
               {hearts.n < HEARTS_MAX && <span className="hearts-timer">{fmtMMSS(heartsNextInSec(hearts))}</span>}
             </span>
             <span className="map-hints">💡 {hintPool}</span>
-            <button className="daily-btn" onClick={() => setDailyOpen(true)} aria-label="Regalo del día">
+            {/* toggle rápido de MÚSICA (el de SFX vive en Ajustes, dentro del nivel) */}
+            <button className="music-btn" aria-label="Música"
+              onClick={() => { const v = !musicOnUi; setMusicOnUi(v); sound.setMusicOn(v); if (v) sound.play('chip') }}>
+              {musicOnUi ? '🎵' : '🔇'}
+            </button>
+            <button className="daily-btn" onClick={() => { sound.play('click'); setDailyOpen(true) }} aria-label="Regalo del día">
               🎁{!dailyClaimed() && <span className="daily-dot" />}
             </button>
           </div>
@@ -668,7 +697,7 @@ export default function App() {
       <StartPopup index={startPopup} onClose={() => setStartPopup(null)} onPlay={playLevel} />
 
       {/* picker "elegí tu objetivo": el nivel arranca recién cuando el jugador elige sus números */}
-      <TargetPicker picker={picker} onConfirm={(sel) => { setPicker(null); ctrlRef.current?.applyChosenTargets(sel) }} />
+      <TargetPicker picker={picker} onConfirm={(sel) => { sound.play('click'); setPicker(null); ctrlRef.current?.applyChosenTargets(sel) }} />
 
       <ResultCard result={result} hearts={hearts}
         onRetry={() => { spendHeart(); ctrlRef.current?.resumeWithBonus() }}

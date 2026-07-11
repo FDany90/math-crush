@@ -8,6 +8,7 @@ import { gsap } from 'gsap'
 import { kindOf } from '../game/logic.js'
 import { CELL_STATES } from './cellStates.js'   // registro de estados de casillero (frozen, infested, …)
 import { getTileTexture } from './tileTextures.js'   // texturas de ficha pre-renderizadas (perf)
+import { sound } from '../audio/sound.js'   // SFX de los efectos que nacen acá (explosión/cruz)
 
 export const TILE = 64;
 export const MAX_PX = TILE * 8;  // tamaño máximo (8x8) para inicializar el canvas
@@ -385,6 +386,7 @@ export class Board {
   // EXPLOTAR TODO el tablero (reintento contra el jefe: la invasión vuela y cae tablero nuevo).
   // Las fichas se achican a 0 con delays al azar + algunos bursts + temblor. Devuelve promesa.
   async explodeAll() {
+    sound.play('boom')
     this.shake(10);
     const proms = [];
     for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
@@ -401,6 +403,7 @@ export class Board {
   // de bursts en las diagonales. El temblor fuerte (shake 17) y las piezas despedidas
   // (clear con `blasts`) los dispara el controller.
   bombBlast(r, c) {
+    sound.play('boom')
     const x = this.px(c), y = this.py(r);
     // 1) FLASH de todo el tablero (fogonazo blanco instantáneo)
     const flash = new Graphics();
@@ -439,6 +442,7 @@ export class Board {
   // destello en CRUZ (fila + columna) al detonar una súper ficha: haces dorados que se
   // ensanchan + onda expansiva + burst dorado en el centro. Épico pero sin exagerar.
   superCross(r, c) {
+    sound.play('zap')
     const w = this.cols * TILE, h = this.rows * TILE;
     const row = new Graphics();
     row.roundRect(-w / 2, -TILE * 0.38, w, TILE * 0.76, 10).fill({ color: 0xffe98f, alpha: 0.6 });

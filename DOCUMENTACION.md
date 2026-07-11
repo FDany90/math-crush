@@ -823,3 +823,38 @@ Igual que 24.6 (pérdidas → jefes ×÷ → súper multi-op → personaje fase 
 - Validar en playtest la ronda 25: densidad de signos (¿regala de más?), N4/N7/N8 endurecidos,
   el picker de objetivos (¿se entiende sin coach?) y la cara del jefe en las cinemáticas.
 - Si el reorden 5↔6 confunde estrellas viejas → bumpear `PROGRESS_VERSION`.
+
+## 26. Sesión 2026-07-11: SONIDO (música + SFX)
+
+### 26.1 Arquitectura (`app/src/audio/`)
+- **`sound.js`** — API única: `sound.play(nombre)`, `sound.music(escena|null)`, `sound.unlock()`,
+  toggles `setMusicOn/setSfxOn` (persistidos en `math_music`/`math_sfx`; '0' = off). El audio
+  NUNCA rompe el juego (try/catch en todo).
+- **`zzfx.js`** — ZzFXMicro v1.3.2 (Frank Force, MIT) vendoreado a ESM: sintetiza los SFX en
+  tiempo real (0 KB de assets). Adaptación: AudioContext LAZY + GainNode maestro (mute).
+  ⚠ El cuerpo del synth es el original minificado: NO tocarlo; los sonidos se diseñan con los
+  PARÁMETROS en `SFX` de sound.js (recetas comentadas, tunear ahí con feedback).
+- **MOBILE/autoplay**: listener global `pointerdown` en App → `sound.unlock()` (resume del
+  contexto + reintento de `play()` de la música si el navegador lo bloqueó).
+
+### 26.2 Música (loops CC0 de Kenney, `app/public/audio/`, créditos en CREDITS.txt)
+Por ESCENA con fade in/out (HTMLAudio, loop): **map.ogg** ("Farm Frolics") en el mapa,
+**level.ogg** ("Wacky Waiting") en niveles, **boss.ogg** ("Drumming Sticks") en jefes.
+Menú = silencio. Volúmenes en `MUSIC_VOL`. La escena se decide en App (useEffect sobre
+`[screen, !!boss]`). Cambiar una pista = reemplazar el .ogg (mismo nombre) o el mapa `trackUrl`.
+
+### 26.3 SFX (dónde suena cada uno)
+`cuenta`/`bossHurt` (onCuenta) · `fail` (triesPop) · `win`/`lose` (onLevelEnd; jingles = mini
+arpegios) · `boom` (Board.bombBlast/explodeAll) · `zap` (Board.superCross) · `bossAtk` +
+aterrizaje `rumble`/`erase`/`infest` (bossAttackFx, delay 740ms = ATTACK_MS) · `cine` (BossCine)
+· `click` (botones: jugar, nodo del mapa, gear, picker confirm) · `chip` (chips del picker,
+toggles) · `hint` (pista) · `daily`/`star` (regalo). El temblor del ATERRIZAJE (shake 12 tras
+cada cuenta) va SIN sonido a propósito (sería ruido en cada movida; `cuenta` ya marca el momento).
+
+### 26.4 Controles de usuario
+- Mapa: botón 🎵/🔇 (solo música). Ajustes (en el nivel): toggles 🎵 Música y 🔊 Sonidos.
+
+### 26.5 CÓMO SEGUIR (sonido)
+1. Playtest: ajustar recetas ZzFX (volúmenes/timbres) y elección de loops con feedback real.
+2. Posibles próximos: pitch del `cuenta` subiendo con el combo; sonido al seleccionar ficha
+   (evaluar si no es ruido); ducking de la música durante cinemáticas/victoria.

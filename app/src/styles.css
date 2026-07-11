@@ -357,6 +357,9 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .map-hearts { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-tiza); font-size: 20px; color: #ff8fa3; background: #1a241fcc; padding: 5px 12px; border-radius: 16px; border: 1.5px solid #ffffff22; }
 .hearts-timer { font-family: var(--font-body); font-size: 11px; font-weight: 700; color: var(--chalk-dim); opacity: .85; }
 .daily-btn { position: relative; font-size: 24px; width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(160deg, #ff9db0, #e0607a); box-shadow: 0 4px 0 #a03a52; display: flex; align-items: center; justify-content: center; }
+/* toggle rápido de música en el mapa (el de SFX está en Ajustes) */
+.music-btn { font-size: 20px; width: 42px; height: 42px; border-radius: 50%; background: #1a241fcc; border: 1.5px solid #ffffff22; display: flex; align-items: center; justify-content: center; }
+.music-btn:active { transform: translateY(2px); }
 .daily-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #a03a52; }
 .daily-dot { position: absolute; top: -2px; right: -2px; width: 14px; height: 14px; border-radius: 50%; background: #2ed573; border: 2px solid #1a241f; animation: lowpulse 1s infinite; }
 .daily-card { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -519,6 +522,12 @@ button { border: none; cursor: pointer; font-family: var(--font-display); color:
 .tchip.pick { border: 3px solid transparent; cursor: pointer; opacity: .82; transition: transform .12s ease, opacity .12s ease, box-shadow .12s ease; animation: none; }
 .tchip.pick:active { transform: scale(.94); }
 .tchip.pick.on { opacity: 1; border-color: #f4f1e8; transform: scale(1.12); box-shadow: 0 4px 0 rgba(0,0,0,.3), 0 0 22px #ffd23fcc; }
+
+/* toggles de audio (pop-up de Ajustes) */
+.audio-toggles { display: flex; gap: 10px; justify-content: center; margin: 6px 0 18px; }
+.audio-btn { font-family: var(--font-chalk); font-size: 17px; color: var(--chalk-dim); background: #14201b; border: 2px solid #ffffff22; border-radius: 14px; padding: 9px 16px; opacity: .7; }
+.audio-btn.on { color: var(--chalk); border-color: var(--eq); opacity: 1; box-shadow: 0 0 10px #ffd23f33; }
+.audio-btn:active { transform: translateY(2px); }
 
 /* input del pop-up de nick */
 .nick-input { display: block; width: 100%; margin: 4px 0 18px; padding: 12px 14px; border-radius: 12px; border: 2px solid #ffffff33; background: #14201b; color: var(--chalk); font-family: var(--font-chalk); font-size: 20px; text-align: center; outline: none; }

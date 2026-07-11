@@ -8,6 +8,7 @@ import { HINTS_MAX } from './game/controller.js'
 import { fmtMMSS } from './uiHelpers.js'
 import { heartsNextInSec } from './storage.js'
 import { Stars } from './mapView.jsx'
+import { sound } from './audio/sound.js'
 
 // El jefe no tiene nombre: es SU SIGNO, en rojo llamativo (decisión de playtest 2026-07-09:
 // se quitó la palabra "Rey"). El '−' de la fuente Tiza cae bajo → barra dibujada.
@@ -47,7 +48,10 @@ export function CoachBubble({ coach, onDismiss }) {
 // igual que un mensaje): 'intro' = presentación (el signo entra RUGIENDO + banner con el nombre);
 // 'phase' = cambio de fase (el signo se ENFURECE, flash rojo). Auto-avanza a los 3 s; tocar saltea.
 function BossCine({ step, onDismiss }) {
-  React.useEffect(() => { const id = setTimeout(onDismiss, 3000); return () => clearTimeout(id) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    sound.play('cine')   // slam de entrada de la cinemática
+    const id = setTimeout(onDismiss, 3000); return () => clearTimeout(id)
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className={'boss-cine ' + step.cine} onClick={onDismiss}>
       <div className="cine-flash" aria-hidden="true" />
@@ -164,9 +168,12 @@ export function TargetPicker({ picker, onConfirm }) {
   React.useEffect(() => { setSel([]) }, [picker])
   if (!picker) return null
   // tocar un chip lo agrega/quita; si ya hay `max`, el nuevo reemplaza al más viejo
-  const toggle = (n) => setSel((s) => s.includes(n)
-    ? s.filter((x) => x !== n)
-    : (s.length >= picker.max ? [...s.slice(1), n] : [...s, n]))
+  const toggle = (n) => {
+    sound.play('chip')
+    setSel((s) => s.includes(n)
+      ? s.filter((x) => x !== n)
+      : (s.length >= picker.max ? [...s.slice(1), n] : [...s, n]))
+  }
   return (
     <div className="overlay">
       <div className="card picker">
@@ -214,14 +221,26 @@ export function ResultCard({ result, hearts, onRetry, onExit }) {
   )
 }
 
-// pop-up de ajustes (dentro del juego)
+// pop-up de ajustes (dentro del juego): música/sonidos + abandonar nivel
 export function SettingsPopup({ levelNum, onClose, onLeave }) {
+  const [musicOn, setMusicOn] = React.useState(() => sound.musicOn())
+  const [sfxOn, setSfxOn] = React.useState(() => sound.sfxOn())
   return (
     <div className="overlay" onClick={onClose}>
       <div className="card settings" onClick={(e) => e.stopPropagation()}>
         <button className="card-x" aria-label="Cerrar" onClick={onClose}>✕</button>
         <div className="start-lvl">Ajustes</div>
         <div className="start-name">Nivel {levelNum}</div>
+        <div className="audio-toggles">
+          <button className={'audio-btn' + (musicOn ? ' on' : '')}
+            onClick={() => { const v = !musicOn; setMusicOn(v); sound.setMusicOn(v) }}>
+            {musicOn ? '🎵' : '🔇'} Música
+          </button>
+          <button className={'audio-btn' + (sfxOn ? ' on' : '')}
+            onClick={() => { const v = !sfxOn; setSfxOn(v); sound.setSfxOn(v); if (v) sound.play('chip') }}>
+            {sfxOn ? '🔊' : '🔈'} Sonidos
+          </button>
+        </div>
         <button className="start-play" onClick={onClose}>Seguir jugando</button>
         <button className="leave-btn" onClick={onLeave}>Abandonar nivel</button>
       </div>
